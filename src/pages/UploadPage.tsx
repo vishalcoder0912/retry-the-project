@@ -39,7 +39,7 @@ const UploadPage = () => {
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl font-bold text-foreground">Upload Data</h1>
-        <p className="text-sm text-muted-foreground mt-1">Upload a CSV file to start analyzing with AI</p>
+        <p className="text-sm text-muted-foreground mt-1">Upload a CSV, Excel, or JSON file to start analyzing with AI</p>
       </motion.div>
 
       {/* Drop Zone */}
