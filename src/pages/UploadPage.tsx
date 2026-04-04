@@ -73,9 +73,9 @@ const UploadPage = () => {
           </div>
           <div>
             <p className="text-sm font-medium text-foreground">
-              {isUploading ? 'Processing...' : 'Drop your CSV here or click to browse'}
+              {isUploading ? 'Processing...' : 'Drop your file here or click to browse'}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">Supports .csv files up to 50MB</p>
+            <p className="text-xs text-muted-foreground mt-1">Supports .csv, .xlsx, .xls, and .json files up to 50MB</p>
           </div>
         </div>
       </motion.div>
