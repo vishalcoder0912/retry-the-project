@@ -12,20 +12,21 @@ const UploadPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   const handleFile = useCallback(async (file: File) => {
-    if (!file.name.endsWith('.csv')) {
-      setError('Please upload a CSV file');
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['csv', 'xlsx', 'xls', 'json'].includes(ext || '')) {
+      setError('Please upload a CSV, Excel (.xlsx), or JSON file');
       return;
     }
     setError(null);
     setIsUploading(true);
     try {
-      await uploadCSV(file);
+      await uploadFile(file);
     } catch (e) {
-      setError('Failed to parse CSV file');
+      setError('Failed to parse file');
     } finally {
       setIsUploading(false);
     }
-  }, [uploadCSV]);
+  }, [uploadFile]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
