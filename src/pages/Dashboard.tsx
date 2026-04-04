@@ -1,23 +1,39 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useData } from '@/contexts/DataContext';
 import KPICard from '@/components/kpi/KPICard';
 import AnalyticsChart from '@/components/charts/AnalyticsChart';
+import DashboardFilters, { FilterState } from '@/components/filters/DashboardFilters';
 import { generateDemoKPIs, generateDemoCharts } from '@/lib/data-store';
-import { Upload, Sparkles, Table2, ArrowRight } from 'lucide-react';
+import { Sparkles, Table2, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const Dashboard = () => {
   const { dataset, loadDemo } = useData();
+  const [filters, setFilters] = useState<FilterState>({
+    dateRange: {},
+    columns: {},
+  });
 
   useEffect(() => {
     if (!dataset) loadDemo();
   }, []);
 
-  if (!dataset) return null;
+  const filteredDataset = useMemo(() => {
+    if (!dataset) return null;
+    const filtered = dataset.rows.filter(row => {
+      for (const [col, val] of Object.entries(filters.columns)) {
+        if (val && String(row[col]) !== val) return false;
+      }
+      return true;
+    });
+    return { ...dataset, rows: filtered, rowCount: filtered.length };
+  }, [dataset, filters]);
 
-  const kpis = generateDemoKPIs(dataset);
-  const charts = generateDemoCharts(dataset);
+  if (!dataset || !filteredDataset) return null;
+
+  const kpis = generateDemoKPIs(filteredDataset);
+  const charts = generateDemoCharts(filteredDataset);
 
   return (
     <div className="p-6 space-y-6">
@@ -30,7 +46,7 @@ const Dashboard = () => {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Analyzing <span className="font-mono text-primary">{dataset.name}</span> · {dataset.rowCount.toLocaleString()} records
+            Analyzing <span className="font-mono text-primary">{dataset.name}</span> · {filteredDataset.rowCount.toLocaleString()} of {dataset.rowCount.toLocaleString()} records
           </p>
         </div>
         <div className="flex gap-2">
@@ -44,6 +60,9 @@ const Dashboard = () => {
           </Link>
         </div>
       </motion.div>
+
+      {/* Filters */}
+      <DashboardFilters dataset={dataset} filters={filters} onChange={setFilters} />
 
       {/* KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -70,14 +89,14 @@ const Dashboard = () => {
           <Table2 className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-semibold text-foreground">Data Preview</h3>
           <span className="text-xs text-muted-foreground font-mono ml-auto">
-            {dataset.columns.length} columns · first 10 rows
+            {filteredDataset.columns.length} columns · first 10 rows
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-border">
-                {dataset.columns.map(col => (
+                {filteredDataset.columns.map(col => (
                   <th key={col.name} className="text-left py-2 px-3 font-mono text-muted-foreground font-medium">
                     {col.name}
                   </th>
@@ -85,9 +104,9 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {dataset.rows.slice(0, 10).map((row, i) => (
+              {filteredDataset.rows.slice(0, 10).map((row, i) => (
                 <tr key={i} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  {dataset.columns.map(col => (
+                  {filteredDataset.columns.map(col => (
                     <td key={col.name} className="py-2 px-3 font-mono text-foreground">
                       {typeof row[col.name] === 'number'
                         ? row[col.name].toLocaleString()
