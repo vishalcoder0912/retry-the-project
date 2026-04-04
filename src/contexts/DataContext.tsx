@@ -10,7 +10,7 @@ interface DataContextType {
   addChatMessage: (msg: ChatMessage) => void;
   isProcessing: boolean;
   setIsProcessing: (v: boolean) => void;
-  uploadCSV: (file: File) => Promise<void>;
+  uploadFile: (file: File) => Promise<void>;
   loadDemo: () => void;
 }
 
