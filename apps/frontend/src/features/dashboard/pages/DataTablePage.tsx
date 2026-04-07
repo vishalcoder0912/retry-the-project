@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useData } from '@/features/data/context/useData';
-import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Pencil, Check, X, Search } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, Pencil, Check, X, Search, Download, Filter } from 'lucide-react';
 import { Input } from '@/shared/components/ui/input';
 import { Button } from '@/shared/components/ui/button';
 import {
@@ -148,44 +147,43 @@ const DataTablePage = () => {
   };
 
   return (
-    <div className="p-6 space-y-4 h-full flex flex-col">
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between gap-4">
+    <div className="flex h-full flex-col space-y-6 px-10 py-10">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Data Table</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            <span className="font-mono text-primary">{sorted.length.toLocaleString()}</span> records &middot; click any cell to edit
+          <p className="terminal-label">2.0 Data Master Table</p>
+          <p className="mt-3 text-sm uppercase tracking-[0.08em] text-muted-foreground">
+            Total Records: {sorted.length.toLocaleString()} // source: local registry
           </p>
         </div>
-        <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <div className="flex items-center gap-4">
+          <div className="relative w-80">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(0);
             }}
-            placeholder="Search all columns..."
-            className="pl-9 h-9 text-xs font-mono bg-card border-border"
+            placeholder="Search registry..."
+            className="h-16 rounded-none border-border bg-background pl-12 text-base font-mono uppercase tracking-[0.08em]"
           />
         </div>
-      </motion.div>
+          <button className="terminal-button gap-2"><Filter className="h-4 w-4" />Filter</button>
+          <button className="terminal-button-inverse gap-2"><Download className="h-4 w-4" />Export</button>
+        </div>
+      </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="glass rounded-xl flex-1 overflow-hidden flex flex-col"
-      >
+      <div className="terminal-panel flex flex-1 flex-col overflow-hidden">
         <div className="overflow-auto flex-1">
-          <table className="w-full text-xs">
-            <thead className="sticky top-0 z-10 bg-card/95 backdrop-blur-sm">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 z-10 bg-primary text-primary-foreground">
               <tr className="border-b border-border">
-                <th className="py-3 px-3 text-left font-mono text-muted-foreground font-medium w-12">#</th>
+                <th className="w-12 py-4 px-4 text-left font-mono font-medium uppercase tracking-[0.08em]">#</th>
                 {dataset.columns.map((col) => (
                   <th
                     key={col.name}
                     onClick={() => handleSort(col.name)}
-                    className="text-left py-3 px-3 font-mono text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors select-none"
+                    className="cursor-pointer select-none px-4 py-4 text-left font-mono font-medium uppercase tracking-[0.08em]"
                   >
                     <div className="flex items-center gap-1.5">
                       {col.name}
@@ -199,8 +197,8 @@ const DataTablePage = () => {
               {pageRows.map((row, rowIdx) => {
                 const globalIdx = page * pageSize + rowIdx;
                 return (
-                  <tr key={globalIdx} className="border-b border-border/50 hover:bg-muted/30 transition-colors group">
-                    <td className="py-2 px-3 font-mono text-muted-foreground/60">{globalIdx + 1}</td>
+                  <tr key={globalIdx} className="border-b border-border/70 group">
+                    <td className="px-4 py-4 font-mono text-muted-foreground/80">{globalIdx + 1}</td>
                     {dataset.columns.map((col) => {
                       const isEditing = editingCell?.row === globalIdx && editingCell?.col === col.name;
 
@@ -216,7 +214,7 @@ const DataTablePage = () => {
                                   if (e.key === 'Enter') void commitEdit();
                                   if (e.key === 'Escape') cancelEdit();
                                 }}
-                                className="w-full px-2 py-1 text-xs font-mono bg-primary/10 border border-primary/30 rounded text-foreground outline-none focus:border-primary"
+                                className="w-full border border-border bg-background px-2 py-2 text-xs font-mono uppercase tracking-[0.08em] text-foreground outline-none"
                               />
                               <button onClick={() => { void commitEdit(); }} className="p-0.5 hover:text-primary text-muted-foreground">
                                 <Check className="w-3.5 h-3.5" />
@@ -233,7 +231,13 @@ const DataTablePage = () => {
                         <td
                           key={col.name}
                           onClick={() => startEdit(rowIdx, col.name)}
-                          className="py-2 px-3 font-mono text-foreground cursor-pointer group/cell relative"
+                          className={`relative cursor-pointer px-4 py-4 font-mono uppercase tracking-[0.06em] group/cell ${
+                            col.name.toLowerCase().includes('salary')
+                              ? 'text-success'
+                              : col.name.toLowerCase().includes('class') || col.name.toLowerCase().includes('education')
+                                ? 'text-accent'
+                                : 'text-foreground'
+                          }`}
                         >
                           <span>{typeof row[col.name] === 'number' ? row[col.name].toLocaleString() : String(row[col.name])}</span>
                           <Pencil className="w-3 h-3 text-muted-foreground/0 group-hover/cell:text-muted-foreground/50 absolute right-2 top-1/2 -translate-y-1/2 transition-colors" />
@@ -247,11 +251,11 @@ const DataTablePage = () => {
           </table>
         </div>
 
-        <div className="border-t border-border px-4 py-3 flex items-center justify-between bg-card/80 backdrop-blur-sm">
+        <div className="flex items-center justify-between border-t border-border px-6 py-5 bg-card">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">Rows per page</span>
+            <span className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Rows per page</span>
             <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(0); }}>
-              <SelectTrigger className="h-8 w-[70px] text-xs font-mono bg-transparent border-border">
+              <SelectTrigger className="h-10 w-[90px] rounded-none border-border bg-transparent text-xs font-mono uppercase tracking-[0.08em]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -263,18 +267,18 @@ const DataTablePage = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground font-mono">
+            <span className="text-xs uppercase tracking-[0.08em] text-muted-foreground font-mono">
               {(page * pageSize + 1).toLocaleString()}-{Math.min((page + 1) * pageSize, sorted.length).toLocaleString()} of {sorted.length.toLocaleString()}
             </span>
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>
+            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-none border border-border" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={page >= totalPages - 1} onClick={() => setPage((current) => current + 1)}>
+            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-none border border-border" disabled={page >= totalPages - 1} onClick={() => setPage((current) => current + 1)}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

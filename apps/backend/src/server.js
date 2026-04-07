@@ -64,6 +64,32 @@ const buildState = () => {
   };
 };
 
+const buildIndexPayload = () => {
+  const state = buildState();
+
+  return {
+    name: "InsightFlow Local API",
+    status: "ok",
+    currentDataset: state.dataset
+      ? {
+          id: state.dataset.id,
+          name: state.dataset.name,
+          rowCount: state.dataset.rowCount,
+          columnCount: state.dataset.columns.length,
+        }
+      : null,
+    routes: {
+      health: "GET /api/health",
+      state: "GET /api/state",
+      importDataset: "POST /api/datasets/import",
+      loadDemo: "POST /api/datasets/demo",
+      datasetSchema: "GET /api/datasets/:datasetId/schema",
+      updateRow: "PATCH /api/datasets/:datasetId/rows/:rowId",
+      chat: "POST /api/datasets/:datasetId/chat",
+    },
+  };
+};
+
 const server = createServer(async (request, response) => {
   if (!request.url) {
     sendJson(response, 400, { error: "Missing request URL" });
@@ -79,6 +105,11 @@ const server = createServer(async (request, response) => {
   const { pathname } = url;
 
   try {
+    if (request.method === "GET" && pathname === "/") {
+      sendJson(response, 200, buildIndexPayload());
+      return;
+    }
+
     if (request.method === "GET" && pathname === "/api/health") {
       sendJson(response, 200, {
         status: "ok",

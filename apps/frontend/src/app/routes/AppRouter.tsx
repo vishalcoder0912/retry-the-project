@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import AnalyticsPage from "@/features/analytics/pages/AnalyticsPage";
 import ChatPage from "@/features/chat/pages/ChatPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import DataTablePage from "@/features/dashboard/pages/DataTablePage";
@@ -19,6 +20,7 @@ const AppRouter = () => (
         <Route path="/upload" element={<UploadPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/data" element={<DataTablePage />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>

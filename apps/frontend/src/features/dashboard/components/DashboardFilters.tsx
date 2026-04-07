@@ -59,7 +59,7 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
       initial={{ opacity: 0, y: -4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.15 }}
-      className="flex flex-wrap items-center gap-3"
+      className="terminal-panel flex flex-wrap items-center gap-3 p-4"
     >
       <Popover>
         <PopoverTrigger asChild>
@@ -67,7 +67,7 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
             variant="outline"
             size="sm"
             className={cn(
-              'h-9 gap-2 font-mono text-xs border-border bg-card hover:bg-secondary',
+              'h-10 gap-2 rounded-none font-mono text-xs uppercase tracking-[0.08em] border-border bg-background hover:bg-secondary',
               filters.dateRange.from && 'border-primary/40 text-primary',
             )}
           >
@@ -99,6 +99,7 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
           <SelectTrigger
             className={cn(
               'h-9 w-auto min-w-[120px] gap-2 font-mono text-xs border-border bg-card',
+              'rounded-none uppercase tracking-[0.08em]',
               filters.columns[column.name] && 'border-primary/40 text-primary',
             )}
           >
@@ -122,7 +123,7 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
               <Badge
                 key={columnName}
                 variant="secondary"
-                className="gap-1 text-xs font-mono cursor-pointer hover:bg-destructive/20"
+                className="gap-1 rounded-none border border-border bg-background text-xs font-mono uppercase cursor-pointer hover:bg-destructive/20"
                 onClick={() => removeColumnFilter(columnName)}
               >
                 {columnName}: {value}
