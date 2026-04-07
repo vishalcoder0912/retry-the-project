@@ -49,8 +49,23 @@ export interface ChatMessage {
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const PREFERRED_NUMERIC_COLUMNS = ["revenue", "sales", "amount", "units_sold", "units", "profit_margin", "customer_rating"];
+const PREFERRED_NUMERIC_COLUMNS = [
+  "salary_usd",
+  "salary",
+  "compensation",
+  "income",
+  "pay",
+  "revenue",
+  "sales",
+  "amount",
+  "units_sold",
+  "units",
+  "profit_margin",
+  "customer_rating",
+];
 const PREFERRED_DIMENSION_COLUMNS = ["month", "date", "category", "region", "segment", "country"];
+const NON_ADDITIVE_METRIC_HINTS = ["margin", "rate", "ratio", "percent", "percentage", "rating", "score"];
+type MetricAggregation = "sum" | "average";
 
 const toNumber = (value: DatasetCellValue | undefined): number | null => {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -89,6 +104,25 @@ const pickPreferredColumn = (columns: DataColumn[], preferredNames: string[]) =>
 
   return columns[0];
 };
+
+const pickPrimaryMetric = (columns: DataColumn[]) => pickPreferredColumn(columns, PREFERRED_NUMERIC_COLUMNS);
+
+const pickSecondaryMetric = (columns: DataColumn[], primaryMetric?: DataColumn) => {
+  const remaining = columns.filter((column) => column.name !== primaryMetric?.name);
+  if (remaining.length === 0) {
+    return undefined;
+  }
+
+  const additiveMetrics = remaining.filter((column) => metricAggregationForColumn(column.name) === "sum");
+  if (additiveMetrics.length > 0) {
+    return pickPreferredColumn(additiveMetrics, PREFERRED_NUMERIC_COLUMNS);
+  }
+
+  return remaining[0];
+};
+
+const metricAggregationForColumn = (columnName: string): MetricAggregation =>
+  NON_ADDITIVE_METRIC_HINTS.some((hint) => columnName.toLowerCase().includes(hint)) ? "average" : "sum";
 
 const sortLabels = (labels: string[], columnType: DataColumn["type"]) => {
   const uniqueLabels = [...new Set(labels)];
@@ -134,8 +168,9 @@ const groupMetricByDimension = (
   rows: DatasetRow[],
   dimensionColumn: DataColumn,
   metricColumn: DataColumn,
+  aggregation: MetricAggregation = "sum",
 ) => {
-  const grouped = new Map<string, number>();
+  const grouped = new Map<string, { sum: number; count: number }>();
 
   rows.forEach((row) => {
     const label = toLabel(row[dimensionColumn.name]);
@@ -145,12 +180,42 @@ const groupMetricByDimension = (
       return;
     }
 
-    grouped.set(label, (grouped.get(label) ?? 0) + value);
+    const current = grouped.get(label) ?? { sum: 0, count: 0 };
+    current.sum += value;
+    current.count += 1;
+    grouped.set(label, current);
   });
 
   return sortLabels([...grouped.keys()], dimensionColumn.type).map((label) => ({
     [dimensionColumn.name]: label,
-    [metricColumn.name]: Number((grouped.get(label) ?? 0).toFixed(2)),
+    [metricColumn.name]: Number(
+      (
+        aggregation === "average"
+          ? (() => {
+              const entry = grouped.get(label) ?? { sum: 0, count: 0 };
+              return entry.count > 0 ? entry.sum / entry.count : 0;
+            })()
+          : (grouped.get(label)?.sum ?? 0)
+      ).toFixed(2),
+    ),
+  }));
+};
+
+const countRowsByDimension = (rows: DatasetRow[], dimensionColumn: DataColumn, valueKey = "count") => {
+  const grouped = new Map<string, number>();
+
+  rows.forEach((row) => {
+    const label = toLabel(row[dimensionColumn.name]);
+    if (!label) {
+      return;
+    }
+
+    grouped.set(label, (grouped.get(label) ?? 0) + 1);
+  });
+
+  return sortLabels([...grouped.keys()], dimensionColumn.type).map((label) => ({
+    [dimensionColumn.name]: label,
+    [valueKey]: grouped.get(label) ?? 0,
   }));
 };
 
@@ -163,7 +228,15 @@ const summarizeMetrics = (rows: DatasetRow[], columns: DataColumn[]) =>
 const formatMetricValue = (columnName: string, value: number) => {
   const normalized = columnName.toLowerCase();
 
-  if (normalized.includes("revenue") || normalized.includes("amount") || normalized.includes("sales")) {
+  if (
+    normalized.includes("salary")
+    || normalized.includes("compensation")
+    || normalized.includes("income")
+    || normalized.includes("pay")
+    || normalized.includes("revenue")
+    || normalized.includes("amount")
+    || normalized.includes("sales")
+  ) {
     return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   }
 
@@ -183,7 +256,15 @@ const formatMetricValue = (columnName: string, value: number) => {
 const iconForMetric = (columnName: string) => {
   const normalized = columnName.toLowerCase();
 
-  if (normalized.includes("revenue") || normalized.includes("amount") || normalized.includes("sales")) return "dollar";
+  if (
+    normalized.includes("salary")
+    || normalized.includes("compensation")
+    || normalized.includes("income")
+    || normalized.includes("pay")
+    || normalized.includes("revenue")
+    || normalized.includes("amount")
+    || normalized.includes("sales")
+  ) return "dollar";
   if (normalized.includes("unit") || normalized.includes("count") || normalized.includes("order")) return "package";
   if (normalized.includes("margin") || normalized.includes("rate")) return "percent";
   if (normalized.includes("rating") || normalized.includes("score")) return "star";
@@ -229,8 +310,8 @@ export const generateDemoData = (): Dataset => {
 export const generateDemoKPIs = (data: Dataset): KPI[] => {
   const numericColumns = getNumericColumns(data);
   const dimensionColumns = getDimensionColumns(data);
-  const primaryMetric = pickPreferredColumn(numericColumns, PREFERRED_NUMERIC_COLUMNS);
-  const secondaryMetric = numericColumns.find((column) => column.name !== primaryMetric?.name);
+  const primaryMetric = pickPrimaryMetric(numericColumns);
+  const secondaryMetric = pickSecondaryMetric(numericColumns, primaryMetric);
   const rowCount = data.rowCount || data.rows.length;
   const kpis: KPI[] = [
     { label: "Rows", value: rowCount.toLocaleString(), icon: "rows" },
@@ -278,18 +359,19 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
     return [];
   }
 
-  const primaryMetric = pickPreferredColumn(numericColumns, PREFERRED_NUMERIC_COLUMNS);
-  const secondaryMetric = numericColumns.find((column) => column.name !== primaryMetric?.name);
+  const primaryMetric = pickPrimaryMetric(numericColumns);
+  const secondaryMetric = pickSecondaryMetric(numericColumns, primaryMetric);
   const primaryDimension = pickPreferredColumn(dimensionColumns, PREFERRED_DIMENSION_COLUMNS);
   const secondaryDimension = dimensionColumns.find((column) => column.name !== primaryDimension?.name);
   const charts: ChartConfig[] = [];
 
   if (primaryDimension && primaryMetric) {
-    const series = groupMetricByDimension(data.rows, primaryDimension, primaryMetric);
+    const primaryAggregation = metricAggregationForColumn(primaryMetric.name);
+    const series = groupMetricByDimension(data.rows, primaryDimension, primaryMetric, primaryAggregation);
     if (series.length > 0) {
       charts.push({
         type: primaryDimension.name === "month" || primaryDimension.type === "date" ? "area" : "bar",
-        title: `${humanize(primaryMetric.name)} by ${humanize(primaryDimension.name)}`,
+        title: `${primaryAggregation === "average" ? "Average " : ""}${humanize(primaryMetric.name)} by ${humanize(primaryDimension.name)}`,
         xKey: primaryDimension.name,
         yKey: primaryMetric.name,
         data: series,
@@ -297,25 +379,31 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
     }
   }
 
-  if (secondaryDimension && primaryMetric) {
-    const series = groupMetricByDimension(data.rows, secondaryDimension, primaryMetric);
+  if (secondaryDimension) {
+    const pieMetric = numericColumns.find((column) => metricAggregationForColumn(column.name) === "sum");
+    const series = pieMetric
+      ? groupMetricByDimension(data.rows, secondaryDimension, pieMetric, "sum")
+      : countRowsByDimension(data.rows, secondaryDimension);
     if (series.length > 0) {
       charts.push({
         type: series.length <= 6 ? "pie" : "bar",
-        title: `${humanize(primaryMetric.name)} by ${humanize(secondaryDimension.name)}`,
+        title: pieMetric
+          ? `${humanize(pieMetric.name)} by ${humanize(secondaryDimension.name)}`
+          : `Count by ${humanize(secondaryDimension.name)}`,
         xKey: secondaryDimension.name,
-        yKey: primaryMetric.name,
+        yKey: pieMetric?.name ?? "count",
         data: series,
       });
     }
   }
 
   if (primaryDimension && secondaryMetric) {
-    const series = groupMetricByDimension(data.rows, primaryDimension, secondaryMetric);
+    const secondaryAggregation = metricAggregationForColumn(secondaryMetric.name);
+    const series = groupMetricByDimension(data.rows, primaryDimension, secondaryMetric, secondaryAggregation);
     if (series.length > 0) {
       charts.push({
         type: primaryDimension.type === "date" ? "line" : "bar",
-        title: `${humanize(secondaryMetric.name)} by ${humanize(primaryDimension.name)}`,
+        title: `${secondaryAggregation === "average" ? "Average " : ""}${humanize(secondaryMetric.name)} by ${humanize(primaryDimension.name)}`,
         xKey: primaryDimension.name,
         yKey: secondaryMetric.name,
         data: series,

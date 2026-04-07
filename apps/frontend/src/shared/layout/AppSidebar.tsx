@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Upload, MessageSquare, Database, Sparkles, Table2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ThemeToggle from '@/shared/layout/ThemeToggle';
 
 const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -52,6 +53,9 @@ const AppSidebar = () => {
 
       {/* Status */}
       <div className="p-4 border-t border-sidebar-border">
+        <div className="mb-3">
+          <ThemeToggle />
+        </div>
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-sidebar-accent">
           <Database className="w-3.5 h-3.5 text-muted-foreground" />
           <span className="text-xs text-muted-foreground">Local Processing</span>

@@ -8,8 +8,13 @@ import {
   getDatasetById,
   patchDatasetRow,
   saveChatMessages,
-} from "./db.js";
-import { createChatResponse, generateDemoDataset, normalizeColumns } from "./analytics.js";
+} from "./database/dataset-repository.js";
+import {
+  buildDatasetSchema,
+  createChatResponse,
+  generateDemoDataset,
+  normalizeColumns,
+} from "./services/analytics-service.js";
 
 const port = Number(process.env.PORT || 3001);
 
@@ -146,6 +151,20 @@ const server = createServer(async (request, response) => {
       }
 
       sendJson(response, 200, { dataset });
+      return;
+    }
+
+    const schemaMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema$/);
+    if (request.method === "GET" && schemaMatch) {
+      const [, datasetId] = schemaMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      sendJson(response, 200, { schema: buildDatasetSchema(dataset) });
       return;
     }
 
