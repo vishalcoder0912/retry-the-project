@@ -88,8 +88,13 @@ const UploadPage = () => {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="flex justify-end">
         <button
           onClick={async () => {
-            await loadDemo();
-            navigate('/');
+            try {
+              await loadDemo();
+              navigate('/');
+            } catch (err) {
+              console.error('Failed to load demo data:', err);
+              alert('Failed to load demo data. Please try uploading a file instead.');
+            }
           }}
           className="terminal-button"
         >

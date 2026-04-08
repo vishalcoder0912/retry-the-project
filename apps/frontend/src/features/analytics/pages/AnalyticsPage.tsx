@@ -1,12 +1,20 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Download, Filter } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
-import { generateDemoCharts, generateDemoKPIs } from '@/features/data/model/dataStore';
+import { Dataset, generateDemoCharts, generateDemoKPIs } from '@/features/data/model/dataStore';
 import AnalyticsChart from '@/features/dashboard/components/AnalyticsChart';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/components/ui/select';
 import StatusPanel from '@/shared/layout/StatusPanel';
 
 const AnalyticsPage = () => {
   const { dataset, isHydrating, apiError, loadDemo, retryHydrate } = useData();
+  const [selectedRegion, setSelectedRegion] = useState<string>('all');
 
   useEffect(() => {
     if (!dataset && !isHydrating) {
@@ -14,8 +22,62 @@ const AnalyticsPage = () => {
     }
   }, [dataset, isHydrating, loadDemo]);
 
-  const charts = useMemo(() => (dataset ? generateDemoCharts(dataset) : []), [dataset]);
-  const kpis = useMemo(() => (dataset ? generateDemoKPIs(dataset) : []), [dataset]);
+  const regionColumn = useMemo(
+    () => dataset?.columns.find((column) => column.name.toLowerCase() === 'country' || column.name.toLowerCase() === 'region'),
+    [dataset],
+  );
+
+  const regionOptions = useMemo(() => {
+    if (!dataset || !regionColumn) return [];
+
+    return [...new Set(
+      dataset.rows
+        .map((row) => String(row[regionColumn.name] ?? '').trim())
+        .filter(Boolean),
+    )].sort((left, right) => left.localeCompare(right));
+  }, [dataset, regionColumn]);
+
+  const analyticsDataset = useMemo<Dataset | null>(() => {
+    if (!dataset) return null;
+    if (!regionColumn || selectedRegion === 'all') return dataset;
+
+    const filteredRows = dataset.rows.filter((row) => String(row[regionColumn.name] ?? '').trim() === selectedRegion);
+
+    return {
+      ...dataset,
+      rows: filteredRows,
+      rowCount: filteredRows.length,
+    };
+  }, [dataset, regionColumn, selectedRegion]);
+
+  const charts = useMemo(() => (analyticsDataset ? generateDemoCharts(analyticsDataset) : []), [analyticsDataset]);
+  const kpis = useMemo(() => (analyticsDataset ? generateDemoKPIs(analyticsDataset) : []), [analyticsDataset]);
+
+  const downloadDossier = () => {
+    if (!analyticsDataset) return;
+
+    const dossier = [
+      'INSIGHTFLOW ANALYTICS DOSSIER',
+      `DATASET: ${analyticsDataset.name}`,
+      `REGION FILTER: ${selectedRegion === 'all' ? 'ALL' : selectedRegion}`,
+      `ROWS: ${analyticsDataset.rowCount}`,
+      `COLUMNS: ${analyticsDataset.columns.length}`,
+      '',
+      'KPIS',
+      ...kpis.map((kpi) => `- ${kpi.label}: ${kpi.value}`),
+      '',
+      'CHARTS',
+      ...charts.map((chart) => `- ${chart.title}`),
+    ].join('\n');
+
+    const blob = new Blob([dossier], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${analyticsDataset.name.replace(/\s+/g, '_').toLowerCase()}_${selectedRegion === 'all' ? 'all' : selectedRegion.toLowerCase()}_dossier.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (isHydrating) {
     return <StatusPanel title="Loading analytics" message="Preparing comparative visualizations." />;
@@ -31,9 +93,28 @@ const AnalyticsPage = () => {
 
   return (
     <div className="space-y-8 px-10 py-10">
-      <div className="flex items-center justify-end gap-4">
-        <button className="terminal-button gap-2"><Filter className="h-4 w-4" />Filter by Region</button>
-        <button className="terminal-button-inverse gap-2"><Download className="h-4 w-4" />Download Dossier</button>
+      <div className="flex flex-wrap items-center justify-end gap-4">
+        <div className="flex items-center gap-3">
+          <div className="terminal-label">Region Filter</div>
+          <Select value={selectedRegion} onValueChange={setSelectedRegion}>
+            <SelectTrigger className="h-12 min-w-[220px] rounded-none border-border bg-card text-sm uppercase tracking-[0.08em]">
+              <Filter className="mr-2 h-4 w-4" />
+              <SelectValue placeholder="Filter by Region" />
+            </SelectTrigger>
+            <SelectContent className="rounded-none border-border bg-card text-foreground">
+              <SelectItem value="all" className="text-xs uppercase tracking-[0.08em]">All Regions</SelectItem>
+              {regionOptions.map((option) => (
+                <SelectItem key={option} value={option} className="text-xs uppercase tracking-[0.08em]">
+                  {option}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <button onClick={downloadDossier} className="terminal-button-inverse gap-2">
+          <Download className="h-4 w-4" />
+          Download Dossier
+        </button>
       </div>
 
       <section className="space-y-4">

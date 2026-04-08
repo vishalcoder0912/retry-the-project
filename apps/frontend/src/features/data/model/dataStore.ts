@@ -380,18 +380,25 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
   }
 
   if (secondaryDimension) {
-    const pieMetric = numericColumns.find((column) => metricAggregationForColumn(column.name) === "sum");
-    const series = pieMetric
+    const shouldUseCountPie = secondaryDimension.name.toLowerCase() === "education";
+    const pieMetric = primaryMetric && metricAggregationForColumn(primaryMetric.name) === "sum"
+      ? primaryMetric
+      : numericColumns.find((column) => metricAggregationForColumn(column.name) === "sum");
+    const series = shouldUseCountPie
+      ? countRowsByDimension(data.rows, secondaryDimension)
+      : pieMetric
       ? groupMetricByDimension(data.rows, secondaryDimension, pieMetric, "sum")
       : countRowsByDimension(data.rows, secondaryDimension);
     if (series.length > 0) {
       charts.push({
         type: series.length <= 6 ? "pie" : "bar",
-        title: pieMetric
+        title: shouldUseCountPie
+          ? `Count by ${humanize(secondaryDimension.name)}`
+          : pieMetric
           ? `${humanize(pieMetric.name)} by ${humanize(secondaryDimension.name)}`
           : `Count by ${humanize(secondaryDimension.name)}`,
         xKey: secondaryDimension.name,
-        yKey: pieMetric?.name ?? "count",
+        yKey: shouldUseCountPie ? "count" : (pieMetric?.name ?? "count"),
         data: series,
       });
     }
