@@ -84,12 +84,13 @@ describe("dataStore dashboard helpers", () => {
       columns: [
         { name: "experience", type: "number", sample: ["5", "10"] },
         { name: "country", type: "string", sample: ["USA", "India"] },
+        { name: "education", type: "string", sample: ["Masters", "Bachelors"] },
         { name: "salary_usd", type: "number", sample: ["100000", "200000"] },
       ],
       rows: [
-        { experience: 5, country: "USA", salary_usd: 100000 },
-        { experience: 10, country: "USA", salary_usd: 200000 },
-        { experience: 2, country: "India", salary_usd: 50000 },
+        { experience: 5, country: "USA", education: "Masters", salary_usd: 100000 },
+        { experience: 10, country: "USA", education: "Bachelors", salary_usd: 200000 },
+        { experience: 2, country: "India", education: "Masters", salary_usd: 50000 },
       ],
     };
 
@@ -108,6 +109,45 @@ describe("dataStore dashboard helpers", () => {
       data: [
         { country: "India", salary_usd: 50000 },
         { country: "USA", salary_usd: 300000 },
+      ],
+    });
+    expect(charts.find((chart) => chart.type === "pie")).toMatchObject({
+      title: "Count by Education",
+      yKey: "count",
+    });
+  });
+
+  it("uses the primary metric for pie charts instead of the first numeric column", () => {
+    const dataset: Dataset = {
+      id: "salary-pie-1",
+      name: "Salary Pie Dataset",
+      uploadedAt: new Date("2026-04-06T00:00:00.000Z"),
+      rowCount: 4,
+      columns: [
+        { name: "experience", type: "number", sample: ["5", "10"] },
+        { name: "country", type: "string", sample: ["USA", "India"] },
+        { name: "education", type: "string", sample: ["Masters", "Bachelors"] },
+        { name: "salary_usd", type: "number", sample: ["100000", "200000"] },
+      ],
+      rows: [
+        { experience: 5, country: "USA", education: "Masters", salary_usd: 100000 },
+        { experience: 10, country: "USA", education: "Bachelors", salary_usd: 200000 },
+        { experience: 2, country: "India", education: "Masters", salary_usd: 50000 },
+        { experience: 8, country: "India", education: "PhD", salary_usd: 150000 },
+      ],
+    };
+
+    const charts = generateDemoCharts(dataset);
+
+    expect(charts[1]).toMatchObject({
+      type: "pie",
+      title: "Count by Education",
+      xKey: "education",
+      yKey: "count",
+      data: [
+        { education: "Bachelors", count: 1 },
+        { education: "Masters", count: 2 },
+        { education: "PhD", count: 1 },
       ],
     });
   });

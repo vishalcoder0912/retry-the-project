@@ -47,6 +47,7 @@ interface AnalyticsChartProps {
 
 const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
   const chartRef = useRef<HTMLDivElement>(null);
+  const isPieChart = config.type === 'pie';
 
   const exportPng = async () => {
     if (!chartRef.current) return;
@@ -57,7 +58,9 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
       a.download = `${config.title.replace(/\s+/g, '_').toLowerCase()}.png`;
       a.click();
     } catch (e) {
-      console.error('Export failed', e);
+      const errorMsg = e instanceof Error ? e.message : 'Unknown error occurred';
+      console.error('Export failed:', errorMsg);
+      alert(`Failed to export chart: ${errorMsg}`);
     }
   };
 
@@ -138,10 +141,35 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
           <Download className="h-3.5 w-3.5" />
         </button>
       </div>
-      <div className="h-72">
-        <ResponsiveContainer width="100%" height="100%">
-          {renderChart()!}
-        </ResponsiveContainer>
+      <div className={`${isPieChart ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_220px]' : 'h-72'}`}>
+        <div className={isPieChart ? 'h-72' : 'h-full'}>
+          <ResponsiveContainer width="100%" height="100%">
+            {renderChart()}
+          </ResponsiveContainer>
+        </div>
+        {isPieChart && (
+          <div className="border border-border p-4">
+            <p className="terminal-label mb-4">Degree Count</p>
+            <div className="space-y-3">
+              {config.data.map((datum, datumIndex) => (
+                <div key={`${String(datum[config.xKey])}-${datumIndex}`} className="flex items-center justify-between gap-3 text-sm uppercase tracking-[0.08em]">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="block h-3 w-3 border border-border"
+                      style={{ backgroundColor: COLORS[datumIndex % COLORS.length] }}
+                    />
+                    <span className="text-foreground">{String(datum[config.xKey])}</span>
+                  </div>
+                  <span className="text-success">
+                    {typeof datum[config.yKey] === 'number'
+                      ? Number(datum[config.yKey]).toLocaleString()
+                      : String(datum[config.yKey])}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
   );

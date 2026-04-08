@@ -116,6 +116,26 @@ const normalizeText = (value) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+const singularizeWord = (word) => {
+  if (word.length <= 3) return word;
+  if (word.endsWith("ies")) return `${word.slice(0, -3)}y`;
+  if (word.endsWith("ses")) return word.slice(0, -2);
+  if (word.endsWith("s")) return word.slice(0, -1);
+  return word;
+};
+
+const normalizeComparableText = (value) =>
+  normalizeText(value)
+    .split(" ")
+    .filter(Boolean)
+    .map(singularizeWord)
+    .join(" ");
+
+const includesPhrase = (source, phrase) => {
+  if (!source || !phrase) return false;
+  return (` ${source} `).includes(` ${phrase} `);
+};
+
 const groupMetricByDimension = (rows, dimensionColumn, metricColumn, aggregation = "sum") => {
   const grouped = new Map();
 
@@ -159,13 +179,20 @@ const countRowsByDimension = (rows, dimensionColumn, valueKey = "count") => {
   }));
 };
 
-const countRowsMatchingValue = (rows, dimensionColumn, matchValue, valueKey = "count") => {
-  const count = rows.reduce((total, row) => {
-    const label = toLabel(row[dimensionColumn.name]);
-    return label === matchValue ? total + 1 : total;
-  }, 0);
+const countRowsMatchingValues = (rows, dimensionColumn, matchValues, valueKey = "count") => {
+  const requestedValues = new Set(matchValues);
+  const grouped = new Map(matchValues.map((value) => [value, 0]));
 
-  return [{ [dimensionColumn.name]: matchValue, [valueKey]: count }];
+  rows.forEach((row) => {
+    const label = toLabel(row[dimensionColumn.name]);
+    if (!label || !requestedValues.has(label)) return;
+    grouped.set(label, (grouped.get(label) ?? 0) + 1);
+  });
+
+  return matchValues.map((value) => ({
+    [dimensionColumn.name]: value,
+    [valueKey]: grouped.get(value) ?? 0,
+  }));
 };
 
 export const buildDatasetSchema = (dataset) => {
@@ -211,8 +238,9 @@ const pickMetricForQuery = (schema, queryLower) => {
     ?? null;
 };
 
-const detectQueryValueFilter = (dataset, schema, queryLower) => {
+const detectQueryValueFilter = (dataset, schema, normalizedQuery) => {
   const dimensions = schema.columns.filter((column) => column.role === "dimension");
+  const comparableQuery = normalizeComparableText(normalizedQuery);
 
   for (const dimension of dimensions) {
     const values = new Set();
@@ -227,15 +255,22 @@ const detectQueryValueFilter = (dataset, schema, queryLower) => {
       }
     }
 
+    const matches = [];
+
     for (const value of values) {
       const normalizedValue = normalizeText(value);
+      const comparableValue = normalizeComparableText(value);
       if (!normalizedValue) {
         continue;
       }
 
-      if (queryLower.includes(normalizedValue)) {
-        return { dimension, value };
+      if (includesPhrase(normalizedQuery, normalizedValue) || includesPhrase(comparableQuery, comparableValue)) {
+        matches.push(value);
       }
+    }
+
+    if (matches.length > 0) {
+      return { dimension, values: [...new Set(matches)] };
     }
   }
 
@@ -268,11 +303,20 @@ const buildAnalysisPlan = (dataset, schema, query) => {
 
   if (wantsCount && valueFilter) {
     return {
-      mode: "countMatchingValue",
+      mode: "countMatchingValues",
       dimension: valueFilter.dimension,
-      matchValue: valueFilter.value,
+      matchValues: valueFilter.values,
       chartType: "bar",
       intent: "count-filter",
+    };
+  }
+
+  if (wantsCount && dimension) {
+    return {
+      mode: "countByDimension",
+      dimension,
+      chartType: "pie",
+      intent: "count",
     };
   }
 
@@ -330,11 +374,12 @@ const materializePlan = (dataset, plan) => {
     };
   }
 
-  if (plan.mode === "countMatchingValue" && plan.dimension && plan.matchValue) {
-    const data = countRowsMatchingValue(dataset.rows, plan.dimension, plan.matchValue);
+  if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && plan.matchValues.length > 0) {
+    const data = countRowsMatchingValues(dataset.rows, plan.dimension, plan.matchValues);
+    const titleValues = plan.matchValues.join(", ");
     return {
       type: "bar",
-      title: `Count of ${humanize(plan.matchValue)} in ${humanize(plan.dimension.name)}`,
+      title: `Count of ${titleValues} in ${humanize(plan.dimension.name)}`,
       xKey: plan.dimension.name,
       yKey: "count",
       data,
@@ -354,9 +399,9 @@ const buildSqlForPlan = (plan) => {
     return `SELECT ${plan.dimension.name}, COUNT(*) AS count FROM dataset_rows GROUP BY ${plan.dimension.name} ORDER BY count DESC;`;
   }
 
-  if (plan.mode === "countMatchingValue" && plan.dimension && plan.matchValue) {
-    const escapedValue = String(plan.matchValue).replace(/'/g, "''");
-    return `SELECT ${plan.dimension.name}, COUNT(*) AS count FROM dataset_rows WHERE ${plan.dimension.name} = '${escapedValue}' GROUP BY ${plan.dimension.name};`;
+  if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && plan.matchValues.length > 0) {
+    const escapedValues = plan.matchValues.map((value) => `'${String(value).replace(/'/g, "''")}'`).join(", ");
+    return `SELECT ${plan.dimension.name}, COUNT(*) AS count FROM dataset_rows WHERE ${plan.dimension.name} IN (${escapedValues}) GROUP BY ${plan.dimension.name} ORDER BY count DESC;`;
   }
 
   return "SELECT * FROM dataset_rows LIMIT 100;";
@@ -373,8 +418,9 @@ const buildInsightsFromSchema = (schema, plan) => {
     base.push(`This response used the schema to pair metric \`${plan.metric.name}\` with dimension \`${plan.dimension.name}\`.`);
   } else if (plan.mode === "countByDimension" && plan.dimension) {
     base.push(`This response used the schema to count records by \`${plan.dimension.name}\` without sending row values to any AI system.`);
-  } else if (plan.mode === "countMatchingValue" && plan.dimension && plan.matchValue) {
-    base.push(`This response counted rows where \`${plan.dimension.name}\` equals \`${plan.matchValue}\` using only local processing.`);
+  } else if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && plan.matchValues.length > 0) {
+    const valuesList = plan.matchValues.map((value) => `\`${value}\``).join(", ");
+    base.push(`This response counted rows where \`${plan.dimension.name}\` matched ${valuesList} using only local processing.`);
   }
 
   return base;
@@ -386,8 +432,10 @@ export const createChatResponse = (dataset, query) => {
   const chart = materializePlan(dataset, plan);
 
   let content = `I analyzed the ${schema.datasetName} schema and used it to select an appropriate ${chart?.type ?? "summary"} view.`;
-  if (plan.mode === "countMatchingValue" && plan.dimension && plan.matchValue && chart?.data?.[0]?.count != null) {
-    content = `${chart.data[0].count.toLocaleString()} records match ${plan.dimension.name} = ${plan.matchValue}.`;
+  if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && chart?.data?.length) {
+    const total = chart.data.reduce((sum, item) => sum + Number(item.count ?? 0), 0);
+    const breakdown = chart.data.map((item) => `${item[plan.dimension.name]}: ${Number(item.count ?? 0).toLocaleString()}`).join("; ");
+    content = `${total.toLocaleString()} records match ${plan.dimension.name} in ${plan.matchValues.join(", ")}. ${breakdown}.`;
   }
 
   return {
