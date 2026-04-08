@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Send, User, Lightbulb, Code, Settings } from 'lucide-react';
+import { Send, User, Settings } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
 import AnalyticsChart from '@/features/dashboard/components/AnalyticsChart';
 
@@ -103,35 +103,9 @@ const ChatInterface = () => {
                 >
                   {msg.content}
                 </div>
-
-                {msg.sql && (
-                  <div className="border border-border p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Code className="w-3 h-3 text-muted-foreground" />
-                      <span className="text-[10px] font-mono text-muted-foreground uppercase">Generated SQL</span>
-                    </div>
-                    <code className="text-xs font-mono text-primary block">{msg.sql}</code>
-                  </div>
-                )}
-
                 {msg.chart && (
                   <div className="w-full">
                     <AnalyticsChart config={msg.chart} index={0} />
-                  </div>
-                )}
-
-                {msg.insights && msg.insights.length > 0 && (
-                  <div className="border border-border p-4 space-y-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Lightbulb className="w-3 h-3 text-warning" />
-                      <span className="text-[10px] font-mono text-muted-foreground uppercase">Insights</span>
-                    </div>
-                    {msg.insights.map((insight, index) => (
-                      <p key={index} className="text-xs text-secondary-foreground flex items-start gap-2">
-                        <span className="text-accent mt-0.5">&bull;</span>
-                        {insight}
-                      </p>
-                    ))}
                   </div>
                 )}
               </div>

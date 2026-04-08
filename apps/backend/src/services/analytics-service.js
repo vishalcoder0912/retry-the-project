@@ -284,6 +284,9 @@ const buildAnalysisPlan = (dataset, schema, query) => {
   const metric = pickMetricForQuery(schema, queryLower);
   const valueFilter = detectQueryValueFilter(dataset, schema, normalizedQuery);
   const wantsCount = /\bhow many\b|\bcount\b|\bnumber of\b|\btotal people\b|\bpeople\b/.test(normalizedQuery);
+  const mentionsMetric = schema.columns
+    .filter((column) => column.role === "metric")
+    .some((column) => includesPhrase(normalizedQuery, normalizeText(column.name)));
 
   if ((queryLower.includes("trend") || queryLower.includes("monthly") || queryLower.includes("over time")) && schema.primaryDimension) {
     const trendDimension = schema.columns.find((column) => column.name === schema.primaryDimension.name && (column.type === "date" || column.name === "month"))
@@ -308,6 +311,16 @@ const buildAnalysisPlan = (dataset, schema, query) => {
       matchValues: valueFilter.values,
       chartType: "bar",
       intent: "count-filter",
+    };
+  }
+
+  if (valueFilter && !mentionsMetric) {
+    return {
+      mode: "countMatchingValues",
+      dimension: valueFilter.dimension,
+      matchValues: valueFilter.values,
+      chartType: "bar",
+      intent: "value-filter",
     };
   }
 
@@ -435,7 +448,8 @@ export const createChatResponse = (dataset, query) => {
   if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && chart?.data?.length) {
     const total = chart.data.reduce((sum, item) => sum + Number(item.count ?? 0), 0);
     const breakdown = chart.data.map((item) => `${item[plan.dimension.name]}: ${Number(item.count ?? 0).toLocaleString()}`).join("; ");
-    content = `${total.toLocaleString()} records match ${plan.dimension.name} in ${plan.matchValues.join(", ")}. ${breakdown}.`;
+    const valueList = plan.matchValues.map((value) => `"${value}"`).join(" and ");
+    content = `${total.toLocaleString()} records match ${humanize(plan.dimension.name)} = ${valueList}. ${breakdown}.`;
   }
 
   return {

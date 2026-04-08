@@ -31,7 +31,7 @@ export interface KPI {
 }
 
 export interface ChartConfig {
-  type: "line" | "bar" | "pie" | "area";
+  type: "line" | "bar" | "pie" | "area" | "scatter" | "radar" | "composed";
   title: string;
   xKey: string;
   yKey: string;
@@ -143,6 +143,16 @@ const sortLabels = (labels: string[], columnType: DataColumn["type"]) => {
 
 const getNumericColumns = (data: Dataset) => data.columns.filter((column) => column.type === "number");
 const getDimensionColumns = (data: Dataset) => data.columns.filter((column) => column.type !== "number");
+const dedupeCharts = (charts: ChartConfig[]) => {
+  const seen = new Set<string>();
+
+  return charts.filter((chart) => {
+    const key = `${chart.title}|${chart.xKey}|${chart.yKey}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 const sumColumn = (rows: DatasetRow[], columnName: string) =>
   rows.reduce((total, row) => total + (toNumber(row[columnName]) ?? 0), 0);
@@ -363,6 +373,9 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
   const secondaryMetric = pickSecondaryMetric(numericColumns, primaryMetric);
   const primaryDimension = pickPreferredColumn(dimensionColumns, PREFERRED_DIMENSION_COLUMNS);
   const secondaryDimension = dimensionColumns.find((column) => column.name !== primaryDimension?.name);
+  const tertiaryDimension = dimensionColumns.find(
+    (column) => column.name !== primaryDimension?.name && column.name !== secondaryDimension?.name,
+  );
   const charts: ChartConfig[] = [];
 
   if (primaryDimension && primaryMetric) {
@@ -418,6 +431,61 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
     }
   }
 
+  if (secondaryDimension && primaryMetric) {
+    const averageSeries = groupMetricByDimension(data.rows, secondaryDimension, primaryMetric, "average");
+    if (averageSeries.length > 0) {
+      charts.push({
+        type: "line",
+        title: `Average ${humanize(primaryMetric.name)} by ${humanize(secondaryDimension.name)}`,
+        xKey: secondaryDimension.name,
+        yKey: primaryMetric.name,
+        data: averageSeries,
+      });
+    }
+  }
+
+  if (tertiaryDimension) {
+    const countSeries = countRowsByDimension(data.rows, tertiaryDimension);
+    if (countSeries.length > 0) {
+      charts.push({
+        type: countSeries.length <= 6 ? "pie" : "bar",
+        title: `Count by ${humanize(tertiaryDimension.name)}`,
+        xKey: tertiaryDimension.name,
+        yKey: "count",
+        data: countSeries,
+      });
+    }
+  }
+
+  if (primaryMetric && secondaryMetric) {
+    const scatterData = data.rows
+      .map((row) => {
+        const x = toNumber(row[secondaryMetric.name]);
+        const y = toNumber(row[primaryMetric.name]);
+        const label = primaryDimension ? toLabel(row[primaryDimension.name]) : null;
+
+        if (x == null || y == null) return null;
+
+        return {
+          [secondaryMetric.name]: x,
+          [primaryMetric.name]: y,
+          label: label ?? "Value",
+        };
+      })
+      .filter((entry): entry is ChartDatum => entry !== null)
+      .slice(0, 250);
+
+    if (scatterData.length > 0) {
+      charts.push({
+        type: "scatter",
+        title: `${humanize(primaryMetric.name)} vs ${humanize(secondaryMetric.name)}`,
+        xKey: secondaryMetric.name,
+        yKey: primaryMetric.name,
+        data: scatterData,
+      });
+    }
+  }
+
   if (charts.length === 0) {
     const summary = summarizeMetrics(data.rows, numericColumns);
     if (summary.length > 0) {
@@ -431,5 +499,5 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
     }
   }
 
-  return charts.slice(0, 4);
+  return dedupeCharts(charts).slice(0, 6);
 };

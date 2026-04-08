@@ -135,12 +135,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return new Promise<void>((resolve, reject) => {
         Papa.parse(file, {
           header: true,
-          dynamicTyping: true,
+          dynamicTyping: false,
           skipEmptyLines: true,
           complete: async (results) => {
             try {
-              const rows = results.data.map(normalizeDatasetRow);
-              const fields = results.meta.fields || [];
+              const rows = (results.data || []).map(normalizeDatasetRow);
+              
+              if (rows.length === 0) {
+                throw new Error('CSV file contains no data rows');
+              }
+              
+              const fields = results.meta?.fields || [];
               await importDatasetPayload(buildDatasetPayload(rows, fields, file.name));
               resolve();
             } catch (error) {
@@ -156,6 +161,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const text = await file.text();
       const parsed = JSON.parse(text) as unknown;
       const rows = (Array.isArray(parsed) ? parsed : [parsed]).map(normalizeDatasetRow);
+      
+      if (rows.length === 0) {
+        throw new Error('JSON file contains no data rows');
+      }
+      
       const fields = Object.keys(rows[0] || {});
       await importDatasetPayload(buildDatasetPayload(rows, fields, file.name));
       return;
@@ -164,8 +174,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (ext === 'xlsx' || ext === 'xls') {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      
+      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+        throw new Error('Excel file contains no sheets');
+      }
+      
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      
+      if (!sheet) {
+        throw new Error('Failed to read Excel sheet');
+      }
+      
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet).map(normalizeDatasetRow);
+      
+      if (rows.length === 0) {
+        throw new Error('Excel sheet contains no data rows');
+      }
+      
       const fields = Object.keys(rows[0] || {});
       await importDatasetPayload(buildDatasetPayload(rows, fields, file.name));
       return;
@@ -203,10 +229,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsProcessing(false);
     }
-  }, [dataset]);
+  }, [dataset, setIsProcessing]);
 
   const updateDatasetCell = useCallback(async (rowId: number, column: string, value: unknown) => {
-    if (!dataset) return;
+    if (!dataset) {
+      const errorMsg = 'Dataset not available';
+      setApiError(errorMsg);
+      throw new Error(errorMsg);
+    }
 
     try {
       const response = await api.updateRow(dataset.id, rowId, column, value);
