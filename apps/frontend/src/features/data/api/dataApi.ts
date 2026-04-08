@@ -18,7 +18,13 @@ interface ChatResponse {
   assistantMessage: ChatMessage;
 }
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const apiBaseUrl = (() => {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+  if (!import.meta.env.VITE_API_BASE_URL) {
+    console.warn('VITE_API_BASE_URL not set, using default:', baseUrl);
+  }
+  return baseUrl.replace(/\/$/, "");
+})();
 
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${apiBaseUrl}${path}`, {

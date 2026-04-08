@@ -98,7 +98,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [hydrateState]);
 
   const buildDatasetPayload = useCallback((rows: DatasetRow[], fields: string[], fileName: string): DatasetImportPayload => {
-    const columns = fields.map(name => ({
+    const columns: Array<{
+      name: string;
+      type: 'string' | 'number' | 'date';
+      sample: string[];
+    }> = fields.map(name => ({
       name,
       type: inferType(rows.slice(0, 20).map(r => String(r[name] ?? ''))),
       sample: rows.slice(0, 3).map(r => String(r[name] ?? '')),
@@ -106,7 +110,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return {
       name: fileName.replace(/\.(csv|xlsx|xls|json)$/i, ''),
-      columns: columns as Dataset['columns'],
+      columns: columns,
       rows,
       fileName,
       sourceType: 'upload',
