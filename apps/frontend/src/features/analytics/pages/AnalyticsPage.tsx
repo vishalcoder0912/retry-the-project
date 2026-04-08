@@ -134,7 +134,7 @@ const AnalyticsPage = () => {
       <section className="space-y-4">
         <h2 className="text-3xl uppercase tracking-[0.08em] text-foreground">4.2 Comparative Visualization</h2>
         <div className="grid gap-6 xl:grid-cols-2">
-          {charts.slice(0, 4).map((chart, index) => (
+          {charts.slice(0, 6).map((chart, index) => (
             <AnalyticsChart key={`${chart.title}-${index}`} config={chart} index={index} />
           ))}
           <div className="terminal-panel p-6">

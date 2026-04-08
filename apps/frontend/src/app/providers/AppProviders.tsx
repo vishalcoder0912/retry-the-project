@@ -15,7 +15,13 @@ interface AppProvidersProps {
 
 const AppProviders = ({ children }: AppProvidersProps) => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem={false}
+      storageKey="insightflow-theme"
+      disableTransitionOnChange
+    >
       <TooltipProvider>
         <Toaster />
         <Sonner />
