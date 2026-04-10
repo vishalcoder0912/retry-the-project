@@ -1,20 +1,35 @@
-import { useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Download } from 'lucide-react';
+import { Download, SlidersHorizontal } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ScatterChart,
+  Scatter, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+  ComposedChart, Legend,
 } from 'recharts';
 import { ChartConfig } from '@/features/data/model/dataStore';
+import { Input } from '@/shared/components/ui/input';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/shared/components/ui/sheet';
+import { Switch } from '@/shared/components/ui/switch';
 
-const COLORS = [
-  'hsl(190, 95%, 50%)',
-  'hsl(270, 60%, 60%)',
-  'hsl(150, 70%, 45%)',
-  'hsl(38, 92%, 55%)',
-  'hsl(340, 75%, 55%)',
-];
+const PALETTES = {
+  cyan: ['#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1'],
+  amber: ['#fcd34d', '#f59e0b', '#d97706', '#b45309', '#78350f'],
+  emerald: ['#86efac', '#4ade80', '#22c55e', '#16a34a', '#166534'],
+  rose: ['#fda4af', '#fb7185', '#f43f5e', '#e11d48', '#881337'],
+  mixed: ['#f5f5f5', '#ff5a5f', '#4cc24f', '#9ca3af', '#525252'],
+} as const;
+
+type PaletteKey = keyof typeof PALETTES;
+type LocalChartType = ChartConfig['type'];
 
 interface TooltipEntry {
   value?: string | number;
@@ -30,9 +45,9 @@ const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="glass rounded-lg px-3 py-2 text-xs">
-      <p className="text-muted-foreground mb-1">{label}</p>
+      <p className="mb-1 uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
       {payload.map((p, i) => (
-        <p key={i} className="font-mono text-foreground">
+        <p key={i} className="font-mono uppercase tracking-[0.08em] text-foreground">
           {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
         </p>
       ))}
@@ -47,6 +62,21 @@ interface AnalyticsChartProps {
 
 const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
   const chartRef = useRef<HTMLDivElement>(null);
+  const [chartType, setChartType] = useState<LocalChartType>(config.type);
+  const [xLabel, setXLabel] = useState(config.xKey);
+  const [yLabel, setYLabel] = useState(config.yKey);
+  const [palette, setPalette] = useState<PaletteKey>('mixed');
+  const [showGrid, setShowGrid] = useState(true);
+  const [showLegend, setShowLegend] = useState(chartType === 'pie');
+  const [curved, setCurved] = useState(true);
+
+  const colors = PALETTES[palette];
+  const isPieChart = chartType === 'pie';
+  const chartData = useMemo(() => config.data, [config.data]);
+
+  useEffect(() => {
+    setShowLegend(chartType === 'pie');
+  }, [chartType]);
 
   const exportPng = async () => {
     if (!chartRef.current) return;
@@ -57,59 +87,102 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
       a.download = `${config.title.replace(/\s+/g, '_').toLowerCase()}.png`;
       a.click();
     } catch (e) {
-      console.error('Export failed', e);
+      const errorMsg = e instanceof Error ? e.message : 'Unknown error occurred';
+      console.error('Export failed:', errorMsg);
+      alert(`Failed to export chart: ${errorMsg}`);
     }
   };
 
   const renderChart = () => {
-    const commonProps = { data: config.data };
+    const commonProps = { data: chartData };
+    const curveType = curved ? 'monotone' : 'linear';
+    const grid = showGrid ? <CartesianGrid strokeDasharray="0" stroke="hsl(0 0% 32%)" /> : null;
+    const legend = showLegend ? <Legend wrapperStyle={{ textTransform: 'uppercase', fontSize: '11px' }} /> : null;
 
-    switch (config.type) {
+    switch (chartType) {
       case 'area':
         return (
           <AreaChart {...commonProps}>
             <defs>
               <linearGradient id={`gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={COLORS[0]} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={COLORS[0]} stopOpacity={0} />
+                <stop offset="5%" stopColor={colors[1]} stopOpacity={0.9} />
+                <stop offset="95%" stopColor={colors[1]} stopOpacity={0.1} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(230, 12%, 16%)" />
-            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(215, 15%, 50%)' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: 'hsl(215, 15%, 50%)' }} axisLine={false} tickLine={false} />
+            {grid}
+            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
+            <YAxis tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
             <Tooltip content={<CustomTooltip />} />
-            <Area type="monotone" dataKey={config.yKey} stroke={COLORS[0]} fill={`url(#gradient-${index})`} strokeWidth={2} />
+            {legend}
+            <Area type={curveType} dataKey={config.yKey} stroke={colors[1]} fill={`url(#gradient-${index})`} strokeWidth={2} />
           </AreaChart>
         );
       case 'bar':
         return (
           <BarChart {...commonProps}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(230, 12%, 16%)" />
-            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(215, 15%, 50%)' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: 'hsl(215, 15%, 50%)' }} axisLine={false} tickLine={false} />
+            {grid}
+            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
+            <YAxis tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
             <Tooltip content={<CustomTooltip />} />
-            <Bar dataKey={config.yKey} fill={COLORS[index % COLORS.length]} radius={[4, 4, 0, 0]} />
+            {legend}
+            <Bar dataKey={config.yKey} fill={colors[index % colors.length]} radius={[0, 0, 0, 0]} />
           </BarChart>
         );
       case 'line':
         return (
           <LineChart {...commonProps}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(230, 12%, 16%)" />
-            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(215, 15%, 50%)' }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: 'hsl(215, 15%, 50%)' }} axisLine={false} tickLine={false} />
+            {grid}
+            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
+            <YAxis tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
             <Tooltip content={<CustomTooltip />} />
-            <Line type="monotone" dataKey={config.yKey} stroke={COLORS[index % COLORS.length]} strokeWidth={2} dot={false} />
+            {legend}
+            <Line type={curveType} dataKey={config.yKey} stroke={colors[1]} strokeWidth={2} dot={{ fill: colors[1], strokeWidth: 0, r: 4 }} />
           </LineChart>
+        );
+      case 'scatter':
+        return (
+          <ScatterChart {...commonProps}>
+            {grid}
+            <XAxis type="number" dataKey={config.xKey} name={xLabel} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
+            <YAxis type="number" dataKey={config.yKey} name={yLabel} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
+            <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
+            {legend}
+            <Scatter data={chartData} fill={colors[1]} />
+          </ScatterChart>
+        );
+      case 'radar':
+        return (
+          <RadarChart outerRadius="70%" data={chartData}>
+            <PolarGrid stroke="hsl(0 0% 32%)" />
+            <PolarAngleAxis dataKey={config.xKey} tick={{ fill: 'hsl(0 0% 70%)', fontSize: 11 }} />
+            <PolarRadiusAxis tick={{ fill: 'hsl(0 0% 55%)', fontSize: 10 }} />
+            <Tooltip content={<CustomTooltip />} />
+            {legend}
+            <Radar dataKey={config.yKey} stroke={colors[1]} fill={colors[1]} fillOpacity={0.35} />
+          </RadarChart>
+        );
+      case 'composed':
+        return (
+          <ComposedChart {...commonProps}>
+            {grid}
+            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
+            <YAxis tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
+            <Tooltip content={<CustomTooltip />} />
+            {legend}
+            <Bar dataKey={config.yKey} fill={colors[0]} />
+            <Line type={curveType} dataKey={config.yKey} stroke={colors[1]} strokeWidth={2} dot={false} />
+          </ComposedChart>
         );
       case 'pie':
         return (
           <PieChart>
-            <Pie data={config.data} dataKey={config.yKey} nameKey={config.xKey} cx="50%" cy="50%" outerRadius={80}>
-              {config.data.map((_, i) => (
-                <Cell key={i} fill={COLORS[i % COLORS.length]} />
+            <Pie data={chartData} dataKey={config.yKey} nameKey={config.xKey} cx="50%" cy="50%" innerRadius={45} outerRadius={82}>
+              {chartData.map((_, i) => (
+                <Cell key={i} fill={colors[i % colors.length]} />
               ))}
             </Pie>
             <Tooltip content={<CustomTooltip />} />
+            {legend}
           </PieChart>
         );
       default:
@@ -121,24 +194,156 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.1 + 0.3, duration: 0.4 }}
-      className="glass rounded-xl p-5 group"
+      transition={{ delay: index * 0.06 + 0.12, duration: 0.2 }}
+      className="terminal-panel group p-5"
       ref={chartRef}
     >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-foreground">{config.title}</h3>
-        <button
-          onClick={exportPng}
-          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-secondary text-muted-foreground hover:text-foreground"
-          title="Download as PNG"
-        >
-          <Download className="w-3.5 h-3.5" />
-        </button>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <p className="terminal-label">Data Visualization</p>
+          <h3 className="mt-2 text-xl uppercase tracking-[0.08em] text-foreground">{config.title}</h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <Sheet>
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 border border-border px-3 py-2 text-xs uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+                title="Customize chart"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Customize
+              </button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full overflow-y-auto border-border bg-card sm:max-w-md">
+              <SheetHeader className="border-b border-border pb-4">
+                <SheetTitle className="text-xl uppercase tracking-[0.08em] text-foreground">Chart Customization</SheetTitle>
+                <SheetDescription className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                  Adjust chart type, palette, labels, and display options for this visualization.
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-6 pt-6">
+                <div className="border border-border bg-background p-4">
+                  <p className="terminal-label mb-3">Chart Type</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['bar', 'line', 'area', 'pie', 'scatter', 'radar', 'composed'] as LocalChartType[]).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setChartType(type)}
+                        className={`border px-3 py-2 text-xs uppercase tracking-[0.08em] ${
+                          chartType === type ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border border-border bg-background p-4">
+                  <p className="terminal-label mb-3">Color Palette</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(Object.keys(PALETTES) as PaletteKey[]).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setPalette(key)}
+                        className={`flex items-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.08em] ${
+                          palette === key ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
+                        }`}
+                      >
+                        <span className="flex gap-1">
+                          {PALETTES[key].slice(0, 3).map((color) => (
+                            <span key={color} className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                          ))}
+                        </span>
+                        {key}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="border border-border bg-background p-4">
+                    <p className="terminal-label mb-3">X Label</p>
+                    <Input
+                      value={xLabel}
+                      onChange={(e) => setXLabel(e.target.value)}
+                      className="rounded-none border-border bg-card text-sm uppercase tracking-[0.08em]"
+                    />
+                  </div>
+                  <div className="border border-border bg-background p-4">
+                    <p className="terminal-label mb-3">Y Label</p>
+                    <Input
+                      value={yLabel}
+                      onChange={(e) => setYLabel(e.target.value)}
+                      className="rounded-none border-border bg-card text-sm uppercase tracking-[0.08em]"
+                    />
+                  </div>
+                </div>
+
+                <div className="border border-border bg-background p-4">
+                  <p className="terminal-label mb-3">Display Options</p>
+                  <div className="space-y-4 text-xs uppercase tracking-[0.08em] text-foreground">
+                    <label className="flex items-center justify-between gap-4">
+                      <span>Grid</span>
+                      <Switch checked={showGrid} onCheckedChange={setShowGrid} />
+                    </label>
+                    <label className="flex items-center justify-between gap-4">
+                      <span>Legend</span>
+                      <Switch checked={showLegend} onCheckedChange={setShowLegend} />
+                    </label>
+                    <label className="flex items-center justify-between gap-4">
+                      <span>Curved</span>
+                      <Switch checked={curved} onCheckedChange={setCurved} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <button
+            type="button"
+            onClick={exportPng}
+            className="border border-border px-3 py-2 text-xs uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+            title="Download as PNG"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
-          {renderChart()!}
-        </ResponsiveContainer>
+      <div className={`${isPieChart ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_220px]' : 'h-72'}`}>
+        <div className={isPieChart ? 'h-72' : 'h-full'}>
+          <ResponsiveContainer width="100%" height="100%">
+            {renderChart()}
+          </ResponsiveContainer>
+        </div>
+        {isPieChart && (
+          <div className="border border-border p-4">
+            <p className="terminal-label mb-4">Degree Count</p>
+            <div className="space-y-3">
+              {chartData.map((datum, datumIndex) => (
+                <div key={`${String(datum[config.xKey])}-${datumIndex}`} className="flex items-center justify-between gap-3 text-sm uppercase tracking-[0.08em]">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="block h-3 w-3 border border-border"
+                      style={{ backgroundColor: colors[datumIndex % colors.length] }}
+                    />
+                    <span className="text-foreground">{String(datum[config.xKey])}</span>
+                  </div>
+                  <span className="text-success">
+                    {typeof datum[config.yKey] === 'number'
+                      ? Number(datum[config.yKey]).toLocaleString()
+                      : String(datum[config.yKey])}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </motion.div>
   );

@@ -101,7 +101,8 @@ const startProcess = (label, args, cwd) => {
 const backendProcess = startProcess("backend", ["--watch", backendEntry], backendDir);
 
 const waitForBackend = async () => {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+  const maxAttempts = 60; // 30 seconds with 500ms intervals
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (!children.has(backendProcess)) {
       throw new Error("Backend process exited before it became ready.");
     }
@@ -109,16 +110,21 @@ const waitForBackend = async () => {
     try {
       const response = await fetch(backendHealthUrl);
       if (response.ok) {
+        console.log("Backend is ready.");
         return;
       }
     } catch {
       // The backend is still starting.
     }
 
+    if (attempt % 10 === 0 && attempt > 0) {
+      console.log(`Waiting for backend... (${attempt * 0.5}s elapsed)`);
+    }
+
     await sleep(500);
   }
 
-  throw new Error("Timed out waiting for the backend API to start.");
+  throw new Error(`Timed out waiting for the backend API to start after ${maxAttempts * 0.5}s.`);
 };
 
 try {

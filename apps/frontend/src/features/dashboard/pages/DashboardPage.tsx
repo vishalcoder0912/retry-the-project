@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import { useData } from '@/features/data/context/useData';
 import KPICard from '@/features/dashboard/components/KPICard';
 import AnalyticsChart from '@/features/dashboard/components/AnalyticsChart';
 import DashboardFilters, { FilterState } from '@/features/dashboard/components/DashboardFilters';
 import { generateDemoKPIs, generateDemoCharts } from '@/features/data/model/dataStore';
-import { Sparkles, Table2, ArrowRight, Download } from 'lucide-react';
+import { Download, Search } from 'lucide-react';
 import { exportDatasetCSV } from '@/features/data/utils/exportUtils';
 import { Link } from 'react-router-dom';
 import StatusPanel from '@/shared/layout/StatusPanel';
@@ -101,46 +100,43 @@ const DashboardPage = () => {
   const charts = generateDemoCharts(filteredDataset);
 
   return (
-    <div className="p-6 space-y-6">
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
-      >
+    <div className="space-y-8 px-10 py-10">
+      <div className="flex items-center justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Analyzing <span className="font-mono text-primary">{dataset.name}</span> &middot; {filteredDataset.rowCount.toLocaleString()} of {dataset.rowCount.toLocaleString()} records
+          <p className="terminal-label">1.0 Dashboard</p>
+          <p className="mt-3 text-sm uppercase tracking-[0.08em] text-muted-foreground">
+            Analyzing {dataset.name} // {filteredDataset.rowCount.toLocaleString()} of {dataset.rowCount.toLocaleString()} records
           </p>
         </div>
         <div className="flex gap-2">
           <button
             onClick={() => exportDatasetCSV(filteredDataset)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-secondary transition-colors"
+            className="terminal-button gap-2"
           >
-            <Download className="w-4 h-4" />
+            <Download className="h-4 w-4" />
             Export CSV
           </button>
-          <Link
-            to="/chat"
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-          >
-            <Sparkles className="w-4 h-4" />
-            Ask AI
-            <ArrowRight className="w-3 h-3" />
-          </Link>
+          <div className="terminal-panel flex items-center gap-3 px-4 py-2 text-sm uppercase tracking-[0.08em] text-muted-foreground">
+            <Search className="h-4 w-4" />
+            Classified Search
+          </div>
         </div>
-      </motion.div>
+      </div>
 
       <DashboardFilters dataset={dataset} filters={filters} onChange={setFilters} />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <section className="space-y-4">
+        <h2 className="text-3xl uppercase tracking-[0.08em] text-foreground">1.1 Summary Metrics</h2>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {kpis.map((kpi, index) => (
           <KPICard key={kpi.label} kpi={kpi} index={index} />
         ))}
-      </div>
+        </div>
+      </section>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <section className="space-y-4">
+        <h2 className="text-3xl uppercase tracking-[0.08em] text-foreground">1.2 Data Visualization</h2>
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {charts.length > 0 ? (
           charts.map((chart, index) => (
             <AnalyticsChart key={chart.title} config={chart} index={index} />
@@ -151,48 +147,52 @@ const DashboardPage = () => {
             message="This dataset does not contain enough numeric and categorical information to build dashboard charts yet."
           />
         )}
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.8 }}
-        className="glass rounded-xl p-5"
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Table2 className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">Data Preview</h3>
-          <span className="text-xs text-muted-foreground font-mono ml-auto">
-            {filteredDataset.columns.length} columns &middot; first 10 rows
-          </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border">
-                {filteredDataset.columns.map((col) => (
-                  <th key={col.name} className="text-left py-2 px-3 font-mono text-muted-foreground font-medium">
-                    {col.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDataset.rows.slice(0, 10).map((row, index) => (
-                <tr key={index} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+      </section>
+
+      <div className="space-y-4">
+        <h2 className="text-3xl uppercase tracking-[0.08em] text-foreground">1.3 Data Preview</h2>
+        <div className="terminal-panel p-0">
+          <div className="border-b border-border px-6 py-4 text-sm uppercase tracking-[0.08em] text-muted-foreground">
+            Top 10 records // authorization required for full access
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-primary text-primary-foreground">
                   {filteredDataset.columns.map((col) => (
-                    <td key={col.name} className="py-2 px-3 font-mono text-foreground">
-                      {typeof row[col.name] === 'number'
-                        ? row[col.name].toLocaleString()
-                        : String(row[col.name] ?? '')}
-                    </td>
+                    <th key={col.name} className="px-6 py-4 text-left font-mono uppercase tracking-[0.08em]">
+                      {col.name}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredDataset.rows.slice(0, 10).map((row, index) => (
+                  <tr key={index} className="border-b border-border/80">
+                    {filteredDataset.columns.map((col) => (
+                      <td
+                        key={col.name}
+                        className={`px-6 py-4 font-mono uppercase tracking-[0.06em] ${
+                          col.name.toLowerCase().includes('salary') ? 'text-success' : 'text-foreground'
+                        }`}
+                      >
+                        {typeof row[col.name] === 'number'
+                          ? row[col.name].toLocaleString()
+                          : String(row[col.name] ?? '')}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between px-6 py-4 text-sm uppercase tracking-[0.08em] text-muted-foreground">
+            <span>[END OF PREVIEW - AUTHORIZATION REQUIRED FOR FULL ACCESS]</span>
+            <Link to="/data">Page 01 // Open Full Table</Link>
+          </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 };

@@ -8,8 +8,14 @@ import {
   getDatasetById,
   patchDatasetRow,
   saveChatMessages,
-} from "./db.js";
-import { createChatResponse, generateDemoDataset, normalizeColumns } from "./analytics.js";
+} from "./database/dataset-repository.js";
+import {
+  buildDatasetSchema,
+  createChatResponse,
+  generateCorrelationAnalysis,
+  generateDemoDataset,
+  normalizeColumns,
+} from "./services/analytics-service.js";
 
 const port = Number(process.env.PORT || 3001);
 
@@ -59,6 +65,32 @@ const buildState = () => {
   };
 };
 
+const buildIndexPayload = () => {
+  const state = buildState();
+
+  return {
+    name: "InsightFlow Local API",
+    status: "ok",
+    currentDataset: state.dataset
+      ? {
+          id: state.dataset.id,
+          name: state.dataset.name,
+          rowCount: state.dataset.rowCount,
+          columnCount: state.dataset.columns.length,
+        }
+      : null,
+    routes: {
+      health: "GET /api/health",
+      state: "GET /api/state",
+      importDataset: "POST /api/datasets/import",
+      loadDemo: "POST /api/datasets/demo",
+      datasetSchema: "GET /api/datasets/:datasetId/schema",
+      updateRow: "PATCH /api/datasets/:datasetId/rows/:rowId",
+      chat: "POST /api/datasets/:datasetId/chat",
+    },
+  };
+};
+
 const server = createServer(async (request, response) => {
   if (!request.url) {
     sendJson(response, 400, { error: "Missing request URL" });
@@ -74,6 +106,11 @@ const server = createServer(async (request, response) => {
   const { pathname } = url;
 
   try {
+    if (request.method === "GET" && pathname === "/") {
+      sendJson(response, 200, buildIndexPayload());
+      return;
+    }
+
     if (request.method === "GET" && pathname === "/api/health") {
       sendJson(response, 200, {
         status: "ok",
@@ -149,6 +186,20 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    const schemaMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema$/);
+    if (request.method === "GET" && schemaMatch) {
+      const [, datasetId] = schemaMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      sendJson(response, 200, { schema: buildDatasetSchema(dataset) });
+      return;
+    }
+
     const chatMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/chat$/);
     if (request.method === "POST" && chatMatch) {
       const [, datasetId] = chatMatch;
@@ -186,6 +237,21 @@ const server = createServer(async (request, response) => {
 
       saveChatMessages(datasetId, [userMessage, assistantMessage]);
       sendJson(response, 201, { userMessage, assistantMessage });
+      return;
+    }
+
+    const aiCorrMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai-correlations$/);
+    if (request.method === "GET" && aiCorrMatch) {
+      const [, datasetId] = aiCorrMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      const correlationResult = generateCorrelationAnalysis(dataset);
+      sendJson(response, 200, correlationResult);
       return;
     }
 

@@ -26,21 +26,21 @@ const KPICard = ({ kpi, index }: KPICardProps) => {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.08, duration: 0.4 }}
-      className="glass rounded-xl p-5 hover:border-primary/30 transition-colors group"
+      className="terminal-panel p-6"
     >
-      <div className="flex items-start justify-between mb-3">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-          <Icon className="w-5 h-5 text-primary" />
-        </div>
+      <div className="mb-6 flex items-start justify-between">
+        <div className="terminal-label">{kpi.label}</div>
         {kpi.change !== undefined && (
-          <div className={`flex items-center gap-1 text-xs font-mono ${isPositive ? 'text-success' : 'text-destructive'}`}>
+          <div className={`flex items-center gap-1 text-xs uppercase tracking-[0.08em] ${isPositive ? 'text-success' : 'text-destructive'}`}>
             {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {Math.abs(kpi.change)}%
           </div>
         )}
       </div>
-      <p className="text-2xl font-bold text-foreground font-mono">{kpi.value}</p>
-      <p className="text-xs text-muted-foreground mt-1">{kpi.label}</p>
+      <div className="flex items-end justify-between gap-4">
+        <p className="text-4xl uppercase tracking-[0.06em] text-foreground">{kpi.value}</p>
+        <Icon className="h-5 w-5 text-muted-foreground" />
+      </div>
     </motion.div>
   );
 };

@@ -1,5 +1,20 @@
 import { ChatMessage, Dataset } from "@/features/data/model/dataStore";
 
+export interface CorrelationResult {
+  column1: string;
+  column2: string;
+  coefficient: number;
+  strength: "weak" | "moderate" | "strong";
+  interpretation: string;
+  sampleSize: number;
+}
+
+export interface CorrelationResponse {
+  correlations: CorrelationResult[];
+  summary: string;
+  hasGemini: boolean;
+}
+
 export interface DatasetImportPayload {
   name: string;
   fileName?: string | null;
@@ -18,7 +33,13 @@ interface ChatResponse {
   assistantMessage: ChatMessage;
 }
 
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const apiBaseUrl = (() => {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+  if (!import.meta.env.VITE_API_BASE_URL) {
+    console.warn('VITE_API_BASE_URL not set, using default:', baseUrl);
+  }
+  return baseUrl.replace(/\/$/, "");
+})();
 
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -61,5 +82,9 @@ export const api = {
     request<ChatResponse>(`/api/datasets/${datasetId}/chat`, {
       method: "POST",
       body: JSON.stringify({ query }),
+    }),
+  getAICorrelations: (datasetId: string) =>
+    request<CorrelationResponse>(`/api/datasets/${datasetId}/ai-correlations`, {
+      method: "GET",
     }),
 };

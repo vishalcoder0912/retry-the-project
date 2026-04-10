@@ -7,16 +7,17 @@ interface StatusPanelProps {
 
 const StatusPanel = ({ title, message, actionLabel, onAction }: StatusPanelProps) => {
   return (
-    <div className="min-h-[calc(100vh-2rem)] p-6 flex items-center justify-center">
-      <div className="glass rounded-2xl p-8 max-w-xl w-full text-center space-y-4">
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
-          <p className="text-sm text-muted-foreground">{message}</p>
+    <div className="flex min-h-[calc(100vh-8rem)] items-center justify-center p-10">
+      <div className="terminal-panel max-w-2xl w-full p-10 text-left">
+        <p className="terminal-label">SYSTEM STATE</p>
+        <div className="mt-4 space-y-3">
+          <h1 className="text-3xl uppercase tracking-[0.08em] text-foreground">{title}</h1>
+          <p className="max-w-xl text-sm uppercase tracking-[0.06em] text-muted-foreground">{message}</p>
         </div>
         {actionLabel && onAction && (
           <button
             onClick={onAction}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 transition-colors"
+            className="terminal-button-inverse mt-8"
           >
             {actionLabel}
           </button>
