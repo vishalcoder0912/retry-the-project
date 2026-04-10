@@ -151,4 +151,109 @@ describe("dataStore dashboard helpers", () => {
       ],
     });
   });
+
+  it("averages mark-like columns using only valid numeric values", () => {
+    const dataset: Dataset = {
+      id: "student-avg-1",
+      name: "Research Students",
+      uploadedAt: new Date("2026-04-10T00:00:00.000Z"),
+      rowCount: 6,
+      columns: [
+        { name: "Branch", type: "string", sample: ["CSE", "ECE"] },
+        { name: "Gender", type: "string", sample: ["Male", "Female"] },
+        { name: "Marks[10th]", type: "number", sample: ["91", "88"] },
+      ],
+      rows: [
+        { Branch: "CSE", Gender: "Male", "Marks[10th]": "91" },
+        { Branch: "CSE", Gender: "Male", "Marks[10th]": "95" },
+        { Branch: "ECE", Gender: "Female", "Marks[10th]": "88" },
+        { Branch: "ECE", Gender: "Female", "Marks[10th]": "92" },
+        { Branch: "MECH", Gender: "Male", "Marks[10th]": null },
+        { Branch: "MECH", Gender: "Male", "Marks[10th]": "not available" },
+      ],
+    };
+
+    const charts = generateDemoCharts(dataset);
+
+    expect(charts[0]).toMatchObject({
+      title: "Average Marks[10th] by Branch",
+      xKey: "Branch",
+      yKey: "Marks[10th]",
+      data: [
+        { Branch: "CSE", "Marks[10th]": 93 },
+        { Branch: "ECE", "Marks[10th]": 90 },
+      ],
+    });
+  });
+
+  it("normalizes gender labels before averaging marks", () => {
+    const dataset: Dataset = {
+      id: "student-gender-1",
+      name: "Research Students",
+      uploadedAt: new Date("2026-04-10T00:00:00.000Z"),
+      rowCount: 6,
+      columns: [
+        { name: "Branch", type: "string", sample: ["CSE", "ECE"] },
+        { name: "Gender", type: "string", sample: ["male", "Female"] },
+        { name: "Marks[10th]", type: "number", sample: ["91", "88"] },
+      ],
+      rows: [
+        { Branch: "CSE", Gender: "male", "Marks[10th]": "91" },
+        { Branch: "CSE", Gender: "Male", "Marks[10th]": "95" },
+        { Branch: "ECE", Gender: "M", "Marks[10th]": "89" },
+        { Branch: "ECE", Gender: "female", "Marks[10th]": "88" },
+        { Branch: "MECH", Gender: "Female", "Marks[10th]": "92" },
+        { Branch: "IT", Gender: "F", "Marks[10th]": "90" },
+      ],
+    };
+
+    const charts = generateDemoCharts(dataset);
+    const genderAverageChart = charts.find((chart) => chart.title === "Average Marks[10th] by Gender");
+
+    expect(genderAverageChart).toMatchObject({
+      xKey: "Gender",
+      yKey: "Marks[10th]",
+      data: [
+        { Gender: "Female", "Marks[10th]": 90 },
+        { Gender: "Male", "Marks[10th]": 91.67 },
+      ],
+    });
+  });
+
+  it("normalizes board labels before counting grouped records", () => {
+    const dataset: Dataset = {
+      id: "student-board-1",
+      name: "Research Students",
+      uploadedAt: new Date("2026-04-10T00:00:00.000Z"),
+      rowCount: 7,
+      columns: [
+        { name: "Branch", type: "string", sample: ["CSE", "ECE"] },
+        { name: "Gender", type: "string", sample: ["Male", "Female"] },
+        { name: "Board", type: "string", sample: ["cbse", "ICSE"] },
+        { name: "Marks[10th]", type: "number", sample: ["91", "88"] },
+      ],
+      rows: [
+        { Branch: "CSE", Gender: "Male", Board: "cbse", "Marks[10th]": "91" },
+        { Branch: "CSE", Gender: "Male", Board: "CBSE", "Marks[10th]": "95" },
+        { Branch: "ECE", Gender: "Female", Board: "Cbse", "Marks[10th]": "88" },
+        { Branch: "ECE", Gender: "Female", Board: "ICSE", "Marks[10th]": "92" },
+        { Branch: "MECH", Gender: "Female", Board: "icse", "Marks[10th]": "90" },
+        { Branch: "IT", Gender: "Male", Board: "STATE BOARD", "Marks[10th]": "85" },
+        { Branch: "IT", Gender: "Male", Board: "state board", "Marks[10th]": "87" },
+      ],
+    };
+
+    const charts = generateDemoCharts(dataset);
+    const boardCountChart = charts.find((chart) => chart.title === "Count by Board");
+
+    expect(boardCountChart).toMatchObject({
+      xKey: "Board",
+      yKey: "count",
+      data: [
+        { Board: "CBSE", count: 3 },
+        { Board: "ICSE", count: 2 },
+        { Board: "State Board", count: 2 },
+      ],
+    });
+  });
 });
