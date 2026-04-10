@@ -9,10 +9,11 @@
   ],
   "scripts": {
     "start": "node scripts/start.js",
-    "start:frontend": "npm run dev --workspace @insightflow/frontend",
-    "start:backend": "npm run dev --workspace @insightflow/backend",
-    "build": "npm run build --workspace @insightflow/frontend",
-    "lint": "npm run lint --workspace @insightflow/frontend",
-    "test": "npm run test --workspace @insightflow/frontend"
+    "dev": "npm run dev -w apps/frontend",
+    "start:frontend": "npm run dev -w apps/frontend",
+    "start:backend": "npm run dev -w apps/backend",
+    "build": "npm run build -w apps/frontend",
+    "lint": "npm run lint -w apps/frontend",
+    "test": "npm run test -w apps/frontend"
   }
 }
