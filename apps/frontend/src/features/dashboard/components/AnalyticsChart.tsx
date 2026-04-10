@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Download } from 'lucide-react';
+import { Download, SlidersHorizontal } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import {
   ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -9,6 +9,16 @@ import {
   ComposedChart, Legend,
 } from 'recharts';
 import { ChartConfig } from '@/features/data/model/dataStore';
+import { Input } from '@/shared/components/ui/input';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/shared/components/ui/sheet';
+import { Switch } from '@/shared/components/ui/switch';
 
 const PALETTES = {
   cyan: ['#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1'],
@@ -188,68 +198,122 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
       className="terminal-panel group p-5"
       ref={chartRef}
     >
-      <div className="mb-4 border border-border bg-background p-4">
-        <div className="grid gap-4 xl:grid-cols-2">
-          <div>
-            <p className="terminal-label mb-2">Chart Type</p>
-            <div className="flex flex-wrap gap-2">
-              {(['bar', 'line', 'area', 'pie', 'scatter', 'radar', 'composed'] as LocalChartType[]).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setChartType(type)}
-                  className={`border px-3 py-2 text-xs uppercase tracking-[0.08em] ${
-                    chartType === type ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="terminal-label mb-2">Color Palette</p>
-            <div className="flex flex-wrap gap-2">
-              {(Object.keys(PALETTES) as PaletteKey[]).map((key) => (
-                <button
-                  key={key}
-                  onClick={() => setPalette(key)}
-                  className={`flex items-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.08em] ${
-                    palette === key ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
-                  }`}
-                >
-                  <span className="flex gap-1">{PALETTES[key].slice(0, 3).map((color) => <span key={color} className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />)}</span>
-                  {key}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <p className="terminal-label mb-2">X Label</p>
-            <input value={xLabel} onChange={(e) => setXLabel(e.target.value)} className="terminal-input w-full" />
-          </div>
-          <div>
-            <p className="terminal-label mb-2">Y Label</p>
-            <input value={yLabel} onChange={(e) => setYLabel(e.target.value)} className="terminal-input w-full" />
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-4 text-xs uppercase tracking-[0.08em] text-foreground">
-          <label className="flex items-center gap-2"><input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grid</label>
-          <label className="flex items-center gap-2"><input type="checkbox" checked={showLegend} onChange={(e) => setShowLegend(e.target.checked)} /> Legend</label>
-          <label className="flex items-center gap-2"><input type="checkbox" checked={curved} onChange={(e) => setCurved(e.target.checked)} /> Curved</label>
-        </div>
-      </div>
       <div className="mb-4 flex items-center justify-between">
         <div>
           <p className="terminal-label">Data Visualization</p>
           <h3 className="mt-2 text-xl uppercase tracking-[0.08em] text-foreground">{config.title}</h3>
         </div>
-        <button
-          onClick={exportPng}
-          className="border border-border px-3 py-2 text-xs uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-          title="Download as PNG"
-        >
-          <Download className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <Sheet>
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-2 border border-border px-3 py-2 text-xs uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+                title="Customize chart"
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Customize
+              </button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full overflow-y-auto border-border bg-card sm:max-w-md">
+              <SheetHeader className="border-b border-border pb-4">
+                <SheetTitle className="text-xl uppercase tracking-[0.08em] text-foreground">Chart Customization</SheetTitle>
+                <SheetDescription className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                  Adjust chart type, palette, labels, and display options for this visualization.
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="space-y-6 pt-6">
+                <div className="border border-border bg-background p-4">
+                  <p className="terminal-label mb-3">Chart Type</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['bar', 'line', 'area', 'pie', 'scatter', 'radar', 'composed'] as LocalChartType[]).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setChartType(type)}
+                        className={`border px-3 py-2 text-xs uppercase tracking-[0.08em] ${
+                          chartType === type ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border border-border bg-background p-4">
+                  <p className="terminal-label mb-3">Color Palette</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(Object.keys(PALETTES) as PaletteKey[]).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setPalette(key)}
+                        className={`flex items-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.08em] ${
+                          palette === key ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
+                        }`}
+                      >
+                        <span className="flex gap-1">
+                          {PALETTES[key].slice(0, 3).map((color) => (
+                            <span key={color} className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                          ))}
+                        </span>
+                        {key}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="border border-border bg-background p-4">
+                    <p className="terminal-label mb-3">X Label</p>
+                    <Input
+                      value={xLabel}
+                      onChange={(e) => setXLabel(e.target.value)}
+                      className="rounded-none border-border bg-card text-sm uppercase tracking-[0.08em]"
+                    />
+                  </div>
+                  <div className="border border-border bg-background p-4">
+                    <p className="terminal-label mb-3">Y Label</p>
+                    <Input
+                      value={yLabel}
+                      onChange={(e) => setYLabel(e.target.value)}
+                      className="rounded-none border-border bg-card text-sm uppercase tracking-[0.08em]"
+                    />
+                  </div>
+                </div>
+
+                <div className="border border-border bg-background p-4">
+                  <p className="terminal-label mb-3">Display Options</p>
+                  <div className="space-y-4 text-xs uppercase tracking-[0.08em] text-foreground">
+                    <label className="flex items-center justify-between gap-4">
+                      <span>Grid</span>
+                      <Switch checked={showGrid} onCheckedChange={setShowGrid} />
+                    </label>
+                    <label className="flex items-center justify-between gap-4">
+                      <span>Legend</span>
+                      <Switch checked={showLegend} onCheckedChange={setShowLegend} />
+                    </label>
+                    <label className="flex items-center justify-between gap-4">
+                      <span>Curved</span>
+                      <Switch checked={curved} onCheckedChange={setCurved} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+
+          <button
+            type="button"
+            onClick={exportPng}
+            className="border border-border px-3 py-2 text-xs uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+            title="Download as PNG"
+          >
+            <Download className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       <div className={`${isPieChart ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_220px]' : 'h-72'}`}>
         <div className={isPieChart ? 'h-72' : 'h-full'}>

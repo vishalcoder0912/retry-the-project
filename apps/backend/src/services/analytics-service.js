@@ -116,6 +116,12 @@ const normalizeText = (value) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+const isGreetingQuery = (query) => {
+  const normalizedQuery = normalizeText(query);
+
+  return /^(hello|hi|hey|hola|good morning|good afternoon|good evening)( there)?$/.test(normalizedQuery);
+};
+
 const singularizeWord = (word) => {
   if (word.length <= 3) return word;
   if (word.endsWith("ies")) return `${word.slice(0, -3)}y`;
@@ -440,6 +446,16 @@ const buildInsightsFromSchema = (schema, plan) => {
 };
 
 export const createChatResponse = (dataset, query) => {
+  if (isGreetingQuery(query)) {
+    return {
+      content: "Hello, how can I help you?",
+      sql: null,
+      chart: null,
+      insights: [],
+      schema: buildDatasetSchema(dataset),
+    };
+  }
+
   const schema = buildDatasetSchema(dataset);
   const plan = buildAnalysisPlan(dataset, schema, query);
   const chart = materializePlan(dataset, plan);
