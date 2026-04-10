@@ -3,10 +3,17 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "workspaces": [
+    "apps/frontend",
+    "apps/backend"
+  ],
   "scripts": {
-    "dev": "cd apps/frontend && npx vite",
-    "build": "cd apps/frontend && npx vite build",
-    "lint": "cd apps/frontend && npm run lint",
-    "test": "cd apps/frontend && npm run test"
+    "start": "node scripts/start.js",
+    "dev": "npm run dev -w apps/frontend",
+    "start:frontend": "npm run dev -w apps/frontend",
+    "start:backend": "npm run dev -w apps/backend",
+    "build": "npm run build -w apps/frontend",
+    "lint": "npm run lint -w apps/frontend",
+    "test": "npm run test -w apps/frontend"
   }
 }
