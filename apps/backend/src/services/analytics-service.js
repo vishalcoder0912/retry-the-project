@@ -1,11 +1,22 @@
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const preferredNumericColumns = ["salary_usd", "salary", "compensation", "income", "pay", "revenue", "sales", "amount", "units_sold", "units", "profit_margin", "customer_rating"];
 const preferredDimensionColumns = ["month", "date", "category", "region", "segment", "country", "education", "company_size"];
-const nonAdditiveMetricHints = ["margin", "rate", "ratio", "percent", "percentage", "rating", "score"];
+const nonAdditiveMetricHints = ["margin", "rate", "ratio", "percent", "percentage", "rating", "score", "mark", "marks", "grade", "gpa", "cgpa"];
 
 const toNumber = (value) => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+  if (value == null) return null;
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    if (!normalized) return null;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
 };
 
 const inferType = (values) => {
@@ -116,6 +127,43 @@ const normalizeText = (value) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+const normalizeGenderLabel = (label) => {
+  const normalized = normalizeText(label);
+
+  if (["m", "male", "man", "boy"].includes(normalized)) return "Male";
+  if (["f", "female", "woman", "girl"].includes(normalized)) return "Female";
+  if (["other", "others", "non binary", "nonbinary"].includes(normalized)) return "Other";
+
+  return label;
+};
+
+const normalizeBoardLabel = (label) => {
+  const normalized = normalizeText(label);
+
+  if (normalized === "cbse") return "CBSE";
+  if (normalized === "icse") return "ICSE";
+  if (normalized === "igcse") return "IGCSE";
+  if (normalized === "ib") return "IB";
+  if (normalized === "state board" || normalized === "stateboard") return "State Board";
+
+  return label;
+};
+
+const normalizeDimensionLabel = (columnName, value) => {
+  const label = toLabel(value);
+  if (!label) return null;
+
+  const normalizedColumnName = normalizeText(columnName);
+  if (normalizedColumnName.includes("gender")) {
+    return normalizeGenderLabel(label);
+  }
+  if (normalizedColumnName.includes("board")) {
+    return normalizeBoardLabel(label);
+  }
+
+  return label;
+};
+
 const isGreetingQuery = (query) => {
   const normalizedQuery = normalizeText(query);
 
@@ -142,14 +190,35 @@ const includesPhrase = (source, phrase) => {
   return (` ${source} `).includes(` ${phrase} `);
 };
 
+const logAverageValidation = ({ metricName, dimensionName, includedValues, skippedInvalidValues, skippedEmptyLabels, groupCount }) => {
+  console.info("[analytics] average validation", {
+    metric: metricName,
+    dimension: dimensionName,
+    formula: "sum(values) / count(values)",
+    includedValues,
+    skippedInvalidValues,
+    skippedEmptyLabels,
+    groupCount,
+  });
+};
+
 const groupMetricByDimension = (rows, dimensionColumn, metricColumn, aggregation = "sum") => {
   const grouped = new Map();
+  let includedValues = 0;
+  let skippedInvalidValues = 0;
+  let skippedEmptyLabels = 0;
 
   rows.forEach((row) => {
-    const label = toLabel(row[dimensionColumn.name]);
-    const value = Number(row[metricColumn.name]);
+    const label = normalizeDimensionLabel(dimensionColumn.name, row[dimensionColumn.name]);
+    const value = toNumber(row[metricColumn.name]);
 
-    if (!label || !Number.isFinite(value)) {
+    if (!label) {
+      skippedEmptyLabels += 1;
+      return;
+    }
+
+    if (value == null) {
+      skippedInvalidValues += 1;
       return;
     }
 
@@ -157,9 +226,10 @@ const groupMetricByDimension = (rows, dimensionColumn, metricColumn, aggregation
     current.sum += value;
     current.count += 1;
     grouped.set(label, current);
+    includedValues += 1;
   });
 
-  return sortLabels([...grouped.keys()], dimensionColumn.type).map((label) => {
+  const series = sortLabels([...grouped.keys()], dimensionColumn.type).map((label) => {
     const entry = grouped.get(label) ?? { sum: 0, count: 0 };
     const value = aggregation === "average" && entry.count > 0 ? entry.sum / entry.count : entry.sum;
 
@@ -168,13 +238,26 @@ const groupMetricByDimension = (rows, dimensionColumn, metricColumn, aggregation
       [metricColumn.name]: Number(value.toFixed(2)),
     };
   });
+
+  if (aggregation === "average") {
+    logAverageValidation({
+      metricName: metricColumn.name,
+      dimensionName: dimensionColumn.name,
+      includedValues,
+      skippedInvalidValues,
+      skippedEmptyLabels,
+      groupCount: series.length,
+    });
+  }
+
+  return series;
 };
 
 const countRowsByDimension = (rows, dimensionColumn, valueKey = "count") => {
   const grouped = new Map();
 
   rows.forEach((row) => {
-    const label = toLabel(row[dimensionColumn.name]);
+    const label = normalizeDimensionLabel(dimensionColumn.name, row[dimensionColumn.name]);
     if (!label) return;
     grouped.set(label, (grouped.get(label) ?? 0) + 1);
   });
@@ -190,7 +273,7 @@ const countRowsMatchingValues = (rows, dimensionColumn, matchValues, valueKey = 
   const grouped = new Map(matchValues.map((value) => [value, 0]));
 
   rows.forEach((row) => {
-    const label = toLabel(row[dimensionColumn.name]);
+    const label = normalizeDimensionLabel(dimensionColumn.name, row[dimensionColumn.name]);
     if (!label || !requestedValues.has(label)) return;
     grouped.set(label, (grouped.get(label) ?? 0) + 1);
   });
@@ -252,7 +335,7 @@ const detectQueryValueFilter = (dataset, schema, normalizedQuery) => {
     const values = new Set();
 
     for (const row of dataset.rows) {
-      const label = toLabel(row[dimension.name]);
+      const label = normalizeDimensionLabel(dimension.name, row[dimension.name]);
       if (label) {
         values.add(label);
       }
