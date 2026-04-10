@@ -1,5 +1,20 @@
 import { ChatMessage, Dataset } from "@/features/data/model/dataStore";
 
+export interface CorrelationResult {
+  column1: string;
+  column2: string;
+  coefficient: number;
+  strength: "weak" | "moderate" | "strong";
+  interpretation: string;
+  sampleSize: number;
+}
+
+export interface CorrelationResponse {
+  correlations: CorrelationResult[];
+  summary: string;
+  hasGemini: boolean;
+}
+
 export interface DatasetImportPayload {
   name: string;
   fileName?: string | null;
@@ -67,5 +82,9 @@ export const api = {
     request<ChatResponse>(`/api/datasets/${datasetId}/chat`, {
       method: "POST",
       body: JSON.stringify({ query }),
+    }),
+  getAICorrelations: (datasetId: string) =>
+    request<CorrelationResponse>(`/api/datasets/${datasetId}/ai-correlations`, {
+      method: "GET",
     }),
 };

@@ -647,3 +647,97 @@ export const createChatResponse = (dataset, query) => {
     schema,
   };
 };
+
+const calculatePearsonCorrelation = (x, y) => {
+  const n = Math.min(x.length, y.length);
+  if (n < 2) return null;
+
+  const sumX = x.reduce((a, b) => a + b, 0);
+  const sumY = y.reduce((a, b) => a + b, 0);
+  const sumXY = x.reduce((total, xi, i) => total + xi * y[i], 0);
+  const sumX2 = x.reduce((total, xi) => total + xi * xi, 0);
+  const sumY2 = y.reduce((total, yi) => total + yi * yi, 0);
+
+  const numerator = n * sumXY - sumX * sumY;
+  const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+  if (denominator === 0) return null;
+  return numerator / denominator;
+};
+
+export const generateCorrelationAnalysis = (dataset) => {
+  const analyticsDataset = prepareDatasetForAnalytics(dataset);
+  const numericColumns = analyticsDataset.columns.filter((column) => column.type === "number");
+
+  if (numericColumns.length < 2) {
+    return {
+      correlations: [],
+      summary: "Not enough numeric columns for correlation analysis.",
+      hasGemini: false,
+    };
+  }
+
+  const columnPairs = [];
+  for (let i = 0; i < numericColumns.length; i++) {
+    for (let j = i + 1; j < numericColumns.length; j++) {
+      columnPairs.push([numericColumns[i], numericColumns[j]]);
+    }
+  }
+
+  const correlations = [];
+  for (const [col1, col2] of columnPairs) {
+    const x = [];
+    const y = [];
+
+    analyticsDataset.rows.forEach((row) => {
+      const xVal = toNumber(row[col1.name]);
+      const yVal = toNumber(row[col2.name]);
+      if (xVal !== null && yVal !== null) {
+        x.push(xVal);
+        y.push(yVal);
+      }
+    });
+
+    if (x.length >= 3) {
+      const correlation = calculatePearsonCorrelation(x, y);
+      if (correlation !== null) {
+        let strength = "weak";
+        let interpretation = "";
+
+        const absCorr = Math.abs(correlation);
+        if (absCorr >= 0.7) {
+          strength = "strong";
+          interpretation = correlation > 0
+            ? `${col1.name} and ${col2.name} show a strong positive correlation.`
+            : `${col1.name} and ${col2.name} show a strong negative correlation.`;
+        } else if (absCorr >= 0.4) {
+          strength = "moderate";
+          interpretation = correlation > 0
+            ? `${col1.name} and ${col2.name} show moderate positive correlation.`
+            : `${col1.name} and ${col2.name} show moderate negative correlation.`;
+        } else {
+          interpretation = `${col1.name} and ${col2.name} show weak/no significant correlation.`;
+        }
+
+        correlations.push({
+          column1: col1.name,
+          column2: col2.name,
+          coefficient: Number(correlation.toFixed(3)),
+          strength,
+          interpretation,
+          sampleSize: x.length,
+        });
+      }
+    }
+  }
+
+  correlations.sort((a, b) => Math.abs(b.coefficient) - Math.abs(a.coefficient));
+
+  return {
+    correlations,
+    summary: correlations.length > 0
+      ? `Found ${correlations.length} correlation(s) among ${numericColumns.length} numeric columns.`
+      : "No significant correlations found between numeric columns.",
+    hasGemini: false,
+  };
+};
