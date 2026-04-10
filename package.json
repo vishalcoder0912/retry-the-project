@@ -3,10 +3,14 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "workspaces": [
+    "apps/frontend",
+    "apps/backend"
+  ],
   "scripts": {
-    "dev": "npm run dev --prefix apps/frontend",
-    "build": "npm run build --prefix apps/frontend",
-    "lint": "npm run lint --prefix apps/frontend",
-    "test": "npm run test --prefix apps/frontend"
+    "dev": "npm run dev --workspace @insightflow/frontend",
+    "build": "npm run build --workspace @insightflow/frontend",
+    "lint": "npm run lint --workspace @insightflow/frontend",
+    "test": "npm run test --workspace @insightflow/frontend"
   }
 }
