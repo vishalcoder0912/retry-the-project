@@ -12,6 +12,7 @@ import {
 import {
   buildDatasetSchema,
   createChatResponse,
+  generateCorrelationAnalysis,
   generateDemoDataset,
   normalizeColumns,
 } from "./services/analytics-service.js";
@@ -236,6 +237,21 @@ const server = createServer(async (request, response) => {
 
       saveChatMessages(datasetId, [userMessage, assistantMessage]);
       sendJson(response, 201, { userMessage, assistantMessage });
+      return;
+    }
+
+    const aiCorrMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai-correlations$/);
+    if (request.method === "GET" && aiCorrMatch) {
+      const [, datasetId] = aiCorrMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      const correlationResult = generateCorrelationAnalysis(dataset);
+      sendJson(response, 200, correlationResult);
       return;
     }
 

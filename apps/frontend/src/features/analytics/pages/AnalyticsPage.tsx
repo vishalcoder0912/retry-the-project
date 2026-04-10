@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Download, Filter } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Filter, Loader2, Sparkles } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
 import { Dataset, generateAnalyticsHealthSummary, generateDemoCharts, generateDemoKPIs } from '@/features/data/model/dataStore';
+import { api, CorrelationResponse } from '@/features/data/api/dataApi';
 import AnalyticsChart from '@/features/dashboard/components/AnalyticsChart';
 import {
   Select,
@@ -15,12 +16,31 @@ import StatusPanel from '@/shared/layout/StatusPanel';
 const AnalyticsPage = () => {
   const { dataset, isHydrating, apiError, loadDemo, retryHydrate } = useData();
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
+  const [isRunningCorrelation, setIsRunningCorrelation] = useState(false);
+  const [correlationResults, setCorrelationResults] = useState<CorrelationResponse | null>(null);
+  const [correlationError, setCorrelationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!dataset && !isHydrating) {
       void loadDemo().catch(() => undefined);
     }
   }, [dataset, isHydrating, loadDemo]);
+
+  const runAICorrelationTest = async () => {
+    if (!dataset) return;
+    setIsRunningCorrelation(true);
+    setCorrelationError(null);
+    setCorrelationResults(null);
+
+    try {
+      const results = await api.getAICorrelations(dataset.id);
+      setCorrelationResults(results);
+    } catch (err) {
+      setCorrelationError(err instanceof Error ? err.message : 'Failed to run correlation test');
+    } finally {
+      setIsRunningCorrelation(false);
+    }
+  };
 
   const regionColumn = useMemo(
     () => dataset?.columns.find((column) => column.name.toLowerCase() === 'country' || column.name.toLowerCase() === 'region'),
@@ -184,7 +204,63 @@ const AnalyticsPage = () => {
                 </p>
               </div>
             </div>
-            <button className="terminal-button mt-8 w-full justify-center">Run AI Correlation Test</button>
+            <button
+              onClick={runAICorrelationTest}
+              disabled={isRunningCorrelation}
+              className="terminal-button mt-8 w-full justify-center disabled:opacity-50"
+            >
+              {isRunningCorrelation ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Analyzing Correlations...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Run AI Correlation Test
+                </>
+              )}
+            </button>
+
+            {correlationError && (
+              <div className="mt-4 rounded border border-destructive bg-destructive/10 p-4 text-sm text-destructive">
+                {correlationError}
+              </div>
+            )}
+
+            {correlationResults && (
+              <div className="mt-4 space-y-4">
+                <div className="flex items-center gap-2 border-t border-border pt-4">
+                  <Sparkles className="h-5 w-5 text-accent" />
+                  <h4 className="font-semibold uppercase tracking-wider">AI Correlation Analysis</h4>
+                </div>
+                <p className="text-sm text-muted-foreground">{correlationResults.summary}</p>
+                {correlationResults.correlations.length > 0 && (
+                  <div className="space-y-3">
+                    {correlationResults.correlations.map((corr, idx) => (
+                      <div key={idx} className="rounded border border-border bg-card p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">
+                            {corr.column1} ↔ {corr.column2}
+                          </span>
+                          <span className={`rounded px-2 py-0.5 text-xs font-medium uppercase ${
+                            corr.strength === 'strong' ? 'bg-success/20 text-success' :
+                            corr.strength === 'moderate' ? 'bg-warning/20 text-warning' :
+                            'bg-muted text-muted-foreground'
+                          }`}>
+                            {corr.strength}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{corr.interpretation}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Coefficient: <span className="font-mono font-medium">{corr.coefficient}</span> (n={corr.sampleSize})
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </section>
