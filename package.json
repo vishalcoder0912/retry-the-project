@@ -5,7 +5,8 @@
   "type": "module",
   "workspaces": [
     "apps/frontend",
-    "apps/backend"
+    "apps/backend",
+    "packages/shared-analytics"
   ],
   "scripts": {
     "dev": "npm run dev -w apps/frontend",

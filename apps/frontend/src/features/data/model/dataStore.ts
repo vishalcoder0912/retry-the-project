@@ -1,3 +1,29 @@
+import {
+  toNumber,
+  toLabel,
+  normalizeText,
+  normalizeGenderLabel,
+  normalizeBoardLabel,
+  normalizeDimensionLabel,
+  humanize,
+  pickPreferredColumn,
+  metricAggregationForColumn,
+  sortLabels,
+  isMeaningfulValue,
+  getMinimumGroupCount,
+  filterGroupedEntries,
+  groupMetricByDimension,
+  countRowsByDimension,
+  prepareDatasetForAnalytics as prepareDatasetForAnalyticsShared,
+  generateDemoDataset,
+  buildDatasetSchema,
+  MONTHS_CONST as MONTHS,
+  PREFERRED_NUMERIC_COLUMNS_CONST as PREFERRED_NUMERIC_COLUMNS,
+  PREFERRED_DIMENSION_COLUMNS_CONST as PREFERRED_DIMENSION_COLUMNS,
+  NON_ADDITIVE_METRIC_HINTS_CONST as NON_ADDITIVE_METRIC_HINTS,
+  BRANCH_MINIMUM_GROUP_COUNT,
+} from "@insightflow/shared-analytics";
+
 export interface DataColumn {
   name: string;
   type: "string" | "number" | "date";
@@ -70,106 +96,7 @@ export interface AnalyticsHealthSummary {
   };
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const PREFERRED_NUMERIC_COLUMNS = [
-  "salary_usd",
-  "salary",
-  "compensation",
-  "income",
-  "pay",
-  "revenue",
-  "sales",
-  "amount",
-  "units_sold",
-  "units",
-  "profit_margin",
-  "customer_rating",
-];
-const PREFERRED_DIMENSION_COLUMNS = ["month", "date", "category", "region", "segment", "country"];
-const NON_ADDITIVE_METRIC_HINTS = ["margin", "rate", "ratio", "percent", "percentage", "rating", "score", "mark", "marks", "grade", "gpa", "cgpa"];
-const BRANCH_MINIMUM_GROUP_COUNT = 2;
 type MetricAggregation = "sum" | "average";
-
-const toNumber = (value: DatasetCellValue | undefined): number | null => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-};
-
-const toLabel = (value: DatasetCellValue | undefined): string | null => {
-  if (value == null) return null;
-  const label = String(value).trim();
-  return label ? label : null;
-};
-
-const normalizeText = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
-const normalizeGenderLabel = (label: string) => {
-  const normalized = normalizeText(label);
-
-  if (["m", "male", "man", "boy"].includes(normalized)) return "Male";
-  if (["f", "female", "woman", "girl"].includes(normalized)) return "Female";
-  if (["other", "others", "non binary", "nonbinary"].includes(normalized)) return "Other";
-
-  return label;
-};
-
-const normalizeBoardLabel = (label: string) => {
-  const normalized = normalizeText(label);
-
-  if (normalized === "cbse") return "CBSE";
-  if (normalized === "icse") return "ICSE";
-  if (normalized === "igcse") return "IGCSE";
-  if (normalized === "ib") return "IB";
-  if (normalized === "state board" || normalized === "stateboard") return "State Board";
-
-  return label;
-};
-
-const normalizeDimensionLabel = (columnName: string, value: DatasetCellValue | undefined): string | null => {
-  const label = toLabel(value);
-  if (!label) return null;
-
-  const normalizedColumnName = normalizeText(columnName);
-  if (normalizedColumnName.includes("gender")) {
-    return normalizeGenderLabel(label);
-  }
-  if (normalizedColumnName.includes("board")) {
-    return normalizeBoardLabel(label);
-  }
-
-  return label;
-};
-
-const humanize = (value: string) =>
-  value
-    .replace(/_/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-
-const pickPreferredColumn = (columns: DataColumn[], preferredNames: string[]) => {
-  for (const name of preferredNames) {
-    const found = columns.find((column) => column.name === name);
-    if (found) {
-      return found;
-    }
-  }
-
-  return columns[0];
-};
 
 const pickPrimaryMetric = (columns: DataColumn[]) => pickPreferredColumn(columns, PREFERRED_NUMERIC_COLUMNS);
 
@@ -185,26 +112,6 @@ const pickSecondaryMetric = (columns: DataColumn[], primaryMetric?: DataColumn) 
   }
 
   return remaining[0];
-};
-
-const metricAggregationForColumn = (columnName: string): MetricAggregation =>
-  NON_ADDITIVE_METRIC_HINTS.some((hint) => columnName.toLowerCase().includes(hint)) ? "average" : "sum";
-
-const sortLabels = (labels: string[], columnType: DataColumn["type"]) => {
-  const uniqueLabels = [...new Set(labels)];
-  const monthIndex = new Map(MONTHS.map((month, index) => [month.toLowerCase(), index]));
-
-  if (uniqueLabels.length > 0 && uniqueLabels.every((label) => monthIndex.has(label.toLowerCase()))) {
-    return [...uniqueLabels].sort(
-      (left, right) => (monthIndex.get(left.toLowerCase()) ?? 99) - (monthIndex.get(right.toLowerCase()) ?? 99),
-    );
-  }
-
-  if (columnType === "date") {
-    return [...uniqueLabels].sort((left, right) => Date.parse(left) - Date.parse(right));
-  }
-
-  return [...uniqueLabels].sort((left, right) => left.localeCompare(right));
 };
 
 const getNumericColumns = (data: Dataset) => data.columns.filter((column) => column.type === "number");
@@ -234,12 +141,6 @@ const logAverageValidation = ({
     skippedEmptyLabels,
     groupCount,
   });
-};
-
-const isMeaningfulValue = (value: DatasetCellValue | undefined) => {
-  if (value == null) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  return true;
 };
 
 const prepareDatasetForAnalytics = (data: Dataset) => {
@@ -296,34 +197,6 @@ const prepareDatasetForAnalytics = (data: Dataset) => {
       invalidNumericValues,
     },
   };
-};
-
-const getMinimumGroupCount = (dimensionColumn: DataColumn) =>
-  normalizeText(dimensionColumn.name).includes("branch") ? BRANCH_MINIMUM_GROUP_COUNT : 1;
-
-const filterGroupedEntries = (
-  entries: Array<[string, { count: number }]>,
-  dimensionColumn: DataColumn,
-  metricName: string,
-) => {
-  const minimumGroupCount = getMinimumGroupCount(dimensionColumn);
-  if (minimumGroupCount <= 1) {
-    return entries;
-  }
-
-  const filteredEntries = entries.filter(([, entry]) => entry.count >= minimumGroupCount);
-  const excludedGroups = entries.length - filteredEntries.length;
-
-  if (excludedGroups > 0) {
-    console.info("[analytics] group threshold validation", {
-      dimension: dimensionColumn.name,
-      metric: metricName,
-      minimumGroupCount,
-      excludedGroups,
-    });
-  }
-
-  return filteredEntries;
 };
 
 const calculateAverage = (values: number[]) =>
@@ -402,90 +275,6 @@ const averageColumn = (rows: DatasetRow[], columnName: string) => {
   return count > 0 ? total / count : 0;
 };
 
-const groupMetricByDimension = (
-  rows: DatasetRow[],
-  dimensionColumn: DataColumn,
-  metricColumn: DataColumn,
-  aggregation: MetricAggregation = "sum",
-) => {
-  const grouped = new Map<string, { sum: number; count: number }>();
-  let includedValues = 0;
-  let skippedInvalidValues = 0;
-  let skippedEmptyLabels = 0;
-
-  rows.forEach((row) => {
-    const label = normalizeDimensionLabel(dimensionColumn.name, row[dimensionColumn.name]);
-    const value = toNumber(row[metricColumn.name]);
-
-    if (!label) {
-      skippedEmptyLabels += 1;
-      return;
-    }
-
-    if (value == null) {
-      skippedInvalidValues += 1;
-      return;
-    }
-
-    const current = grouped.get(label) ?? { sum: 0, count: 0 };
-    current.sum += value;
-    current.count += 1;
-    grouped.set(label, current);
-    includedValues += 1;
-  });
-
-  const groupedEntries = filterGroupedEntries([...grouped.entries()], dimensionColumn, metricColumn.name);
-  const series = sortLabels(groupedEntries.map(([label]) => label), dimensionColumn.type).map((label) => ({
-    [dimensionColumn.name]: label,
-    [metricColumn.name]: Number(
-      (
-        aggregation === "average"
-          ? (() => {
-              const entry = grouped.get(label) ?? { sum: 0, count: 0 };
-              return entry.count > 0 ? entry.sum / entry.count : 0;
-            })()
-          : (grouped.get(label)?.sum ?? 0)
-      ).toFixed(2),
-    ),
-  }));
-
-  if (aggregation === "average") {
-    logAverageValidation({
-      metricName: metricColumn.name,
-      dimensionName: dimensionColumn.name,
-      includedValues,
-      skippedInvalidValues,
-      skippedEmptyLabels,
-      groupCount: series.length,
-    });
-  }
-
-  return series;
-};
-
-const countRowsByDimension = (rows: DatasetRow[], dimensionColumn: DataColumn, valueKey = "count") => {
-  const grouped = new Map<string, number>();
-
-  rows.forEach((row) => {
-    const label = normalizeDimensionLabel(dimensionColumn.name, row[dimensionColumn.name]);
-    if (!label) {
-      return;
-    }
-
-    grouped.set(label, (grouped.get(label) ?? 0) + 1);
-  });
-
-  const groupedEntries = filterGroupedEntries(
-    [...grouped.entries()].map(([label, count]) => [label, { count }]),
-    dimensionColumn,
-    valueKey,
-  );
-
-  return sortLabels(groupedEntries.map(([label]) => label), dimensionColumn.type).map((label) => ({
-    [dimensionColumn.name]: label,
-    [valueKey]: grouped.get(label) ?? 0,
-  }));
-};
 
 const summarizeMetrics = (rows: DatasetRow[], columns: DataColumn[]) =>
   columns.slice(0, 6).map((column) => ({
@@ -541,37 +330,11 @@ const iconForMetric = (columnName: string) => {
 };
 
 export const generateDemoData = (): Dataset => {
-  const categories = ["Electronics", "Clothing", "Food", "Software", "Services"];
-  const regions = ["North", "South", "East", "West"];
-  const rows: DatasetRow[] = [];
-
-  for (let index = 0; index < 200; index += 1) {
-    rows.push({
-      month: MONTHS[Math.floor(Math.random() * 12)],
-      category: categories[Math.floor(Math.random() * categories.length)],
-      region: regions[Math.floor(Math.random() * regions.length)],
-      revenue: Math.floor(Math.random() * 50000) + 5000,
-      units_sold: Math.floor(Math.random() * 500) + 10,
-      profit_margin: (Math.random() * 0.4 + 0.1).toFixed(2),
-      customer_rating: (Math.random() * 2 + 3).toFixed(1),
-    });
-  }
-
+  const demoData = generateDemoDataset();
   return {
     id: "demo-1",
-    name: "Sales Analytics 2024",
-    columns: [
-      { name: "month", type: "string", sample: MONTHS.slice(0, 3) },
-      { name: "category", type: "string", sample: categories.slice(0, 3) },
-      { name: "region", type: "string", sample: regions.slice(0, 3) },
-      { name: "revenue", type: "number", sample: ["25000", "18000", "32000"] },
-      { name: "units_sold", type: "number", sample: ["150", "230", "89"] },
-      { name: "profit_margin", type: "number", sample: ["0.25", "0.18", "0.32"] },
-      { name: "customer_rating", type: "number", sample: ["4.2", "3.8", "4.7"] },
-    ],
-    rows,
+    ...demoData,
     uploadedAt: new Date(),
-    rowCount: rows.length,
   };
 };
 
