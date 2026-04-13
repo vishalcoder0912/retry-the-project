@@ -1,169 +1,30 @@
-const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const preferredNumericColumns = ["salary_usd", "salary", "compensation", "income", "pay", "revenue", "sales", "amount", "units_sold", "units", "profit_margin", "customer_rating"];
-const preferredDimensionColumns = ["month", "date", "category", "region", "segment", "country", "education", "company_size"];
-const nonAdditiveMetricHints = ["margin", "rate", "ratio", "percent", "percentage", "rating", "score", "mark", "marks", "grade", "gpa", "cgpa"];
-const branchMinimumGroupCount = 2;
+import {
+  toNumber,
+  inferType,
+  normalizeColumns,
+  generateDemoDataset,
+  humanize,
+  pickPreferredColumn,
+  metricAggregationForColumn,
+  sortLabels,
+  toLabel,
+  normalizeText,
+  normalizeGenderLabel,
+  normalizeBoardLabel,
+  normalizeDimensionLabel,
+  isMeaningfulValue,
+  prepareDatasetForAnalytics,
+  getMinimumGroupCount,
+  filterGroupedEntries,
+  groupMetricByDimension,
+  countRowsByDimension,
+  countRowsMatchingValues,
+  buildDatasetSchema,
+  calculatePearsonCorrelation,
+} from "@insightflow/shared-analytics";
 
-const toNumber = (value) => {
-  if (value == null) return null;
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : null;
-  }
-
-  if (typeof value === "string") {
-    const normalized = value.trim();
-    if (!normalized) return null;
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-};
-
-const inferType = (values) => {
-  const sample = values.filter(Boolean).slice(0, 20);
-  if (sample.length === 0) return "string";
-  if (sample.every((value) => !Number.isNaN(Number(value)))) return "number";
-  if (sample.every((value) => !Number.isNaN(Date.parse(value)))) return "date";
-  return "string";
-};
-
-export const normalizeColumns = (rows, providedColumns = []) => {
-  if (providedColumns.length > 0) {
-    return providedColumns.map((column) => ({
-      name: column.name,
-      type: column.type || inferType(rows.slice(0, 20).map((row) => String(row[column.name] ?? ""))),
-      sample: Array.isArray(column.sample) ? column.sample.map((value) => String(value)) : [],
-    }));
-  }
-
-  const fields = Object.keys(rows[0] || {});
-  return fields.map((name) => ({
-    name,
-    type: inferType(rows.slice(0, 20).map((row) => String(row[name] ?? ""))),
-    sample: rows.slice(0, 3).map((row) => String(row[name] ?? "")),
-  }));
-};
-
-export const generateDemoDataset = () => {
-  const categories = ["Electronics", "Clothing", "Food", "Software", "Services"];
-  const regions = ["North", "South", "East", "West"];
-  const rows = [];
-
-  for (let index = 0; index < 200; index += 1) {
-    rows.push({
-      month: months[Math.floor(Math.random() * months.length)],
-      category: categories[Math.floor(Math.random() * categories.length)],
-      region: regions[Math.floor(Math.random() * regions.length)],
-      revenue: Math.floor(Math.random() * 50000) + 5000,
-      units_sold: Math.floor(Math.random() * 500) + 10,
-      profit_margin: Number((Math.random() * 0.4 + 0.1).toFixed(2)),
-      customer_rating: Number((Math.random() * 2 + 3).toFixed(1)),
-    });
-  }
-
-  return {
-    name: "Sales Analytics 2024",
-    sourceType: "demo",
-    fileName: "sales-analytics-2024.json",
-    columns: [
-      { name: "month", type: "string", sample: months.slice(0, 3) },
-      { name: "category", type: "string", sample: categories.slice(0, 3) },
-      { name: "region", type: "string", sample: regions.slice(0, 3) },
-      { name: "revenue", type: "number", sample: ["25000", "18000", "32000"] },
-      { name: "units_sold", type: "number", sample: ["150", "230", "89"] },
-      { name: "profit_margin", type: "number", sample: ["0.25", "0.18", "0.32"] },
-      { name: "customer_rating", type: "number", sample: ["4.2", "3.8", "4.7"] },
-    ],
-    rows,
-  };
-};
-
-const humanize = (value) =>
-  value
-    .replace(/_/g, " ")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-
-const pickPreferredColumn = (columns, preferredNames) => {
-  for (const name of preferredNames) {
-    const found = columns.find((column) => column.name === name);
-    if (found) return found;
-  }
-
-  return columns[0];
-};
-
-const metricAggregationForColumn = (columnName) =>
-  nonAdditiveMetricHints.some((hint) => columnName.toLowerCase().includes(hint)) ? "average" : "sum";
-
-const sortLabels = (labels, columnType) => {
-  const uniqueLabels = [...new Set(labels)];
-  const monthIndex = new Map(months.map((month, index) => [month.toLowerCase(), index]));
-
-  if (uniqueLabels.length > 0 && uniqueLabels.every((label) => monthIndex.has(String(label).toLowerCase()))) {
-    return [...uniqueLabels].sort(
-      (left, right) => (monthIndex.get(String(left).toLowerCase()) ?? 99) - (monthIndex.get(String(right).toLowerCase()) ?? 99),
-    );
-  }
-
-  if (columnType === "date") {
-    return [...uniqueLabels].sort((left, right) => Date.parse(left) - Date.parse(right));
-  }
-
-  return [...uniqueLabels].sort((left, right) => String(left).localeCompare(String(right)));
-};
-
-const toLabel = (value) => {
-  if (value == null) return null;
-  const label = String(value).trim();
-  return label || null;
-};
-
-const normalizeText = (value) =>
-  String(value ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
-const normalizeGenderLabel = (label) => {
-  const normalized = normalizeText(label);
-
-  if (["m", "male", "man", "boy"].includes(normalized)) return "Male";
-  if (["f", "female", "woman", "girl"].includes(normalized)) return "Female";
-  if (["other", "others", "non binary", "nonbinary"].includes(normalized)) return "Other";
-
-  return label;
-};
-
-const normalizeBoardLabel = (label) => {
-  const normalized = normalizeText(label);
-
-  if (normalized === "cbse") return "CBSE";
-  if (normalized === "icse") return "ICSE";
-  if (normalized === "igcse") return "IGCSE";
-  if (normalized === "ib") return "IB";
-  if (normalized === "state board" || normalized === "stateboard") return "State Board";
-
-  return label;
-};
-
-const normalizeDimensionLabel = (columnName, value) => {
-  const label = toLabel(value);
-  if (!label) return null;
-
-  const normalizedColumnName = normalizeText(columnName);
-  if (normalizedColumnName.includes("gender")) {
-    return normalizeGenderLabel(label);
-  }
-  if (normalizedColumnName.includes("board")) {
-    return normalizeBoardLabel(label);
-  }
-
-  return label;
-};
+// Re-export for backward compatibility
+export { normalizeColumns, generateDemoDataset, buildDatasetSchema };
 
 const isGreetingQuery = (query) => {
   const normalizedQuery = normalizeText(query);
@@ -191,211 +52,6 @@ const includesPhrase = (source, phrase) => {
   return (` ${source} `).includes(` ${phrase} `);
 };
 
-const isMeaningfulValue = (value) => {
-  if (value == null) return false;
-  if (typeof value === "string") return value.trim().length > 0;
-  return true;
-};
-
-const prepareDatasetForAnalytics = (dataset) => {
-  const numericColumns = dataset.columns.filter((column) => column.type === "number");
-  const sanitizedRows = [];
-  let removedEmptyRows = 0;
-  let invalidNumericValues = 0;
-
-  dataset.rows.forEach((row) => {
-    const hasMeaningfulField = dataset.columns.some((column) => isMeaningfulValue(row[column.name]));
-    if (!hasMeaningfulField) {
-      removedEmptyRows += 1;
-      return;
-    }
-
-    const nextRow = { ...row };
-    numericColumns.forEach((column) => {
-      const rawValue = row[column.name];
-      const numericValue = toNumber(rawValue);
-
-      if (numericValue == null) {
-        if (isMeaningfulValue(rawValue)) {
-          invalidNumericValues += 1;
-        }
-        nextRow[column.name] = null;
-        return;
-      }
-
-      nextRow[column.name] = numericValue;
-    });
-
-    sanitizedRows.push(nextRow);
-  });
-
-  if (removedEmptyRows > 0 || invalidNumericValues > 0) {
-    console.info("[analytics] integrity validation", {
-      totalRows: dataset.rows.length,
-      analyticsRows: sanitizedRows.length,
-      removedEmptyRows,
-      invalidNumericValues,
-    });
-  }
-
-  return {
-    ...dataset,
-    rows: sanitizedRows,
-    rowCount: sanitizedRows.length,
-  };
-};
-
-const getMinimumGroupCount = (dimensionColumn) =>
-  normalizeText(dimensionColumn.name).includes("branch") ? branchMinimumGroupCount : 1;
-
-const filterGroupedEntries = (entries, dimensionColumn, metricColumn) => {
-  const minimumGroupCount = getMinimumGroupCount(dimensionColumn);
-  if (minimumGroupCount <= 1) {
-    return entries;
-  }
-
-  const filteredEntries = entries.filter(([, entry]) => entry.count >= minimumGroupCount);
-  const excludedGroups = entries.length - filteredEntries.length;
-
-  if (excludedGroups > 0) {
-    console.info("[analytics] group threshold validation", {
-      dimension: dimensionColumn.name,
-      metric: metricColumn?.name ?? "count",
-      minimumGroupCount,
-      excludedGroups,
-    });
-  }
-
-  return filteredEntries;
-};
-
-const logAverageValidation = ({ metricName, dimensionName, includedValues, skippedInvalidValues, skippedEmptyLabels, groupCount }) => {
-  console.info("[analytics] average validation", {
-    metric: metricName,
-    dimension: dimensionName,
-    formula: "sum(values) / count(values)",
-    includedValues,
-    skippedInvalidValues,
-    skippedEmptyLabels,
-    groupCount,
-  });
-};
-
-const groupMetricByDimension = (rows, dimensionColumn, metricColumn, aggregation = "sum") => {
-  const grouped = new Map();
-  let includedValues = 0;
-  let skippedInvalidValues = 0;
-  let skippedEmptyLabels = 0;
-
-  rows.forEach((row) => {
-    const label = normalizeDimensionLabel(dimensionColumn.name, row[dimensionColumn.name]);
-    const value = toNumber(row[metricColumn.name]);
-
-    if (!label) {
-      skippedEmptyLabels += 1;
-      return;
-    }
-
-    if (value == null) {
-      skippedInvalidValues += 1;
-      return;
-    }
-
-    const current = grouped.get(label) ?? { sum: 0, count: 0 };
-    current.sum += value;
-    current.count += 1;
-    grouped.set(label, current);
-    includedValues += 1;
-  });
-
-  const groupedEntries = filterGroupedEntries([...grouped.entries()], dimensionColumn, metricColumn);
-  const series = sortLabels(groupedEntries.map(([label]) => label), dimensionColumn.type).map((label) => {
-    const entry = grouped.get(label) ?? { sum: 0, count: 0 };
-    const value = aggregation === "average" && entry.count > 0 ? entry.sum / entry.count : entry.sum;
-
-    return {
-      [dimensionColumn.name]: label,
-      [metricColumn.name]: Number(value.toFixed(2)),
-    };
-  });
-
-  if (aggregation === "average") {
-    logAverageValidation({
-      metricName: metricColumn.name,
-      dimensionName: dimensionColumn.name,
-      includedValues,
-      skippedInvalidValues,
-      skippedEmptyLabels,
-      groupCount: series.length,
-    });
-  }
-
-  return series;
-};
-
-const countRowsByDimension = (rows, dimensionColumn, valueKey = "count") => {
-  const grouped = new Map();
-
-  rows.forEach((row) => {
-    const label = normalizeDimensionLabel(dimensionColumn.name, row[dimensionColumn.name]);
-    if (!label) return;
-    grouped.set(label, (grouped.get(label) ?? 0) + 1);
-  });
-
-  const groupedEntries = filterGroupedEntries(
-    [...grouped.entries()].map(([label, count]) => [label, { count }]),
-    dimensionColumn,
-    null,
-  );
-
-  return sortLabels(groupedEntries.map(([label]) => label), dimensionColumn.type).map((label) => ({
-    [dimensionColumn.name]: label,
-    [valueKey]: grouped.get(label) ?? 0,
-  }));
-};
-
-const countRowsMatchingValues = (rows, dimensionColumn, matchValues, valueKey = "count") => {
-  const requestedValues = new Set(matchValues);
-  const grouped = new Map(matchValues.map((value) => [value, 0]));
-
-  rows.forEach((row) => {
-    const label = normalizeDimensionLabel(dimensionColumn.name, row[dimensionColumn.name]);
-    if (!label || !requestedValues.has(label)) return;
-    grouped.set(label, (grouped.get(label) ?? 0) + 1);
-  });
-
-  return matchValues.map((value) => ({
-    [dimensionColumn.name]: value,
-    [valueKey]: grouped.get(value) ?? 0,
-  }));
-};
-
-export const buildDatasetSchema = (dataset) => {
-  const numericColumns = dataset.columns.filter((column) => column.type === "number");
-  const dimensionColumns = dataset.columns.filter((column) => column.type !== "number");
-  const primaryMetric = numericColumns.length > 0 ? pickPreferredColumn(numericColumns, preferredNumericColumns) : null;
-  const remainingMetrics = numericColumns.filter((column) => column.name !== primaryMetric?.name);
-  const secondaryMetric = remainingMetrics.length > 0 ? remainingMetrics[0] : null;
-  const primaryDimension = dimensionColumns.length > 0 ? pickPreferredColumn(dimensionColumns, preferredDimensionColumns) : null;
-  const secondaryDimension = dimensionColumns.find((column) => column.name !== primaryDimension?.name) ?? null;
-
-  return {
-    datasetName: dataset.name,
-    rowCount: dataset.rowCount,
-    columnCount: dataset.columns.length,
-    columns: dataset.columns.map((column) => ({
-      name: column.name,
-      type: column.type,
-      sample: column.sample ?? [],
-      role: column.type === "number" ? "metric" : "dimension",
-      aggregation: column.type === "number" ? metricAggregationForColumn(column.name) : null,
-    })),
-    primaryMetric,
-    secondaryMetric,
-    primaryDimension,
-    secondaryDimension,
-  };
-};
 
 const pickDimensionForQuery = (schema, queryLower) => {
   const dimensions = schema.columns.filter((column) => column.role === "dimension");
@@ -648,22 +304,6 @@ export const createChatResponse = (dataset, query) => {
   };
 };
 
-const calculatePearsonCorrelation = (x, y) => {
-  const n = Math.min(x.length, y.length);
-  if (n < 2) return null;
-
-  const sumX = x.reduce((a, b) => a + b, 0);
-  const sumY = y.reduce((a, b) => a + b, 0);
-  const sumXY = x.reduce((total, xi, i) => total + xi * y[i], 0);
-  const sumX2 = x.reduce((total, xi) => total + xi * xi, 0);
-  const sumY2 = y.reduce((total, yi) => total + yi * yi, 0);
-
-  const numerator = n * sumXY - sumX * sumY;
-  const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
-
-  if (denominator === 0) return null;
-  return numerator / denominator;
-};
 
 export const generateCorrelationAnalysis = (dataset) => {
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
