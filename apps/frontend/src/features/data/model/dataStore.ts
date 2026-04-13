@@ -21,7 +21,7 @@ import {
   PREFERRED_NUMERIC_COLUMNS_CONST as PREFERRED_NUMERIC_COLUMNS,
   PREFERRED_DIMENSION_COLUMNS_CONST as PREFERRED_DIMENSION_COLUMNS,
   NON_ADDITIVE_METRIC_HINTS_CONST as NON_ADDITIVE_METRIC_HINTS,
-  BRANCH_MINIMUM_GROUP_COUNT,
+  BRANCH_MINIMUM_GROUP_COUNT_CONST as BRANCH_MINIMUM_GROUP_COUNT,
 } from "@insightflow/shared-analytics";
 
 export interface DataColumn {
@@ -495,7 +495,7 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
           label: label ?? "Value",
         };
       })
-      .filter((entry): entry is ChartDatum => entry !== null)
+      .filter((entry): entry is ChartDatum & { label: string } => entry !== null)
       .slice(0, 250);
 
     if (scatterData.length > 0) {
