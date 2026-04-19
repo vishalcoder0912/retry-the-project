@@ -1,18 +1,21 @@
 {
-  "name": "insightflow-workspace",
+  "name": "insightflow",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "workspaces": [
     "apps/frontend",
-    "apps/backend"
+    "apps/backend",
+    "packages/shared-analytics"
   ],
   "scripts": {
-    "start": "node scripts/start.js",
     "dev": "npm run dev -w apps/frontend",
-    "start:frontend": "npm run dev -w apps/frontend",
-    "start:backend": "npm run dev -w apps/backend",
+    "dev:all": "npm run dev -w apps/backend & npm run dev -w apps/frontend",
+    "dev:frontend": "npm run dev -w apps/frontend",
+    "dev:backend": "npm run dev -w apps/backend",
     "build": "npm run build -w apps/frontend",
+    "build:frontend": "npm run build -w apps/frontend",
+    "build:backend": "npm run build -w apps/backend",
     "lint": "npm run lint -w apps/frontend",
     "test": "npm run test -w apps/frontend"
   }

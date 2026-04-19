@@ -44,10 +44,10 @@ interface CustomTooltipProps {
 const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass rounded-lg px-3 py-2 text-xs">
-      <p className="mb-1 uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+    <div className="glass rounded-lg px-4 py-3 text-sm">
+      <p className="mb-2 font-medium text-foreground">{label}</p>
       {payload.map((p, i) => (
-        <p key={i} className="font-mono uppercase tracking-[0.08em] text-foreground">
+        <p key={i} className="font-mono text-muted-foreground">
           {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
         </p>
       ))}
@@ -97,12 +97,21 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
     const commonProps = { data: chartData };
     const curveType = curved ? 'monotone' : 'linear';
     const grid = showGrid ? <CartesianGrid strokeDasharray="0" stroke="hsl(0 0% 32%)" /> : null;
-    const legend = showLegend ? <Legend wrapperStyle={{ textTransform: 'uppercase', fontSize: '11px' }} /> : null;
+    const legend = (showLegend && !isPieChart) ? (
+      <Legend
+        wrapperStyle={{ fontSize: '14px', paddingTop: '20px', paddingBottom: '10px', textTransform: 'none' }}
+        iconSize={20}
+        iconType="rect"
+        align="center"
+        verticalAlign="bottom"
+        layout="horizontal"
+      />
+    ) : null;
 
     switch (chartType) {
       case 'area':
         return (
-          <AreaChart {...commonProps}>
+          <AreaChart {...commonProps} margin={{ top: 20, right: 20, bottom: 60, left: 60 }}>
             <defs>
               <linearGradient id={`gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={colors[1]} stopOpacity={0.9} />
@@ -110,8 +119,8 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
               </linearGradient>
             </defs>
             {grid}
-            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
-            <YAxis tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
+            <XAxis dataKey={config.xKey} tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'bottom', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
+            <YAxis tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'left', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
             <Tooltip content={<CustomTooltip />} />
             {legend}
             <Area type={curveType} dataKey={config.yKey} stroke={colors[1]} fill={`url(#gradient-${index})`} strokeWidth={2} />
@@ -119,10 +128,10 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
         );
       case 'bar':
         return (
-          <BarChart {...commonProps}>
+          <BarChart {...commonProps} margin={{ top: 20, right: 20, bottom: 60, left: 60 }}>
             {grid}
-            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
-            <YAxis tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
+            <XAxis dataKey={config.xKey} tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'bottom', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
+            <YAxis tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'left', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
             <Tooltip content={<CustomTooltip />} />
             {legend}
             <Bar dataKey={config.yKey} fill={colors[index % colors.length]} radius={[0, 0, 0, 0]} />
@@ -130,10 +139,10 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
         );
       case 'line':
         return (
-          <LineChart {...commonProps}>
+          <LineChart {...commonProps} margin={{ top: 20, right: 20, bottom: 60, left: 60 }}>
             {grid}
-            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
-            <YAxis tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
+            <XAxis dataKey={config.xKey} tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'bottom', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
+            <YAxis tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'left', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
             <Tooltip content={<CustomTooltip />} />
             {legend}
             <Line type={curveType} dataKey={config.yKey} stroke={colors[1]} strokeWidth={2} dot={{ fill: colors[1], strokeWidth: 0, r: 4 }} />
@@ -141,10 +150,10 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
         );
       case 'scatter':
         return (
-          <ScatterChart {...commonProps}>
+          <ScatterChart {...commonProps} margin={{ top: 20, right: 20, bottom: 60, left: 60 }}>
             {grid}
-            <XAxis type="number" dataKey={config.xKey} name={xLabel} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
-            <YAxis type="number" dataKey={config.yKey} name={yLabel} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
+            <XAxis type="number" dataKey={config.xKey} name={xLabel} tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'bottom', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
+            <YAxis type="number" dataKey={config.yKey} name={yLabel} tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'left', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
             <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
             {legend}
             <Scatter data={chartData} fill={colors[1]} />
@@ -152,10 +161,10 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
         );
       case 'radar':
         return (
-          <RadarChart outerRadius="70%" data={chartData}>
+          <RadarChart outerRadius="70%" data={chartData} margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
             <PolarGrid stroke="hsl(0 0% 32%)" />
-            <PolarAngleAxis dataKey={config.xKey} tick={{ fill: 'hsl(0 0% 70%)', fontSize: 11 }} />
-            <PolarRadiusAxis tick={{ fill: 'hsl(0 0% 55%)', fontSize: 10 }} />
+            <PolarAngleAxis dataKey={config.xKey} tick={{ fill: 'hsl(0 0% 75%)', fontSize: 12 }} />
+            <PolarRadiusAxis tick={{ fill: 'hsl(0 0% 60%)', fontSize: 11 }} />
             <Tooltip content={<CustomTooltip />} />
             {legend}
             <Radar dataKey={config.yKey} stroke={colors[1]} fill={colors[1]} fillOpacity={0.35} />
@@ -163,10 +172,10 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
         );
       case 'composed':
         return (
-          <ComposedChart {...commonProps}>
+          <ComposedChart {...commonProps} margin={{ top: 20, right: 20, bottom: 60, left: 60 }}>
             {grid}
-            <XAxis dataKey={config.xKey} tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'insideBottom', offset: -4, fill: 'hsl(0 0% 60%)' }} />
-            <YAxis tick={{ fontSize: 11, fill: 'hsl(0 0% 60%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'insideLeft', fill: 'hsl(0 0% 60%)' }} />
+            <XAxis dataKey={config.xKey} tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: xLabel, position: 'bottom', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
+            <YAxis tick={{ fontSize: 13, fill: 'hsl(0 0% 70%)' }} axisLine={false} tickLine={false} label={{ value: yLabel, angle: -90, position: 'left', offset: 40, fill: 'hsl(0 0% 80%)', fontSize: 14, fontWeight: 500 }} />
             <Tooltip content={<CustomTooltip />} />
             {legend}
             <Bar dataKey={config.yKey} fill={colors[0]} />
@@ -175,7 +184,7 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
         );
       case 'pie':
         return (
-          <PieChart>
+          <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
             <Pie data={chartData} dataKey={config.yKey} nameKey={config.xKey} cx="50%" cy="50%" innerRadius={45} outerRadius={82}>
               {chartData.map((_, i) => (
                 <Cell key={i} fill={colors[i % colors.length]} />
@@ -195,15 +204,15 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 + 0.12, duration: 0.2 }}
-      className="terminal-panel group p-5"
+      className="terminal-panel group p-6"
       ref={chartRef}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div>
+      <div className="mb-6 flex items-center justify-between">
+        <div className="flex-1">
           <p className="terminal-label">Data Visualization</p>
           <h3 className="mt-2 text-xl uppercase tracking-[0.08em] text-foreground">{config.title}</h3>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ml-4">
           <Sheet>
             <SheetTrigger asChild>
               <button
@@ -216,24 +225,24 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
               </button>
             </SheetTrigger>
             <SheetContent side="right" className="w-full overflow-y-auto border-border bg-card sm:max-w-md">
-              <SheetHeader className="border-b border-border pb-4">
+              <SheetHeader className="border-b border-border pb-6">
                 <SheetTitle className="text-xl uppercase tracking-[0.08em] text-foreground">Chart Customization</SheetTitle>
-                <SheetDescription className="text-xs uppercase tracking-[0.08em] text-muted-foreground">
+                <SheetDescription className="text-sm text-muted-foreground">
                   Adjust chart type, palette, labels, and display options for this visualization.
                 </SheetDescription>
               </SheetHeader>
 
               <div className="space-y-6 pt-6">
-                <div className="border border-border bg-background p-4">
-                  <p className="terminal-label mb-3">Chart Type</p>
-                  <div className="flex flex-wrap gap-2">
+                <div className="border border-border bg-background p-5">
+                  <p className="terminal-label mb-4 text-sm">Chart Type</p>
+                  <div className="grid grid-cols-3 gap-3">
                     {(['bar', 'line', 'area', 'pie', 'scatter', 'radar', 'composed'] as LocalChartType[]).map((type) => (
                       <button
                         key={type}
                         type="button"
                         onClick={() => setChartType(type)}
-                        className={`border px-3 py-2 text-xs uppercase tracking-[0.08em] ${
-                          chartType === type ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground'
+                        className={`border px-4 py-3 text-sm transition-colors ${
+                          chartType === type ? 'border-primary bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:border-primary/50'
                         }`}
                       >
                         {type}
@@ -242,21 +251,21 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
                   </div>
                 </div>
 
-                <div className="border border-border bg-background p-4">
-                  <p className="terminal-label mb-3">Color Palette</p>
-                  <div className="flex flex-wrap gap-2">
+                <div className="border border-border bg-background p-5">
+                  <p className="terminal-label mb-4 text-sm">Color Palette</p>
+                  <div className="grid grid-cols-2 gap-3">
                     {(Object.keys(PALETTES) as PaletteKey[]).map((key) => (
                       <button
                         key={key}
                         type="button"
                         onClick={() => setPalette(key)}
-                        className={`flex items-center gap-2 border px-3 py-2 text-xs uppercase tracking-[0.08em] ${
-                          palette === key ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground'
+                        className={`flex items-center gap-3 border px-4 py-3 text-sm transition-colors ${
+                          palette === key ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:border-primary/50'
                         }`}
                       >
                         <span className="flex gap-1">
                           {PALETTES[key].slice(0, 3).map((color) => (
-                            <span key={color} className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                            <span key={color} className="h-3 w-3 rounded-full border border-border" style={{ backgroundColor: color }} />
                           ))}
                         </span>
                         {key}
@@ -266,27 +275,27 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="border border-border bg-background p-4">
-                    <p className="terminal-label mb-3">X Label</p>
+                  <div className="border border-border bg-background p-5">
+                    <p className="terminal-label mb-3 text-sm">X Label</p>
                     <Input
                       value={xLabel}
                       onChange={(e) => setXLabel(e.target.value)}
-                      className="rounded-none border-border bg-card text-sm uppercase tracking-[0.08em]"
+                      className="rounded-none border-border bg-card text-base"
                     />
                   </div>
-                  <div className="border border-border bg-background p-4">
-                    <p className="terminal-label mb-3">Y Label</p>
+                  <div className="border border-border bg-background p-5">
+                    <p className="terminal-label mb-3 text-sm">Y Label</p>
                     <Input
                       value={yLabel}
                       onChange={(e) => setYLabel(e.target.value)}
-                      className="rounded-none border-border bg-card text-sm uppercase tracking-[0.08em]"
+                      className="rounded-none border-border bg-card text-base"
                     />
                   </div>
                 </div>
 
-                <div className="border border-border bg-background p-4">
-                  <p className="terminal-label mb-3">Display Options</p>
-                  <div className="space-y-4 text-xs uppercase tracking-[0.08em] text-foreground">
+                <div className="border border-border bg-background p-5">
+                  <p className="terminal-label mb-4 text-sm">Display Options</p>
+                  <div className="space-y-5 text-sm text-foreground">
                     <label className="flex items-center justify-between gap-4">
                       <span>Grid</span>
                       <Switch checked={showGrid} onCheckedChange={setShowGrid} />
@@ -315,35 +324,10 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
           </button>
         </div>
       </div>
-      <div className={`${isPieChart ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_220px]' : 'h-72'}`}>
-        <div className={isPieChart ? 'h-72' : 'h-full'}>
-          <ResponsiveContainer width="100%" height="100%">
-            {renderChart()}
-          </ResponsiveContainer>
-        </div>
-        {isPieChart && (
-          <div className="border border-border p-4">
-            <p className="terminal-label mb-4">Degree Count</p>
-            <div className="space-y-3">
-              {chartData.map((datum, datumIndex) => (
-                <div key={`${String(datum[config.xKey])}-${datumIndex}`} className="flex items-center justify-between gap-3 text-sm uppercase tracking-[0.08em]">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="block h-3 w-3 border border-border"
-                      style={{ backgroundColor: colors[datumIndex % colors.length] }}
-                    />
-                    <span className="text-foreground">{String(datum[config.xKey])}</span>
-                  </div>
-                  <span className="text-success">
-                    {typeof datum[config.yKey] === 'number'
-                      ? Number(datum[config.yKey]).toLocaleString()
-                      : String(datum[config.yKey])}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+      <div className="h-80">
+        <ResponsiveContainer width="100%" height="100%">
+          {renderChart()}
+        </ResponsiveContainer>
       </div>
     </motion.div>
   );
