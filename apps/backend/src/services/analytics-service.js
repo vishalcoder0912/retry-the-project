@@ -318,12 +318,14 @@ export const createChatResponse = (dataset, query) => {
 };
 
 /**
- * Create AI-powered chat response using schema-first Gemini approach
- * @param {Object} dataset - The dataset object with rows and columns
- * @param {string} query - User's natural language query
- * @returns {Promise<Object>} Chat response with SQL, insight, chart
+ * Create chat response using AI with intelligent caching
+ * Cache hit = instant response ($0 cost)
+ * Cache miss = call Gemini, then cache result
  */
 export const createSchemaFirstChatResponse = async (dataset, query) => {
+  // Import cache service
+  const { getCachedQuery, cacheQuery } = await import("./query-cache.js");
+  
   // Handle greetings
   if (isGreetingQuery(query)) {
     return {
@@ -333,10 +335,26 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
       insights: [],
       usedAI: false,
       reason: "greeting",
+      fromCache: false,
     };
   }
 
-  // Try AI analysis if configured
+  // ✅ STEP 1: CHECK CACHE FIRST (Zero Cost)
+  console.log(`[analytics] Checking cache for query: "${query.substring(0, 50)}..."`);
+  const cachedResult = getCachedQuery(dataset.id, query);
+  
+  if (cachedResult) {
+    console.log("[analytics] 🟢 Cache HIT - returning cached response (saving API cost)");
+    return {
+      ...cachedResult,
+      fromCache: true,
+      cacheMessage: "⚡ Retrieved from cache (instant response, $0 cost)",
+    };
+  }
+
+  console.log("[analytics] 🔴 Cache MISS - calling Gemini AI");
+
+  // ✅ STEP 2: TRY AI ANALYSIS if configured
   if (isGeminiConfigured()) {
     try {
       console.log("[analytics] Attempting AI analysis for query:", query.substring(0, 50));
@@ -352,62 +370,53 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
       const aiResponse = await callGeminiAI(datasetForAI, query);
 
       if (aiResponse.success && aiResponse.usedAI) {
-        // Sanitize SQL
-        const sanitized = sanitizeSQL(aiResponse.sql);
-        if (!sanitized) {
-          console.warn("[analytics] SQL sanitation failed");
-          return fallbackToLocalAnalysis(dataset, query, "SQL validation failed");
-        }
-
-        // Build chart from AI response
+        // Build response from AI analysis
         let chart = null;
         if (aiResponse.chart_type && aiResponse.chart_type !== 'table') {
-          const plan = buildPlanFromAIResponse(dataset, aiResponse);
-          chart = materializePlan(dataset, plan);
+          chart = materializePlan(
+            dataset,
+            buildPlanFromAIResponse(dataset, aiResponse)
+          );
         }
 
-        // Build response
-        const confidenceLevel = getConfidenceLevel(aiResponse.confidence);
-        const insights = [
-          `Analysis Type: ${aiResponse.intent}`,
-          `Confidence: ${(aiResponse.confidence * 100).toFixed(0)}% (${confidenceLevel})`,
-          aiResponse.reasoning,
-        ];
-
-        if (aiResponse.warnings?.length > 0) {
-          insights.push(`Warning: ${aiResponse.warnings.join("; ")}`);
-        }
-
-        return {
+        const response = {
           content: aiResponse.insight,
-          sql: sanitized,
-          chart,
-          insights,
+          sql: aiResponse.sql,
+          chart: chart,
+          insights: [
+            `Analysis type: ${aiResponse.intent}`,
+            `Confidence: ${(aiResponse.confidence * 100).toFixed(0)}%`,
+            aiResponse.reasoning,
+          ],
           usedAI: true,
           intent: aiResponse.intent,
           confidence: aiResponse.confidence,
-          metadata: aiResponse.metadata,
+          fromCache: false,
         };
-      } else if (aiResponse.shouldFallback) {
-        console.log("[analytics] AI failed, using local fallback:", aiResponse.error);
-        return fallbackToLocalAnalysis(dataset, query, aiResponse.error);
+
+        // ✅ STEP 3: CACHE THE RESULT (for future queries)
+        console.log("[analytics] 💾 Caching AI response for future use");
+        cacheQuery(dataset.id, query, response);
+
+        return response;
       }
     } catch (error) {
       console.warn("[analytics] AI analysis error:", error.message);
     }
+  } else {
+    console.log("[analytics] ℹ️  Gemini API key not configured, using local analysis");
   }
 
-  // Fallback to local analysis
-  return fallbackToLocalAnalysis(dataset, query, null);
+  // ✅ STEP 4: FALLBACK to local analysis (FREE, no API cost)
+  return fallbackToLocalAnalysis(dataset, query);
 };
 
 /**
- * Build analysis plan from AI response
+ * Build plan from AI response
  */
-const buildPlanFromAIResponse = (dataset, aiResponse) => {
-  const analyticsDataset = prepareDatasetForAnalytics(dataset);
-  const schema = buildDatasetSchema(analyticsDataset);
-
+function buildPlanFromAIResponse(dataset, aiResponse) {
+  const schema = buildDatasetSchema(prepareDatasetForAnalytics(dataset));
+  
   const columnsInSchema = (aiResponse.columns_used || [])
     .map(name => schema.columns.find(c => c.name === name))
     .filter(Boolean);
@@ -426,13 +435,13 @@ const buildPlanFromAIResponse = (dataset, aiResponse) => {
     chartType: aiResponse.chart_type,
     intent: aiResponse.intent,
   };
-};
+}
 
 /**
- * Fallback to local analysis
+ * Fallback to local analysis (FREE, no external API)
  */
-const fallbackToLocalAnalysis = (dataset, query, reason) => {
-  console.log("[analytics] Using local fallback analysis. Reason:", reason);
+function fallbackToLocalAnalysis(dataset, query) {
+  console.log("[analytics] Using local fallback analysis");
 
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
   const schema = buildDatasetSchema(analyticsDataset);
@@ -440,14 +449,15 @@ const fallbackToLocalAnalysis = (dataset, query, reason) => {
   const chart = materializePlan(analyticsDataset, plan);
 
   return {
-    content: `I analyzed your data locally and found ${chart?.type || "an interesting"} view: ${chart?.title || ""}`,
+    content: `Using local analysis: ${chart?.title || "Analyzing your data"}`,
     sql: buildSqlForPlan(plan),
     chart,
     insights: buildInsightsFromSchema(schema, plan),
     usedAI: false,
-    reason: reason || "local-fallback",
+    reason: "local-fallback",
+    fromCache: false,
   };
-};
+}
 
 /**
  * Build chart data from SQL query result
