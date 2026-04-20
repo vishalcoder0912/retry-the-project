@@ -1,5 +1,8 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
 import {
   createDataset,
   getChatMessages,
@@ -11,16 +14,24 @@ import {
 } from "./database/dataset-repository.js";
 import { 
   initializeCache, 
-  getCachedQuery, 
-  cacheQuery, 
   getCacheStats, 
   clearDatasetCache 
 } from "./services/query-cache.js";
 import MLClient from "./services/ml-client.js";
 
-// Initialize cache on startup
-initializeCache();
-console.log("[startup] Query cache initialized");
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+
+// Initialize cache immediately on startup
+console.log("[startup] Initializing query cache...");
+try {
+  initializeCache();
+  console.log("[startup] ✅ Query cache initialized successfully");
+} catch (error) {
+  console.error("[startup] ❌ Cache init failed:", error.message);
+  process.exit(1);
+}
 import {
   buildDatasetSchema,
   createChatResponse,
