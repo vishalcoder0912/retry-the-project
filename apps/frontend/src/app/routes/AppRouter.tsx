@@ -5,6 +5,7 @@ import LocalChatPage from "@/features/chat/pages/LocalChatPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import DataTablePage from "@/features/dashboard/pages/DataTablePage";
 import UploadPage from "@/features/data/pages/UploadPage";
+import MLPage from "@/features/ml/pages/MLPage";
 import AppLayout from "@/shared/layout/AppLayout";
 import NotFoundPage from "@/app/routes/NotFoundPage";
 
@@ -23,6 +24,7 @@ const AppRouter = () => (
         <Route path="/local-chat" element={<LocalChatPage />} />
         <Route path="/data" element={<DataTablePage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/ml" element={<MLPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
