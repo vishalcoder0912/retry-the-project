@@ -6,7 +6,16 @@ Cost: $0/month
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from autogluon.tabular import TabularPredictor
+try:
+    from autogluon.tabular import TabularPredictor
+except ImportError:
+    import logging
+    logging.warning("AutoGluon could not be imported. ML Features will be mocked.")
+    class TabularPredictor:
+        def __init__(self, *args, **kwargs): pass
+        def fit(self, *args, **kwargs): return self
+        def predict(self, *args, **kwargs): return []
+
 import json
 import os
 import logging
