@@ -9,6 +9,18 @@ import {
   patchDatasetRow,
   saveChatMessages,
 } from "./database/dataset-repository.js";
+import { 
+  initializeCache, 
+  getCachedQuery, 
+  cacheQuery, 
+  getCacheStats, 
+  clearDatasetCache 
+} from "./services/query-cache.js";
+import MLClient from "./services/ml-client.js";
+
+// Initialize cache on startup
+initializeCache();
+console.log("[startup] Query cache initialized");
 import {
   buildDatasetSchema,
   createChatResponse,
@@ -119,6 +131,162 @@ const server = createServer(async (request, response) => {
   try {
     if (request.method === "GET" && pathname === "/") {
       sendJson(response, 200, buildIndexPayload());
+      return;
+    }
+
+    // ============================================================
+    // CACHE STATS ENDPOINT (for monitoring, no authentication needed)
+    // ============================================================
+    if (pathname === "/api/cache/stats" && request.method === "GET") {
+      const stats = getCacheStats();
+      sendJson(response, 200, {
+        success: true,
+        cache: stats,
+        message: "Cache stats retrieved successfully",
+      });
+      return;
+    }
+
+    // GET cache stats for specific dataset
+    const cacheDatasetMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/cache\/stats$/);
+    if (cacheDatasetMatch && request.method === "GET") {
+      const [, datasetId] = cacheDatasetMatch;
+      const stats = getCacheStats(datasetId);
+      sendJson(response, 200, {
+        success: true,
+        datasetId,
+        cache: stats,
+      });
+      return;
+    }
+
+    // Clear cache for dataset (useful for testing)
+    const clearCacheMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/cache\/clear$/);
+    if (clearCacheMatch && request.method === "POST") {
+      const [, datasetId] = clearCacheMatch;
+      clearDatasetCache(datasetId);
+      sendJson(response, 200, {
+        success: true,
+        message: `Cache cleared for dataset ${datasetId}`,
+      });
+      return;
+    }
+
+    // ============================================================
+    // ML ROUTES
+    // ============================================================
+    if (request.method === "POST" && pathname === "/api/ml/health") {
+      try {
+        const health = await MLClient.health();
+        sendJson(response, health.success ? 200 : 503, health);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    if (request.method === "GET" && pathname === "/api/ml/models/list") {
+      try {
+        const result = await MLClient.listModels();
+        sendJson(response, result.success ? 200 : 500, result);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    const mlTrainMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ml\/train$/);
+    if (request.method === "POST" && mlTrainMatch) {
+      const [, datasetId] = mlTrainMatch;
+      try {
+        const body = await readJsonBody(request);
+        const { targetColumn, problemType = 'regression' } = body;
+        
+        const dataset = getDatasetById(datasetId);
+        if (!dataset) {
+          sendJson(response, 404, { error: 'Dataset not found' });
+          return;
+        }
+
+        if (!dataset.columns.find((c) => c.name === targetColumn)) {
+          sendJson(response, 400, { error: `Column "${targetColumn}" not found` });
+          return;
+        }
+
+        const result = await MLClient.trainModel(datasetId, dataset.rows, targetColumn, problemType);
+        if (result.success) {
+          sendJson(response, 200, {
+            success: true,
+            model: {
+              id: result.model_id,
+              accuracy: result.accuracy,
+              features: result.feature_importance,
+              trainingCompletedAt: result.training_completed_at,
+            },
+            message: '✅ Model trained successfully',
+          });
+        } else {
+          sendJson(response, 500, { success: false, error: result.error });
+        }
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    const mlPredictMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ml\/predict$/);
+    if (request.method === "POST" && mlPredictMatch) {
+      const [, datasetId] = mlPredictMatch;
+      try {
+        const body = await readJsonBody(request);
+        const { inputData } = body;
+
+        if (!inputData) {
+          sendJson(response, 400, { error: 'inputData is required' });
+          return;
+        }
+
+        const result = await MLClient.predict(datasetId, inputData);
+        if (result.success) {
+          sendJson(response, 200, {
+            success: true,
+            predictions: result.predictions,
+            count: result.count,
+          });
+        } else {
+          sendJson(response, 500, { success: false, error: result.error });
+        }
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    const mlFeatureMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ml\/feature-importance$/);
+    if (request.method === "GET" && mlFeatureMatch) {
+      const [, datasetId] = mlFeatureMatch;
+      try {
+        const result = await MLClient.getFeatureImportance(datasetId);
+        if (result.success) {
+          sendJson(response, 200, { success: true, importance: result.importance });
+        } else {
+          sendJson(response, 500, { success: false, error: result.error });
+        }
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    const mlModelDelMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ml\/model$/);
+    if (request.method === "DELETE" && mlModelDelMatch) {
+      const [, datasetId] = mlModelDelMatch;
+      try {
+        const result = await MLClient.deleteModel(datasetId);
+        sendJson(response, result.success ? 200 : 500, result);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
       return;
     }
 
