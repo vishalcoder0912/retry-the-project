@@ -66,6 +66,25 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_chat_messages_dataset_id ON chat_messages(dataset_id);
 `);
 
+// Migration: Add new columns for local datasets support
+try {
+  db.exec("ALTER TABLE datasets ADD COLUMN is_local INTEGER DEFAULT 0");
+} catch (e) {
+  // Column might already exist, ignore error
+}
+
+try {
+  db.exec("ALTER TABLE datasets ADD COLUMN local_dataset_id TEXT");
+} catch (e) {
+  // Column might already exist, ignore error
+}
+
+try {
+  db.exec("CREATE INDEX IF NOT EXISTS idx_datasets_local_id ON datasets(local_dataset_id)");
+} catch (e) {
+  // Index might already exist, ignore error
+}
+
 const parseJson = (value, fallback) => {
   if (!value) return fallback;
   try {

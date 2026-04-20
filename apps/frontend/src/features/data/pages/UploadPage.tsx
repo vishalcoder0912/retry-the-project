@@ -2,14 +2,17 @@ import { useCallback, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
+import { useLocalData } from '@/features/data/context/localDataContext';
 import { useNavigate } from 'react-router-dom';
 
 const UploadPage = () => {
   const { dataset, uploadFile, loadDemo } = useData();
+  const { localDataset, importLocalDataset: importLocal } = useLocalData();
   const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localMode, setLocalMode] = useState(false);
 
   const handleFile = useCallback(async (file: File) => {
     const ext = file.name.split('.').pop()?.toLowerCase();
@@ -20,13 +23,30 @@ const UploadPage = () => {
     setError(null);
     setIsUploading(true);
     try {
-      await uploadFile(file);
+      if (localMode) {
+        // Local mode: Use local file processor
+        const { processLocalFile } = await import('@/features/data/utils/localFileProcessor');
+        
+        // Process file and extract schema
+        const result = await processLocalFile(file, () => {}, 1000);
+        
+        // Import to local database
+        await importLocal(
+          result.fileName.replace(/\.(csv|xlsx|xls|json)$/i, ''),
+          result.fileName,
+          result.columns,
+          [] // Data will be sent separately in chunks
+        );
+      } else {
+        // Standard mode: Use existing upload
+        await uploadFile(file);
+      }
     } catch {
       setError('Failed to parse file');
     } finally {
       setIsUploading(false);
     }
-  }, [uploadFile]);
+  }, [uploadFile, localMode, importLocal]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -46,6 +66,31 @@ const UploadPage = () => {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
+        className="flex items-center justify-between gap-4"
+      >
+        <div className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            id="local-mode"
+            checked={localMode}
+            onChange={(e) => setLocalMode(e.target.checked)}
+            className="h-4 w-4 border border-border bg-card"
+          />
+          <label htmlFor="local-mode" className="text-sm uppercase tracking-[0.08em] text-foreground">
+            Local AI Mode (Data stays on your system, only schema sent to AI)
+          </label>
+        </div>
+        {localMode && (
+          <div className="border border-success bg-success/10 px-4 py-2 text-xs uppercase tracking-[0.08em] text-success">
+            Privacy Protected
+          </div>
+        )}
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
@@ -103,7 +148,7 @@ const UploadPage = () => {
         </button>
       </motion.div>
 
-      {dataset && (
+      {(dataset || localDataset) && (
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -111,27 +156,39 @@ const UploadPage = () => {
         >
           <div className="flex items-center justify-between gap-6 border-b border-border pb-6">
             <div>
-              <p className="text-3xl uppercase tracking-[0.06em] text-foreground">{dataset.name}</p>
-              <p className="mt-2 text-sm uppercase tracking-[0.08em] text-muted-foreground">Local registry file detected</p>
+              <p className="text-3xl uppercase tracking-[0.06em] text-foreground">
+                {localMode ? localDataset?.name : dataset?.name}
+              </p>
+              <p className="mt-2 text-sm uppercase tracking-[0.08em] text-muted-foreground">
+                {localMode ? 'Local AI Mode - Data stays on your system' : 'Local registry file detected'}
+              </p>
             </div>
-            <div className="border border-success bg-success/10 px-4 py-2 text-sm uppercase tracking-[0.08em] text-success">Ready for Analysis</div>
+            <div className={`border px-4 py-2 text-sm uppercase tracking-[0.08em] ${
+              localMode ? 'border-success bg-success/10 text-success' : 'border-success bg-success/10 text-success'
+            }`}>
+              Ready for Analysis
+            </div>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
             <div>
               <p className="terminal-label">Record Count</p>
-              <p className="mt-3 text-4xl uppercase tracking-[0.08em] text-foreground">{dataset.rowCount.toLocaleString()} Rows</p>
+              <p className="mt-3 text-4xl uppercase tracking-[0.08em] text-foreground">
+                {(localMode ? localDataset?.rowCount : dataset?.rowCount)?.toLocaleString()} Rows
+              </p>
             </div>
             <div>
               <p className="terminal-label">Detection Status</p>
-              <p className="mt-3 text-4xl uppercase tracking-[0.08em] text-foreground">{dataset.columns.length} Columns Found</p>
+              <p className="mt-3 text-4xl uppercase tracking-[0.08em] text-foreground">
+                {(localMode ? localDataset?.columns : dataset?.columns)?.length} Columns Found
+              </p>
             </div>
           </div>
 
           <div>
             <p className="terminal-label mb-4">Detected Fields</p>
             <div className="flex flex-wrap gap-3">
-              {dataset.columns.map((col) => (
+              {(localMode ? localDataset?.columns : dataset?.columns)?.map((col) => (
                 <span key={col.name} className="border border-border px-3 py-2 text-xs uppercase tracking-[0.08em] text-foreground">
                   {col.name}
                 </span>
@@ -142,11 +199,11 @@ const UploadPage = () => {
           <div className="flex justify-end gap-4 pt-4">
             <button onClick={() => navigate('/')} className="terminal-button">Cancel</button>
             <button
-              onClick={() => navigate('/analytics')}
+              onClick={() => navigate(localMode ? '/local-chat' : '/analytics')}
               className="terminal-button-inverse gap-2 px-6 py-4"
             >
               <CheckCircle2 className="h-4 w-4" />
-              Initialize Upload Sequence
+              {localMode ? 'Initialize Local AI Chat' : 'Initialize Upload Sequence'}
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
