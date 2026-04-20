@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import AnalyticsPage from "@/features/analytics/pages/AnalyticsPage";
 import ChatPage from "@/features/chat/pages/ChatPage";
+import LocalChatPage from "@/features/chat/pages/LocalChatPage";
 import DashboardPage from "@/features/dashboard/pages/DashboardPage";
 import DataTablePage from "@/features/dashboard/pages/DataTablePage";
 import UploadPage from "@/features/data/pages/UploadPage";
@@ -19,6 +20,7 @@ const AppRouter = () => (
         <Route path="/" element={<DashboardPage />} />
         <Route path="/upload" element={<UploadPage />} />
         <Route path="/chat" element={<ChatPage />} />
+        <Route path="/local-chat" element={<LocalChatPage />} />
         <Route path="/data" element={<DataTablePage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
       </Route>

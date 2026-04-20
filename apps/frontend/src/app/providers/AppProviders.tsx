@@ -5,6 +5,7 @@ import { Toaster } from "@/shared/components/ui/toaster";
 import { TooltipProvider } from "@/shared/components/ui/tooltip";
 import AppErrorBoundary from "@/app/providers/AppErrorBoundary";
 import { DataProvider } from "@/features/data/context/DataContext";
+import { LocalDataProvider } from "@/features/data/context/localDataContext";
 
 interface AppProvidersProps {
   children: ReactNode;
@@ -22,7 +23,9 @@ const AppProviders = ({ children }: AppProvidersProps) => (
       <Toaster />
       <Sonner />
       <AppErrorBoundary>
-        <DataProvider>{children}</DataProvider>
+        <DataProvider>
+          <LocalDataProvider>{children}</LocalDataProvider>
+        </DataProvider>
       </AppErrorBoundary>
     </TooltipProvider>
   </ThemeProvider>

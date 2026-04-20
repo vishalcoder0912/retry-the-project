@@ -72,6 +72,14 @@ export interface ChatMessage {
   chart?: ChartConfig;
   insights?: string[];
   timestamp: Date;
+  usedAI?: boolean;
+  confidence?: number;
+  intent?: string;
+  reason?: string;
+  metadata?: {
+    durationMs?: number;
+    dataQualityScore?: number;
+  };
 }
 
 export interface AnalyticsHealthSummary {
