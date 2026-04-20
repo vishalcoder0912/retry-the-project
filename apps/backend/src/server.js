@@ -12,10 +12,21 @@ import {
 import {
   buildDatasetSchema,
   createChatResponse,
+  createSchemaFirstChatResponse,
   generateCorrelationAnalysis,
   generateDemoDataset,
   normalizeColumns,
 } from "./services/analytics-service.js";
+import {
+  generateSQLFromSchema,
+  validateSQLQuery,
+} from "./services/schema-ai-service.js";
+import {
+  createLocalDatabase,
+  executeLocalQuery,
+  getLocalData,
+  deleteLocalDatabase,
+} from "./services/local-database-service.js";
 
 const port = Number(process.env.PORT || 3001);
 
@@ -217,7 +228,8 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      const analysis = createChatResponse(dataset, query);
+      // Use schema-first AI chat (falls back to local if no API key)
+      const analysis = await createSchemaFirstChatResponse(dataset, query);
       const now = new Date().toISOString();
       const userMessage = {
         id: randomUUID(),
@@ -233,6 +245,11 @@ const server = createServer(async (request, response) => {
         chart: analysis.chart,
         insights: analysis.insights,
         timestamp: now,
+        usedAI: analysis.usedAI,
+        confidence: analysis.confidence,
+        intent: analysis.intent,
+        reason: analysis.reason,
+        metadata: analysis.metadata,
       };
 
       saveChatMessages(datasetId, [userMessage, assistantMessage]);
@@ -252,6 +269,109 @@ const server = createServer(async (request, response) => {
 
       const correlationResult = generateCorrelationAnalysis(dataset);
       sendJson(response, 200, correlationResult);
+      return;
+    }
+
+    // Schema-only AI query endpoint
+    if (request.method === "POST" && pathname === "/api/datasets/schema-ai-query") {
+      const body = await readJsonBody(request);
+      const { schema, query } = body;
+
+      if (!schema) {
+        sendJson(response, 400, { error: "Schema is required" });
+        return;
+      }
+
+      if (!query) {
+        sendJson(response, 400, { error: "Query is required" });
+        return;
+      }
+
+      try {
+        const result = await generateSQLFromSchema(schema, query);
+        sendJson(response, 200, result);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    // Local dataset import endpoint
+    if (request.method === "POST" && pathname === "/api/datasets/local-import") {
+      const body = await readJsonBody(request);
+      const { name, fileName, columns, sourceType } = body;
+
+      if (!columns || !Array.isArray(columns)) {
+        sendJson(response, 400, { error: "Columns are required" });
+        return;
+      }
+
+      try {
+        const dbInfo = createLocalDatabase({ name, columns, rows: body.rows || [] });
+        
+        // Create dataset record in main database
+        const dataset = createDataset({
+          name: name || "Local Dataset",
+          fileName: fileName || null,
+          columns,
+          rows: [], // Don't store rows in main DB for local mode
+          sourceType: sourceType || "local",
+        });
+
+        sendJson(response, 201, {
+          dataset: {
+            ...dataset,
+            isLocal: true,
+            localDatasetId: dbInfo.datasetId,
+          },
+          chatMessages: [],
+        });
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    // Local query execution endpoint
+    const localQueryMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/local-query$/);
+    if (request.method === "POST" && localQueryMatch) {
+      const [, datasetId] = localQueryMatch;
+      const body = await readJsonBody(request);
+      const { sql, page, limit } = body;
+
+      if (!sql) {
+        sendJson(response, 400, { error: "SQL query is required" });
+        return;
+      }
+
+      try {
+        const validation = validateSQLQuery(sql);
+        if (!validation.valid) {
+          sendJson(response, 400, { error: "Invalid SQL", details: validation.errors });
+          return;
+        }
+
+        const results = executeLocalQuery(datasetId, sql, page || 0, limit || 100);
+        sendJson(response, 200, results);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    // Local data access endpoint
+    const localDataMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/local-data$/);
+    if (request.method === "GET" && localDataMatch) {
+      const [, datasetId] = localDataMatch;
+      const page = Number(url.searchParams.get('page') || '0');
+      const limit = Number(url.searchParams.get('limit') || '100');
+
+      try {
+        const results = getLocalData(datasetId, page, limit);
+        sendJson(response, 200, results);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
       return;
     }
 
