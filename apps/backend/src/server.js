@@ -3,6 +3,17 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
+
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] Uncaught exception:', err.message);
+  console.error(err.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[fatal] Unhandled rejection at:', promise, 'reason:', reason);
+});
+
 import {
   createDataset,
   getChatMessages,
@@ -21,7 +32,7 @@ import MLClient from "./services/ml-client.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 // Initialize cache immediately on startup
 console.log("[startup] Initializing query cache...");
