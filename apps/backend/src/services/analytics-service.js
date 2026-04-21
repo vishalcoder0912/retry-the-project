@@ -23,7 +23,7 @@ import {
   calculatePearsonCorrelation,
 } from "@insightflow/shared-analytics";
 
-import { callGeminiAI, isGeminiConfigured, sanitizeSQL, getConfidenceLevel } from "./gemini-ai-service.js";
+import { callOllamaAI, isOllamaConfigured } from "./ollama-ai-service.js";
 import { buildSchemaPacket, formatSchemaForPrompt } from "./schema-packet-builder.js";
 
 // Re-export for backward compatibility
@@ -360,8 +360,11 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
 
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
 
-  if (isGeminiConfigured()) {
-    console.log("[analytics] STEP 2: Gemini configured, calling AI...");
+  // Check if Ollama is available
+  const ollamaAvailable = await isOllamaConfigured();
+
+  if (ollamaAvailable) {
+    console.log("[analytics] STEP 2: Ollama available, calling Mistral...");
     try {
       const datasetForAI = {
         name: dataset.name,
@@ -371,12 +374,12 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
         columnCount: dataset.columns?.length || 0,
       };
 
-      const aiResponse = await callGeminiAI(datasetForAI, query);
+      const aiResponse = await callOllamaAI(datasetForAI, query);
       console.log(`[analytics] AI response success: ${aiResponse.success}`);
       console.log(`[analytics] AI used: ${aiResponse.usedAI}`);
 
       if (aiResponse.success && aiResponse.usedAI) {
-        console.log("[analytics] ✅ AI analysis successful");
+        console.log("[analytics] ✅ Ollama analysis successful");
         let chart = null;
         if (aiResponse.chart_type && aiResponse.chart_type !== 'table') {
           chart = materializePlan(
@@ -399,6 +402,7 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
           confidence: aiResponse.confidence,
           fromCache: false,
           cacheHit: false,
+          model: "Mistral (Ollama)",
         };
 
         console.log("[analytics] STEP 3: Caching AI response...");
@@ -409,11 +413,11 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
       }
       console.log("[analytics] AI response not usable, falling back...");
     } catch (error) {
-      console.warn("[analytics] AI call failed:", error.message);
+      console.warn("[analytics] Ollama call failed:", error.message);
       console.log("[analytics] Falling back to local analysis...");
     }
   } else {
-    console.log("[analytics] Gemini not configured, using local analysis");
+    console.log("[analytics] Ollama not configured, using local analysis");
   }
 
   console.log("[analytics] STEP 4: Using local analysis fallback");
