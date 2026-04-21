@@ -190,4 +190,4 @@ export function getTopCachedQueries(limit = 10) {
   }
 }
 
-console.log("[cache] Query cache service loaded");
+console.log("[cache] Module loaded successfully");

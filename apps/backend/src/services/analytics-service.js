@@ -323,11 +323,14 @@ export const createChatResponse = (dataset, query) => {
  * Cache miss = call Gemini, then cache result
  */
 export const createSchemaFirstChatResponse = async (dataset, query) => {
-  // Import cache service
   const { getCachedQuery, cacheQuery } = await import("./query-cache.js");
-  
-  // Handle greetings
+  console.log("\n[analytics] ========================================");
+  console.log(`[analytics] NEW QUERY: "${query.substring(0, 60)}..."`);
+  console.log(`[analytics] Dataset ID: ${dataset.id}`);
+  console.log("[analytics] ========================================");
+
   if (isGreetingQuery(query)) {
+    console.log("[analytics] → Greeting query (skipping cache)");
     return {
       content: "Hello! I'm your AI data analyst. Ask me anything about your dataset!",
       sql: null,
@@ -339,26 +342,27 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
     };
   }
 
-  // ✅ STEP 1: CHECK CACHE FIRST (Zero Cost)
-  console.log(`[analytics] Checking cache for query: "${query.substring(0, 50)}..."`);
+  console.log("[analytics] STEP 1: Checking cache...");
   const cachedResult = getCachedQuery(dataset.id, query);
-  
+
   if (cachedResult) {
-    console.log("[analytics] 🟢 Cache HIT - returning cached response (saving API cost)");
+    console.log("[analytics] ✅✅✅ CACHE HIT FOUND!");
+    console.log("[analytics] Returning cached response immediately");
     return {
       ...cachedResult,
       fromCache: true,
+      cacheHit: true,
       cacheMessage: "⚡ Retrieved from cache (instant response, $0 cost)",
     };
   }
 
-  console.log("[analytics] 🔴 Cache MISS - calling Gemini AI");
+  console.log("[analytics] ❌ Cache MISS - will call AI or fallback");
 
-  // ✅ STEP 2: TRY AI ANALYSIS if configured
+  const analyticsDataset = prepareDatasetForAnalytics(dataset);
+
   if (isGeminiConfigured()) {
+    console.log("[analytics] STEP 2: Gemini configured, calling AI...");
     try {
-      console.log("[analytics] Attempting AI analysis for query:", query.substring(0, 50));
-      
       const datasetForAI = {
         name: dataset.name,
         rows: dataset.rows,
@@ -366,16 +370,18 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
         rowCount: dataset.rows?.length || 0,
         columnCount: dataset.columns?.length || 0,
       };
-      
+
       const aiResponse = await callGeminiAI(datasetForAI, query);
+      console.log(`[analytics] AI response success: ${aiResponse.success}`);
+      console.log(`[analytics] AI used: ${aiResponse.usedAI}`);
 
       if (aiResponse.success && aiResponse.usedAI) {
-        // Build response from AI analysis
+        console.log("[analytics] ✅ AI analysis successful");
         let chart = null;
         if (aiResponse.chart_type && aiResponse.chart_type !== 'table') {
           chart = materializePlan(
-            dataset,
-            buildPlanFromAIResponse(dataset, aiResponse)
+            analyticsDataset,
+            buildPlanFromAIResponse(analyticsDataset, aiResponse)
           );
         }
 
@@ -392,23 +398,44 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
           intent: aiResponse.intent,
           confidence: aiResponse.confidence,
           fromCache: false,
+          cacheHit: false,
         };
 
-        // ✅ STEP 3: CACHE THE RESULT (for future queries)
-        console.log("[analytics] 💾 Caching AI response for future use");
+        console.log("[analytics] STEP 3: Caching AI response...");
         cacheQuery(dataset.id, query, response);
+        console.log("[analytics] ✅ Response cached");
 
         return response;
       }
+      console.log("[analytics] AI response not usable, falling back...");
     } catch (error) {
-      console.warn("[analytics] AI analysis error:", error.message);
+      console.warn("[analytics] AI call failed:", error.message);
+      console.log("[analytics] Falling back to local analysis...");
     }
   } else {
-    console.log("[analytics] ℹ️  Gemini API key not configured, using local analysis");
+    console.log("[analytics] Gemini not configured, using local analysis");
   }
 
-  // ✅ STEP 4: FALLBACK to local analysis (FREE, no API cost)
-  return fallbackToLocalAnalysis(dataset, query);
+  console.log("[analytics] STEP 4: Using local analysis fallback");
+  const schema = buildDatasetSchema(analyticsDataset);
+  const plan = buildAnalysisPlan(analyticsDataset, schema, query);
+  const chart = materializePlan(analyticsDataset, plan);
+
+  const localResponse = {
+    content: `Local analysis: ${chart?.title || "Dataset analysis"}`,
+    sql: buildSqlForPlan(plan) || null,
+    chart: chart || null,
+    insights: buildInsightsFromSchema(schema, plan),
+    usedAI: false,
+    fromCache: false,
+    cacheHit: false,
+    reason: "local-fallback",
+  };
+
+  cacheQuery(dataset.id, query, localResponse);
+  console.log("[analytics] ✅ Local response cached");
+
+  return localResponse;
 };
 
 /**
