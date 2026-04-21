@@ -46,11 +46,18 @@ async function runFullTest() {
 
   // 3. Create Dataset (Mock Upload)
   // Need to check what /api/datasets expects. Let's just create a mock dataset.
-  const dataset = await testEndpoint('Create/Upload Dataset', 'POST', `${baseUrl}/api/datasets`, {
+  const dataset = await testEndpoint('Create/Upload Dataset', 'POST', `${baseUrl}/api/datasets/import`, {
     name: 'Sample Test Data',
-    data: [
+    sourceType: 'upload',
+    rows: [
       { age: 25, salary: 50000, experience: 2, department: 'Sales' },
       { age: 30, salary: 60000, experience: 5, department: 'Engineering' }
+    ],
+    columns: [
+      { name: 'age', type: 'number' },
+      { name: 'salary', type: 'number' },
+      { name: 'experience', type: 'number' },
+      { name: 'department', type: 'string' }
     ]
   });
 

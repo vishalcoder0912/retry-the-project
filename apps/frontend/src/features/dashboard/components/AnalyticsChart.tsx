@@ -33,6 +33,9 @@ type LocalChartType = ChartConfig['type'];
 
 interface TooltipEntry {
   value?: string | number;
+  name?: string;
+  color?: string;
+  payload?: any;
 }
 
 interface CustomTooltipProps {
@@ -44,12 +47,18 @@ interface CustomTooltipProps {
 const CustomTooltip = ({ active, payload, label }: CustomTooltipProps) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass rounded-lg px-4 py-3 text-sm">
-      <p className="mb-2 font-medium text-foreground">{label}</p>
+    <div className="glass rounded-lg px-4 py-3 text-sm border border-border/50 shadow-xl">
+      {label && <p className="mb-2 font-medium text-foreground">{label}</p>}
       {payload.map((p, i) => (
-        <p key={i} className="font-mono text-muted-foreground">
-          {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
-        </p>
+        <div key={i} className="flex items-center gap-2 mb-1 last:mb-0">
+          {p.color && <div className="w-3 h-3 rounded-full" style={{ backgroundColor: p.color }} />}
+          <span className="font-mono text-muted-foreground">
+            {p.name || label}:
+          </span>
+          <span className="font-mono font-medium text-foreground">
+            {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
+          </span>
+        </div>
       ))}
     </div>
   );
@@ -103,7 +112,7 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
     const commonProps = { data: chartData };
     const curveType = curved ? 'monotone' : 'linear';
     const grid = showGrid ? <CartesianGrid strokeDasharray="0" stroke="hsl(0 0% 32%)" /> : null;
-    const legend = (showLegend && !isPieChart) ? (
+    const legend = showLegend ? (
       <Legend
         wrapperStyle={{ fontSize: '14px', paddingTop: '20px', paddingBottom: '10px', textTransform: 'none' }}
         iconSize={20}

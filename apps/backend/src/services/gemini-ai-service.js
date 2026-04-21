@@ -33,6 +33,7 @@ export async function callGeminiAI(dataset, query) {
     const schemaText = formatSchemaForPrompt(schemaPacket);
 
     // Initialize Gemini
+    console.log("[gemini-ai] Initializing with model:", GEMINI_CONFIG.model);
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
       model: GEMINI_CONFIG.model,
@@ -57,6 +58,9 @@ USER QUERY:
 Analyze this query and respond with JSON.
 `;
 
+    console.log("[gemini-ai] Sending request to Gemini...");
+    console.log("[gemini-ai] Schema length:", schemaText.length, "chars");
+
     // Create timeout promise
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(
@@ -66,14 +70,23 @@ Analyze this query and respond with JSON.
     });
 
     // Make API call with timeout
+    console.log("[gemini-ai] Waiting for response...");
     const response = await Promise.race([
       model.generateContent(userPrompt),
       timeoutPromise,
     ]);
+    console.log("[gemini-ai] Response received, parsing...");
 
     // Parse response
     const responseText = response.response.text();
-    const aiResponse = JSON.parse(responseText);
+    let aiResponse;
+    try {
+      aiResponse = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error("[gemini-ai] JSON parse error:", parseError.message);
+      console.error("[gemini-ai] Raw response:", responseText.substring(0, 500));
+      throw new Error(`Invalid JSON response from Gemini: ${responseText.substring(0, 100)}`);
+    }
 
     // Validate columns
     validateColumnsExist(aiResponse.columns_used, schemaPacket);

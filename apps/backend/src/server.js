@@ -3,6 +3,17 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
+
+process.on('uncaughtException', (err) => {
+  console.error('[fatal] Uncaught exception:', err.message);
+  console.error(err.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[fatal] Unhandled rejection at:', promise, 'reason:', reason);
+});
+
 import {
   createDataset,
   getChatMessages,
@@ -50,6 +61,14 @@ import {
   getLocalData,
   deleteLocalDatabase,
 } from "./services/local-database-service.js";
+import {
+  analyzeDatasetProfile,
+  detectAnomalies,
+  generateNarrative,
+  mapColumnRelationships,
+  generateDrillDownSuggestions,
+  suggestDataCleaning,
+} from "./services/ai-data-service.js";
 
 const port = Number(process.env.PORT || 3001);
 
@@ -387,6 +406,125 @@ const server = createServer(async (request, response) => {
       }
 
       sendJson(response, 200, { schema: buildDatasetSchema(dataset) });
+      return;
+    }
+
+    const aiProfileMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai\/profile$/);
+    if (request.method === "GET" && aiProfileMatch) {
+      const [, datasetId] = aiProfileMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        const profile = await analyzeDatasetProfile(dataset.rows, dataset.columns);
+        sendJson(response, 200, { success: true, profile });
+      } catch (error) {
+        sendJson(response, 500, { success: false, error: error.message });
+      }
+      return;
+    }
+
+    const aiAnomaliesMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai\/anomalies$/);
+    if (request.method === "GET" && aiAnomaliesMatch) {
+      const [, datasetId] = aiAnomaliesMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        const anomalies = await detectAnomalies(dataset.rows, dataset.columns);
+        sendJson(response, 200, { success: true, anomalies });
+      } catch (error) {
+        sendJson(response, 500, { success: false, error: error.message });
+      }
+      return;
+    }
+
+    const aiRelationshipsMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai\/relationships$/);
+    if (request.method === "GET" && aiRelationshipsMatch) {
+      const [, datasetId] = aiRelationshipsMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        const relationships = await mapColumnRelationships(dataset.rows, dataset.columns);
+        sendJson(response, 200, { success: true, relationships });
+      } catch (error) {
+        sendJson(response, 500, { success: false, error: error.message });
+      }
+      return;
+    }
+
+    const aiCleaningMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai\/cleaning$/);
+    if (request.method === "GET" && aiCleaningMatch) {
+      const [, datasetId] = aiCleaningMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        const suggestions = await suggestDataCleaning(dataset.rows, dataset.columns);
+        sendJson(response, 200, { success: true, suggestions });
+      } catch (error) {
+        sendJson(response, 500, { success: false, error: error.message });
+      }
+      return;
+    }
+
+    const aiNarrativeMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai\/narrative$/);
+    if (request.method === "POST" && aiNarrativeMatch) {
+      const [, datasetId] = aiNarrativeMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        const body = await readJsonBody(request);
+        const narrative = await generateNarrative(dataset.name, body.analysisResults || {});
+        sendJson(response, 200, { success: true, narrative });
+      } catch (error) {
+        sendJson(response, 500, { success: false, error: error.message });
+      }
+      return;
+    }
+
+    const aiSuggestionsMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai\/suggestions$/);
+    if (request.method === "GET" && aiSuggestionsMatch) {
+      const [, datasetId] = aiSuggestionsMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        const profile = await analyzeDatasetProfile(dataset.rows, dataset.columns);
+        sendJson(response, 200, { 
+          success: true, 
+          suggestions: profile.suggestedAnalyses,
+          recommendations: profile.recommendations,
+        });
+      } catch (error) {
+        sendJson(response, 500, { success: false, error: error.message });
+      }
       return;
     }
 

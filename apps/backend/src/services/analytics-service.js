@@ -359,6 +359,14 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
   console.log("[analytics] ❌ Cache MISS - will call AI or fallback");
 
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
+  
+  const datasetForAI = {
+    name: dataset.name,
+    rows: dataset.rows,
+    columns: dataset.columns,
+    rowCount: dataset.rows?.length || 0,
+    columnCount: dataset.columns?.length || 0,
+  };
 
   // Check if Ollama is available
   const ollamaAvailable = await isOllamaConfigured();
@@ -420,7 +428,8 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
     console.log("[analytics] Ollama not configured, using local analysis");
   }
 
-  console.log("[analytics] STEP 4: Using local analysis fallback");
+  // PRIORITY 3: Fallback to local analysis engine
+  console.log("[analytics] STEP 4: AI failed or not available, using local analysis fallback (Priority 3)...");
   const schema = buildDatasetSchema(analyticsDataset);
   const plan = buildAnalysisPlan(analyticsDataset, schema, query);
   const chart = materializePlan(analyticsDataset, plan);
