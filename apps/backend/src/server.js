@@ -28,6 +28,14 @@ import {
   getCacheStats, 
   clearDatasetCache 
 } from "./services/query-cache.js";
+import { performAICascadeAnalysis, getCascadeStatus } from "./services/ai-cascade-service.js";
+import { 
+  generateUploadQRSession, 
+  getUploadSessionStatus, 
+  handleQRFileUpload,
+  cleanupExpiredSessions,
+  getActiveSessionsCount
+} from "./services/qr-upload-service.js";
 import MLClient from "./services/ml-client.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -69,6 +77,9 @@ import {
   generateDrillDownSuggestions,
   suggestDataCleaning,
 } from "./services/ai-data-service.js";
+import { generateAdvancedCharts } from "./services/data-visualization-service.js";
+import { exportToJSON, exportToCSV, exportToMarkdown } from "./services/export-service.js";
+import { stratifiedSample, randomSample, clusteredSample } from "./services/data-sampling-service.js";
 
 const port = Number(process.env.PORT || 3001);
 
@@ -528,6 +539,95 @@ const server = createServer(async (request, response) => {
       return;
     }
 
+    // AI Cascade Status Endpoint
+    if (request.method === "GET" && pathname === "/api/cascade/status") {
+      try {
+        const status = await getCascadeStatus();
+        sendJson(response, 200, { success: true, cascade: status });
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    // QR Code Generation Endpoint
+    if (request.method === "POST" && pathname === "/api/qr-upload/generate") {
+      try {
+        const session = generateUploadQRSession();
+        sendJson(response, 201, {
+          success: true,
+          sessionId: session.sessionId,
+          uploadToken: session.uploadToken,
+          expiresAt: session.expiresAt,
+          uploadUrl: session.uploadUrl,
+        });
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    // QR Session Status Endpoint
+    const qrStatusMatch = pathname.match(/^\/api\/qr-upload\/([A-Z0-9]+)\/status$/);
+    if (request.method === "GET" && qrStatusMatch) {
+      const [, sessionId] = qrStatusMatch;
+      const uploadToken = url.searchParams.get("token");
+
+      if (!uploadToken) {
+        sendJson(response, 400, { error: "Upload token required" });
+        return;
+      }
+
+      try {
+        const status = getUploadSessionStatus(sessionId, uploadToken);
+        if (status.error) {
+          sendJson(response, 401, { success: false, ...status });
+        } else {
+          sendJson(response, 200, { success: true, ...status });
+        }
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    // QR File Upload Endpoint
+    const qrUploadMatch = pathname.match(/^\/api\/qr-upload\/([A-Z0-9]+)\/([a-f0-9-]+)$/);
+    if (request.method === "POST" && qrUploadMatch) {
+      const [, sessionId, uploadToken] = qrUploadMatch;
+
+      try {
+        const body = await readJsonBody(request);
+        const { fileName, rows, columns } = body;
+
+        if (!fileName || !rows || !columns) {
+          sendJson(response, 400, { error: "fileName, rows, and columns are required" });
+          return;
+        }
+
+        handleQRFileUpload(sessionId, uploadToken, JSON.stringify(body), fileName);
+
+        const dataset = createDataset({
+          name: fileName.replace(/\.[^/.]+$/, ""),
+          fileName: fileName,
+          columns: columns,
+          rows: rows,
+          sourceType: "qr-mobile",
+        });
+
+        sendJson(response, 201, {
+          success: true,
+          message: "File uploaded via QR",
+          dataset,
+          source: "mobile-qr",
+          sessionId,
+        });
+      } catch (error) {
+        sendJson(response, 400, { error: error.message });
+      }
+      return;
+    }
+
     const chatMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/chat$/);
     if (request.method === "POST" && chatMatch) {
       const [, datasetId] = chatMatch;
@@ -545,8 +645,8 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      // Use schema-first AI chat (falls back to local if no API key)
-      const analysis = await createSchemaFirstChatResponse(dataset, query);
+      // Use AI Cascade: Ollama → Gemini → Local
+      const analysis = await performAICascadeAnalysis(dataset, query);
       const now = new Date().toISOString();
       const userMessage = {
         id: randomUUID(),
@@ -565,8 +665,7 @@ const server = createServer(async (request, response) => {
         usedAI: analysis.usedAI,
         confidence: analysis.confidence,
         intent: analysis.intent,
-        reason: analysis.reason,
-        metadata: analysis.metadata,
+        cascade: analysis.cascade,
       };
 
       saveChatMessages(datasetId, [userMessage, assistantMessage]);
@@ -624,14 +723,23 @@ const server = createServer(async (request, response) => {
       }
 
       try {
-        const dbInfo = createLocalDatabase({ name, columns, rows: body.rows || [] });
+        // Clean rows to avoid duplicate 'id' column conflicts with SQLite autoincrement
+        const cleanedRows = (body.rows || []).map(row => {
+          const { id, __rowId, ...rest } = row;
+          return rest;
+        });
+
+        // Filter out 'id' column from schema to avoid conflict with SQLite autoincrement
+        const cleanedColumns = columns.filter(c => c.name !== 'id' && c.name !== '__rowId');
+
+        const dbInfo = createLocalDatabase({ name, columns: cleanedColumns, rows: cleanedRows });
         
         // Create dataset record in main database
         const dataset = createDataset({
           name: name || "Local Dataset",
           fileName: fileName || null,
-          columns,
-          rows: [], // Don't store rows in main DB for local mode
+          columns: cleanedColumns,
+          rows: [],
           sourceType: sourceType || "local",
         });
 
@@ -686,6 +794,112 @@ const server = createServer(async (request, response) => {
       try {
         const results = getLocalData(datasetId, page, limit);
         sendJson(response, 200, results);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    // Advanced charts endpoint
+    const advancedChartsMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai\/advanced-charts$/);
+    if (request.method === "GET" && advancedChartsMatch) {
+      const [, datasetId] = advancedChartsMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        const charts = generateAdvancedCharts(dataset);
+        sendJson(response, 200, { success: true, charts });
+      } catch (error) {
+        sendJson(response, 500, { success: false, error: error.message });
+      }
+      return;
+    }
+
+    // Export endpoint
+    const exportMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/export\/([^/]+)$/);
+    if (request.method === "GET" && exportMatch) {
+      const [, datasetId, format] = exportMatch;
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        const analysisResults = {
+          profile: await analyzeDatasetProfile(dataset.rows, dataset.columns),
+          anomalies: await detectAnomalies(dataset.rows, dataset.columns),
+          relationships: await mapColumnRelationships(dataset.rows, dataset.columns),
+        };
+
+        let result;
+        switch (format) {
+          case 'json':
+            result = exportToJSON(analysisResults, dataset.name);
+            break;
+          case 'csv':
+            result = exportToCSV(dataset.rows, dataset.name);
+            break;
+          case 'md':
+            result = exportToMarkdown(analysisResults, dataset.name);
+            break;
+          default:
+            sendJson(response, 400, { error: "Unsupported format. Use json, csv, or md" });
+            return;
+        }
+
+        response.writeHead(200, {
+          "Content-Type": result.mimeType,
+          "Content-Disposition": `attachment; filename="${result.filename}"`,
+        });
+        response.end(result.data);
+      } catch (error) {
+        sendJson(response, 500, { error: error.message });
+      }
+      return;
+    }
+
+    // Sampling endpoint
+    const sampleMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/sample\/([^/]+)$/);
+    if (request.method === "GET" && sampleMatch) {
+      const [, datasetId, sampleType] = sampleMatch;
+      const dataset = getDatasetById(datasetId);
+      const sampleSize = Number(url.searchParams.get('size') || '1000');
+
+      if (!dataset) {
+        sendJson(response, 404, { error: "Dataset not found" });
+        return;
+      }
+
+      try {
+        let sampled;
+        switch (sampleType) {
+          case 'stratified':
+            sampled = stratifiedSample(dataset.rows, sampleSize);
+            break;
+          case 'random':
+            sampled = randomSample(dataset.rows, sampleSize);
+            break;
+          case 'clustered':
+            sampled = clusteredSample(dataset.rows, dataset.columns, sampleSize);
+            break;
+          default:
+            sendJson(response, 400, { error: "Unsupported sample type. Use stratified, random, or clustered" });
+            return;
+        }
+
+        sendJson(response, 200, { 
+          success: true, 
+          originalSize: dataset.rows.length,
+          sampleSize: sampled.length,
+          rows: sampled 
+        });
       } catch (error) {
         sendJson(response, 500, { error: error.message });
       }

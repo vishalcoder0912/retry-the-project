@@ -10,19 +10,30 @@ let passed = 0;
 let failed = 0;
 const failures = [];
 
-async function request(method, path, body = null) {
+async function request(method, path, body = null, timeoutMs = 90000) {
   const url = `${BASE_URL}${path}`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   const options = {
     method,
     headers: { "Content-Type": "application/json" },
+    signal: controller.signal,
   };
   if (body) options.body = JSON.stringify(body);
 
   const start = Date.now();
-  const res = await fetch(url, options);
-  const elapsed = Date.now() - start;
-  const data = await res.json().catch(() => null);
-  return { status: res.status, data, elapsed };
+  try {
+    const res = await fetch(url, options);
+    clearTimeout(timer);
+    const elapsed = Date.now() - start;
+    const data = await res.json().catch(() => null);
+    return { status: res.status, data, elapsed };
+  } catch (err) {
+    clearTimeout(timer);
+    const elapsed = Date.now() - start;
+    console.log(`     ⚠️  Request failed: ${method} ${path} — ${err.message} (${elapsed}ms)`);
+    return { status: 0, data: null, elapsed, error: err.message };
+  }
 }
 
 function test(name, condition, detail = "") {
@@ -587,25 +598,33 @@ async function main() {
 
   const startTime = Date.now();
 
-  try {
-    await testRootAndHealth();
-    await testState();
-    await testDemoDataset();
-    await testDatasetImport();
-    await testSchema();
-    await testRowPatch();
-    await testAIChat();
-    await testCorrelation();
-    await testAIDataServices();
-    await testCache();
-    await testSchemaAIQuery();
-    await testLocalDatabase();
-    await testMLService();
-    await testErrorHandling();
-    await testChatPersistence();
-  } catch (error) {
-    console.error("\n  💥 FATAL ERROR:", error.message);
-    console.error(error.stack);
+  const tests = [
+    testRootAndHealth,
+    testState,
+    testDemoDataset,
+    testDatasetImport,
+    testSchema,
+    testRowPatch,
+    testAIChat,
+    testCorrelation,
+    testAIDataServices,
+    testCache,
+    testSchemaAIQuery,
+    testLocalDatabase,
+    testMLService,
+    testErrorHandling,
+    testChatPersistence,
+  ];
+
+  for (const fn of tests) {
+    try {
+      await fn();
+    } catch (error) {
+      console.error(`\n  💥 ERROR in ${fn.name}: ${error.message}`);
+      totalTests++;
+      failed++;
+      failures.push(`  ❌ ${fn.name} — crashed: ${error.message}`);
+    }
   }
 
   const totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
