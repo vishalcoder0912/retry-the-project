@@ -23,8 +23,7 @@ import {
   calculatePearsonCorrelation,
 } from "@insightflow/shared-analytics";
 
-import { callGeminiAI, isGeminiConfigured, sanitizeSQL, getConfidenceLevel } from "./gemini-ai-service.js";
-import { callOllamaAI } from "./ollama-service.js";
+import { callOllamaAI, isOllamaConfigured } from "./ollama-ai-service.js";
 import { buildSchemaPacket, formatSchemaForPrompt } from "./schema-packet-builder.js";
 
 // Re-export for backward compatibility
@@ -369,58 +368,64 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
     columnCount: dataset.columns?.length || 0,
   };
 
-  let aiResponse = null;
+  // Check if Ollama is available
+  const ollamaAvailable = await isOllamaConfigured();
 
-  // PRIORITY 1: Try Local Ollama first
-  console.log("[analytics] STEP 2: Trying Ollama (Priority 1)...");
-  aiResponse = await callOllamaAI(datasetForAI, query);
-  
-  // PRIORITY 2: Try Gemini if Ollama fails or times out
-  if (!aiResponse || !aiResponse.success) {
-    console.log("[analytics] Ollama failed or timed out. Falling back to Gemini (Priority 2)...");
-    if (isGeminiConfigured()) {
-      aiResponse = await callGeminiAI(datasetForAI, query);
-    } else {
-      console.log("[analytics] Gemini not configured, skipping.");
+  if (ollamaAvailable) {
+    console.log("[analytics] STEP 2: Ollama available, calling Mistral...");
+    try {
+      const datasetForAI = {
+        name: dataset.name,
+        rows: dataset.rows,
+        columns: dataset.columns,
+        rowCount: dataset.rows?.length || 0,
+        columnCount: dataset.columns?.length || 0,
+      };
+
+      const aiResponse = await callOllamaAI(datasetForAI, query);
+      console.log(`[analytics] AI response success: ${aiResponse.success}`);
+      console.log(`[analytics] AI used: ${aiResponse.usedAI}`);
+
+      if (aiResponse.success && aiResponse.usedAI) {
+        console.log("[analytics] ✅ Ollama analysis successful");
+        let chart = null;
+        if (aiResponse.chart_type && aiResponse.chart_type !== 'table') {
+          chart = materializePlan(
+            analyticsDataset,
+            buildPlanFromAIResponse(analyticsDataset, aiResponse)
+          );
+        }
+
+        const response = {
+          content: aiResponse.insight,
+          sql: aiResponse.sql,
+          chart: chart,
+          insights: [
+            `Analysis type: ${aiResponse.intent}`,
+            `Confidence: ${(aiResponse.confidence * 100).toFixed(0)}%`,
+            aiResponse.reasoning,
+          ],
+          usedAI: true,
+          intent: aiResponse.intent,
+          confidence: aiResponse.confidence,
+          fromCache: false,
+          cacheHit: false,
+          model: "Mistral (Ollama)",
+        };
+
+        console.log("[analytics] STEP 3: Caching AI response...");
+        cacheQuery(dataset.id, query, response);
+        console.log("[analytics] ✅ Response cached");
+
+        return response;
+      }
+      console.log("[analytics] AI response not usable, falling back...");
+    } catch (error) {
+      console.warn("[analytics] Ollama call failed:", error.message);
+      console.log("[analytics] Falling back to local analysis...");
     }
-  }
-
-  // Handle successful AI Response
-  if (aiResponse && aiResponse.success && aiResponse.usedAI) {
-    console.log(`[analytics] ✅ AI analysis successful via ${aiResponse.provider || 'gemini'}`);
-    let chart = null;
-    if (aiResponse.chart_type && aiResponse.chart_type !== 'table') {
-      chart = materializePlan(
-        analyticsDataset,
-        buildPlanFromAIResponse(analyticsDataset, aiResponse)
-      );
-    }
-
-    const response = {
-      content: aiResponse.insight,
-      sql: aiResponse.sql,
-      chart: chart,
-      insights: [
-        `Analysis type: ${aiResponse.intent}`,
-        `Confidence: ${(aiResponse.confidence * 100).toFixed(0)}%`,
-        `Provider: ${aiResponse.provider || 'gemini'}`
-      ],
-      usedAI: true,
-      intent: aiResponse.intent,
-      confidence: aiResponse.confidence,
-      fromCache: false,
-      cacheHit: false,
-    };
-
-    if (aiResponse.reasoning) {
-      response.insights.push(aiResponse.reasoning);
-    }
-
-    console.log("[analytics] STEP 3: Caching AI response...");
-    cacheQuery(dataset.id, query, response);
-    console.log("[analytics] ✅ Response cached");
-
-    return response;
+  } else {
+    console.log("[analytics] Ollama not configured, using local analysis");
   }
 
   // PRIORITY 3: Fallback to local analysis engine
