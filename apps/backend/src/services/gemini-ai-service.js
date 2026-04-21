@@ -14,7 +14,9 @@ import {
  * Check if Gemini is configured
  */
 export function isGeminiConfigured() {
-  return !!process.env.GEMINI_API_KEY?.trim();
+  const key = process.env.GEMINI_API_KEY?.trim();
+  console.log(`[gemini-ai] Checking config: ${key ? "✅ CONFIGURED" : "❌ NOT CONFIGURED"}`);
+  return !!key;
 }
 
 /**

@@ -31,7 +31,7 @@ ALWAYS respond with ONLY valid JSON:
 }`;
 
 export const GEMINI_CONFIG = {
-  model: "gemini-1.5-flash",
+  model: "gemini-flash-latest",
   temperature: 0.2,
   topP: 0.9,
   topK: 40,
