@@ -130,8 +130,24 @@ Analyze this query and respond with ONLY JSON (no markdown code blocks).`;
       throw new Error("Missing required fields: intent or sql");
     }
 
+    // Ensure chart_type is set based on intent
+    const intentToChartType = {
+      'aggregation': 'bar',
+      'filter': 'table',
+      'comparison': 'bar',
+      'distribution': 'histogram',
+      'correlation': 'scatter',
+      'count': 'pie',
+      'trend': 'line',
+      'summary': 'table'
+    };
+    if (!aiResponse.chart_type) {
+      aiResponse.chart_type = intentToChartType[aiResponse.intent] || 'table';
+    }
+
     console.log("[ollama] ✅ Ollama analysis successful");
     console.log("[ollama] Intent:", aiResponse.intent);
+    console.log("[ollama] Chart type:", aiResponse.chart_type);
     console.log("[ollama] Confidence:", aiResponse.confidence);
 
     return {
@@ -150,5 +166,3 @@ Analyze this query and respond with ONLY JSON (no markdown code blocks).`;
     };
   }
 }
-
-export { getAvailableModels };
