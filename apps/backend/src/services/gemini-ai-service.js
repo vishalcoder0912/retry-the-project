@@ -5,18 +5,27 @@ import {
   TIMEOUT_CONFIG,
 } from "../config/gemini-config.js";
 import {
-  buildSchemaPacket,
+  buildSchemaPacketAsync,
   formatSchemaForPrompt,
   validateColumnsExist,
 } from "./schema-packet-builder.js";
+
+let lastGeminiConfigState = null;
+
+const readGeminiApiKey = () => process.env.GEMINI_API_KEY?.trim() || "";
 
 /**
  * Check if Gemini is configured
  */
 export function isGeminiConfigured() {
-  const key = process.env.GEMINI_API_KEY?.trim();
-  console.log(`[gemini-ai] Checking config: ${key ? "✅ CONFIGURED" : "❌ NOT CONFIGURED"}`);
-  return !!key;
+  const configured = Boolean(readGeminiApiKey());
+
+  if (lastGeminiConfigState !== configured) {
+    console.log(`[gemini-ai] Config status: ${configured ? "CONFIGURED" : "NOT CONFIGURED"}`);
+    lastGeminiConfigState = configured;
+  }
+
+  return configured;
 }
 
 /**
@@ -29,12 +38,12 @@ export async function callGeminiAI(dataset, query) {
 
   try {
     // Build schema packet
-    const schemaPacket = buildSchemaPacket(dataset);
+    const schemaPacket = await buildSchemaPacketAsync(dataset);
     const schemaText = formatSchemaForPrompt(schemaPacket);
 
     // Initialize Gemini
     console.log("[gemini-ai] Initializing with model:", GEMINI_CONFIG.model);
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const genAI = new GoogleGenerativeAI(readGeminiApiKey());
     const model = genAI.getGenerativeModel({
       model: GEMINI_CONFIG.model,
       generationConfig: {

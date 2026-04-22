@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize Gemini AI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+let hasLoggedMissingGeminiConfig = false;
 
 /**
  * Schema-first system prompt for InsightFlow AI
@@ -166,11 +167,22 @@ const buildFallbackSchemaResponse = (schemaPacket, query, reason) => {
  * Generates structured SQL response from natural language using schema-first Gemini AI
  * @param {Object} schemaPacket - Dataset schema packet from buildSchemaPacket()
  * @param {string} query - Natural language query
+ * @param {Object} options
+ * @param {boolean} options.allowFallback - When false, propagate Gemini failures instead of returning a schema fallback
  * @returns {Promise<Object>} Structured response with SQL, insight, chart_type, confidence
  */
-export const generateSQLFromSchema = async (schemaPacket, query) => {
+export const generateSQLFromSchema = async (schemaPacket, query, options = {}) => {
+  const { allowFallback = true } = options;
+
   if (!process.env.GEMINI_API_KEY) {
-    console.warn('[schema-ai] GEMINI_API_KEY not configured, returning fallback response');
+    if (!allowFallback) {
+      throw new Error('GEMINI_API_KEY not configured');
+    }
+
+    if (!hasLoggedMissingGeminiConfig) {
+      console.warn('[schema-ai] GEMINI_API_KEY not configured, returning fallback response');
+      hasLoggedMissingGeminiConfig = true;
+    }
     return buildFallbackSchemaResponse(
       schemaPacket,
       query,
@@ -243,6 +255,10 @@ export const generateSQLFromSchema = async (schemaPacket, query) => {
       columns_used: parsedResponse.columns_used || []
     };
   } catch (error) {
+    if (!allowFallback) {
+      throw error;
+    }
+
     console.warn(`[schema-ai] Falling back after AI generation failure: ${error.message}`);
     return buildFallbackSchemaResponse(
       schemaPacket,

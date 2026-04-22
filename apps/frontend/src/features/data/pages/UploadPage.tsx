@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
 import { useLocalData } from '@/features/data/context/localDataContext';
+import type { DatasetRow } from '@/features/data/model/dataStore';
 import { useNavigate } from 'react-router-dom';
 
 const UploadPage = () => {
@@ -26,16 +27,19 @@ const UploadPage = () => {
       if (localMode) {
         // Local mode: Use local file processor
         const { processLocalFile } = await import('@/features/data/utils/localFileProcessor');
+        const localRows: DatasetRow[] = [];
         
         // Process file and extract schema
-        const result = await processLocalFile(file, () => {}, 1000);
+        const result = await processLocalFile(file, (chunk) => {
+          localRows.push(...chunk.data);
+        }, 1000);
         
         // Import to local database
         await importLocal(
           result.fileName.replace(/\.(csv|xlsx|xls|json)$/i, ''),
           result.fileName,
           result.columns,
-          [] // Data will be sent separately in chunks
+          localRows
         );
       } else {
         // Standard mode: Use existing upload
