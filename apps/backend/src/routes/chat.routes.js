@@ -55,6 +55,12 @@ export function registerChatRoutes(server) {
           query: query.substring(0, 50) 
         });
         
+        console.log('\n================================================');
+        console.log('📥 API RECEIVED USER QUERY:');
+        console.log(`   Dataset ID: ${datasetId}`);
+        console.log(`   Query: "${query}"`);
+        console.log('================================================\n');
+        
         // Get existing chat messages
         const existingMessages = getChatMessages(datasetId);
         
@@ -78,6 +84,7 @@ export function registerChatRoutes(server) {
           insights: analysis.insights,
           timestamp: now,
           usedAI: analysis.usedAI,
+          model: analysis.model,
           confidence: analysis.confidence,
           intent: analysis.intent,
           reason: analysis.reason,
@@ -87,12 +94,21 @@ export function registerChatRoutes(server) {
         // Save messages
         saveChatMessages(datasetId, [userMessage, assistantMessage]);
         
-        logger.info('Chat response generated', {
+logger.info('Chat response generated', {
           datasetId,
           usedAI: analysis.usedAI,
           confidence: analysis.confidence,
         });
-        
+
+        console.log('\n================================================');
+        console.log('📤 API SENDING RESPONSE BACK:');
+        console.log(`   Used AI: ${analysis.usedAI ? 'Yes 🤖' : 'No (Local)'}`);
+        console.log(`   Model: ${analysis.model || 'Local Analysis Engine'}`);
+        console.log(`   Confidence: ${(analysis.confidence || 0) * 100}%`);
+        console.log(`   Intent: ${analysis.intent || 'N/A'}`);
+        console.log(`   Response: ${analysis.content?.substring(0, 200)}...`);
+        console.log('================================================\n');
+
         sendJson(res, 201, { 
           userMessage, 
           assistantMessage,

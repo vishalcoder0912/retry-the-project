@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Download, Filter, Loader2, Sparkles } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
-import { Dataset, generateAnalyticsHealthSummary, generateDemoCharts, generateDemoKPIs } from '@/features/data/model/dataStore';
+import { Dataset } from '@/features/data/model/dataStore';
+import { useKPIEngine } from '@/features/dashboard/hooks/useKPIEngine';
 import { api, CorrelationResponse } from '@/features/data/api/dataApi';
 import AnalyticsChart from '@/features/dashboard/components/AnalyticsChart';
 import {
@@ -70,12 +71,14 @@ const AnalyticsPage = () => {
     };
   }, [dataset, regionColumn, selectedRegion]);
 
-  const charts = useMemo(() => (analyticsDataset ? generateDemoCharts(analyticsDataset) : []), [analyticsDataset]);
-  const kpis = useMemo(() => (analyticsDataset ? generateDemoKPIs(analyticsDataset) : []), [analyticsDataset]);
-  const analyticsHealth = useMemo(
-    () => (analyticsDataset ? generateAnalyticsHealthSummary(analyticsDataset) : null),
-    [analyticsDataset],
-  );
+  const { analyticsBundle,kpis } = useKPIEngine(analyticsDataset);
+  const charts = analyticsBundle?.charts ?? [];
+  const analyticsHealth = analyticsBundle?.health ?? null;
+  const insights = analyticsBundle?.insights ?? [];
+  const missingColumnsSummary = analyticsHealth
+    ? Object.entries(analyticsHealth.missingByColumn).filter(([,count]) => count > 0).map(([column,count]) => `${column} (${count})`).join(', ') || 'none detected'
+    : 'none detected';
+  const missingPercentageLabel = analyticsHealth ? analyticsHealth.metrics.missingPercentage.toFixed(2) : '0.00';
 
   const downloadDossier = () => {
     if (!analyticsDataset) return;
@@ -88,7 +91,7 @@ const AnalyticsPage = () => {
       `COLUMNS: ${analyticsDataset.columns.length}`,
       '',
       'KPIS',
-      ...kpis.map((kpi) => `- ${kpi.label}: ${kpi.value}`),
+      ...kpis.map((kpi) => `- ${kpi.title}: ${kpi.value}`),
       '',
       'CHARTS',
       ...charts.map((chart) => `- ${chart.title}`),
@@ -146,22 +149,20 @@ const AnalyticsPage = () => {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {analyticsHealth && [
             {
-              label: 'Integrity Rows',
-              value: `${analyticsHealth.integrity.analyticsRows}/${analyticsHealth.integrity.totalRows}`,
+              label: 'Integrity Score',
+              value: `${analyticsHealth.metrics.integrityScore.toFixed(2)}%`,
             },
             {
-              label: 'Anomaly Count',
-              value: String(analyticsHealth.integrity.removedEmptyRows + analyticsHealth.integrity.invalidNumericValues),
+              label: 'Missing Data',
+              value: `${analyticsHealth.metrics.missingPercentage.toFixed(2)}%`,
             },
             {
               label: 'Risk Indicator',
-              value: analyticsHealth.risk.level,
+              value: analyticsHealth.metrics.riskLevel,
             },
             {
-              label: 'Branch Coverage',
-              value: analyticsHealth.branchCoverage.totalGroups > 0
-                ? `${analyticsHealth.branchCoverage.includedGroups}/${analyticsHealth.branchCoverage.totalGroups}`
-                : 'N/A',
+              label: 'Validation Load',
+              value: `${analyticsHealth.metrics.validRows}/${analyticsHealth.metrics.totalRows}`,
             },
           ].map((item) => (
             <div key={item.label} className="terminal-panel p-6">
@@ -186,23 +187,27 @@ const AnalyticsPage = () => {
               <div className="flex gap-4">
                 <AlertTriangle className="mt-1 h-5 w-5 text-accent" />
                 <p>
-                  {analyticsHealth?.risk.metricName
-                    ? `${analyticsHealth.risk.rule}. Current average is ${analyticsHealth.risk.average ?? 'N/A'} and the indicator is ${analyticsHealth.risk.level}.`
-                    : 'Risk indicator is unavailable because this dataset does not contain a numeric metric.'}
+                  Risk level is {analyticsHealth?.metrics.riskLevel ?? 'LOW'} with {analyticsHealth?.metrics.duplicateCount ?? 0} duplicate row(s), {analyticsHealth?.metrics.outlierCount ?? 0} outlier row(s), and {missingPercentageLabel}% missing cells.
                 </p>
               </div>
               <div className="flex gap-4">
                 <AlertTriangle className="mt-1 h-5 w-5 text-accent" />
                 <p>
-                  Analytics excluded {analyticsHealth?.branchCoverage.excludedGroups ?? 0} branch group(s) below the minimum sample size of {analyticsHealth?.branchCoverage.minimumGroupCount ?? 0}.
+                  Missing values by column: {missingColumnsSummary}.
                 </p>
               </div>
               <div className="flex gap-4">
                 <CheckCircle2 className="mt-1 h-5 w-5 text-success" />
                 <p>
-                  Data integrity checks removed {analyticsHealth?.integrity.removedEmptyRows ?? 0} empty row(s) and flagged {analyticsHealth?.integrity.invalidNumericValues ?? 0} invalid numeric value(s) before analytics ran.
+                  Cleaned analytics dataset retained {analyticsHealth?.metrics.validRows ?? 0} valid row(s) from {analyticsHealth?.metrics.totalRows ?? 0} total input row(s) after duplicate and outlier handling.
                 </p>
               </div>
+              {insights.map((insight) => (
+                <div key={insight} className="flex gap-4">
+                  <CheckCircle2 className="mt-1 h-5 w-5 text-success" />
+                  <p>{insight}</p>
+                </div>
+              ))}
             </div>
             <button
               onClick={runAICorrelationTest}

@@ -4,8 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/server.js",
+    "dev": "node src/server.js",
+    "dev:watch": "node --watch src/server.js",
     "start": "node src/server.js",
+    "kill-port": "node kill-port.js",
     "test": "vitest",
     "test:run": "vitest run"
   },

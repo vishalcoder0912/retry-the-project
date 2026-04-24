@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Upload, MessageSquare, Database, Table2, LineChart } from 'lucide-react';
+import { LayoutDashboard, Upload, MessageSquare, Database, Table2, LineChart, AlertTriangle, TrendingUp, Filter, Download, CheckCircle } from 'lucide-react';
 import ThemeToggle from '@/shared/layout/ThemeToggle';
 
 const navItems = [
@@ -7,6 +7,11 @@ const navItems = [
   { path: '/data', label: '2.0 Data Table', icon: Table2 },
   { path: '/upload', label: '3.0 Upload', icon: Upload },
   { path: '/analytics', label: '4.0 Analytics', icon: LineChart },
+  { path: '/analytics/profile', label: '4.1 Profile', icon: CheckCircle },
+  { path: '/analytics/anomalies', label: '4.2 Anomalies', icon: AlertTriangle },
+  { path: '/analytics/relationships', label: '4.3 Relations', icon: TrendingUp },
+  { path: '/analytics/cleaning', label: '4.4 Cleaning', icon: Filter },
+  { path: '/analytics/export', label: '4.5 Export', icon: Download },
   { path: '/chat', label: '5.0 AI Chat', icon: MessageSquare },
 ];
 

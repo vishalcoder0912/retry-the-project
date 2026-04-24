@@ -1,5 +1,5 @@
 import {
-  buildSchemaPacket,
+  buildSchemaPacketAsync,
   formatSchemaForPrompt,
   validateColumnsExist,
 } from "./schema-packet-builder.js";
@@ -11,7 +11,7 @@ const OLLAMA_TIMEOUT_MS = 120000; // 120 seconds timeout for local models proces
 
 export async function callOllamaAI(dataset, query) {
   try {
-    const schemaPacket = buildSchemaPacket(dataset);
+    const schemaPacket = await buildSchemaPacketAsync(dataset);
     const schemaText = formatSchemaForPrompt(schemaPacket);
 
     const userPrompt = `${GEMINI_SYSTEM_PROMPT}\n\nSCHEMA INFORMATION:\n${schemaText}\n\nUSER QUERY:\n"${query}"\n\nAnalyze this query and respond with ONLY valid JSON formatting. No markdown blocks. No explanations.`;

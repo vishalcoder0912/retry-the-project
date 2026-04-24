@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize Gemini AI client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+let hasLoggedMissingGeminiConfig = false;
 
 /**
  * Schema-first system prompt for InsightFlow AI
@@ -118,15 +119,75 @@ ${columnDescriptions}
 Total columns: ${columns.length}`;
 };
 
+const buildFallbackSchemaResponse = (schemaPacket, query, reason) => {
+  const columns = Array.isArray(schemaPacket?.columns) ? schemaPacket.columns : [];
+  const loweredQuery = String(query || "").toLowerCase();
+  const numericCols = columns.filter(col => col.type === "number");
+  const categoricalCols = columns.filter(col => col.type === "string");
+  const metricCol = numericCols[0];
+  const dimensionCol = categoricalCols[0];
+
+  let intent = "unclear";
+  let sql = "";
+  let insight = reason || "AI SQL generation is unavailable for this request.";
+  let chart_type = "table";
+  let confidence = 0.35;
+  let columns_used = [];
+
+  if (metricCol && /\b(avg|average|mean)\b/.test(loweredQuery)) {
+    intent = dimensionCol ? "comparison" : "aggregation";
+    sql = dimensionCol
+      ? `SELECT "${dimensionCol.name}", AVG("${metricCol.name}") AS average_${metricCol.name} FROM dataset GROUP BY "${dimensionCol.name}" ORDER BY average_${metricCol.name} DESC`
+      : `SELECT AVG("${metricCol.name}") AS average_${metricCol.name} FROM dataset`;
+    insight = reason || `Returning a schema-based fallback query for average ${metricCol.name}.`;
+    chart_type = dimensionCol ? "bar" : "table";
+    confidence = 0.6;
+    columns_used = dimensionCol ? [dimensionCol.name, metricCol.name] : [metricCol.name];
+  } else if (dimensionCol && /\b(count|how many|number of)\b/.test(loweredQuery)) {
+    intent = "count";
+    sql = `SELECT "${dimensionCol.name}", COUNT(*) AS count FROM dataset GROUP BY "${dimensionCol.name}" ORDER BY count DESC`;
+    insight = reason || `Returning a schema-based fallback count grouped by ${dimensionCol.name}.`;
+    chart_type = "bar";
+    confidence = 0.6;
+    columns_used = [dimensionCol.name];
+  }
+
+  return {
+    intent,
+    sql,
+    insight,
+    chart_type,
+    confidence,
+    columns_used,
+    fallback: true,
+  };
+};
+
 /**
  * Generates structured SQL response from natural language using schema-first Gemini AI
  * @param {Object} schemaPacket - Dataset schema packet from buildSchemaPacket()
  * @param {string} query - Natural language query
+ * @param {Object} options
+ * @param {boolean} options.allowFallback - When false, propagate Gemini failures instead of returning a schema fallback
  * @returns {Promise<Object>} Structured response with SQL, insight, chart_type, confidence
  */
-export const generateSQLFromSchema = async (schemaPacket, query) => {
+export const generateSQLFromSchema = async (schemaPacket, query, options = {}) => {
+  const { allowFallback = true } = options;
+
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured');
+    if (!allowFallback) {
+      throw new Error('GEMINI_API_KEY not configured');
+    }
+
+    if (!hasLoggedMissingGeminiConfig) {
+      console.warn('[schema-ai] GEMINI_API_KEY not configured, returning fallback response');
+      hasLoggedMissingGeminiConfig = true;
+    }
+    return buildFallbackSchemaResponse(
+      schemaPacket,
+      query,
+      'Gemini API not configured. Returning a schema-based fallback response.'
+    );
   }
 
   if (!query || typeof query !== 'string') {
@@ -194,10 +255,16 @@ export const generateSQLFromSchema = async (schemaPacket, query) => {
       columns_used: parsedResponse.columns_used || []
     };
   } catch (error) {
-    if (error.message.includes('API key')) {
-      throw new Error('Failed to connect to Gemini AI: Invalid API key');
+    if (!allowFallback) {
+      throw error;
     }
-    throw new Error(`Failed to generate schema-first response: ${error.message}`);
+
+    console.warn(`[schema-ai] Falling back after AI generation failure: ${error.message}`);
+    return buildFallbackSchemaResponse(
+      schemaPacket,
+      query,
+      `AI generation failed. Returning a schema-based fallback response.`
+    );
   }
 };
 
