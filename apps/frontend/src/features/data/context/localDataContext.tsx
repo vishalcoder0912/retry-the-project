@@ -106,7 +106,12 @@ export const LocalDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         throw new Error(error.error || 'Failed to generate SQL');
       }
 
-      const { sql, explanation } = await aiResponse.json();
+      const aiPayload = await aiResponse.json();
+      const { sql, insight, explanation, fallback } = aiPayload;
+
+      if (!sql) {
+        throw new Error('AI could not generate a valid SQL query');
+      }
 
       // Execute SQL locally
       const queryResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/datasets/${localDataset.localDatasetId}/local-query`, {
@@ -132,7 +137,11 @@ export const LocalDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: `${explanation}\n\nSQL: ${sql}`,
+        content: [
+          insight || explanation || 'Query processed successfully.',
+          `Matched rows: ${queryResult.pagination.total}`,
+          fallback ? 'Schema fallback was used for this query.' : null,
+        ].filter(Boolean).join('\n\n'),
         sql: sql,
         timestamp: new Date(),
       };

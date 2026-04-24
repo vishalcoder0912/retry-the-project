@@ -1,22 +1,56 @@
+import os from "node:os";
+import { Worker } from "node:worker_threads";
 import { toNumber, isMeaningfulValue } from "@insightflow/shared-analytics";
 
-/**
- * Extract numeric statistics from column
- */
-function extractNumericStats(values, columnName) {
+const DEFAULT_SCHEMA_SAMPLE_SIZE = Number(process.env.SCHEMA_PACKET_SAMPLE_SIZE || 5000);
+const DEFAULT_SCHEMA_ANALYSIS_CONCURRENCY = Number(
+  process.env.SCHEMA_ANALYSIS_CONCURRENCY
+  || Math.max(1, Math.min((os.availableParallelism?.() || os.cpus().length || 2) - 1, 4)),
+);
+const WORKER_ROW_THRESHOLD = Number(process.env.SCHEMA_WORKER_ROW_THRESHOLD || 1000);
+const WORKER_CELL_THRESHOLD = Number(process.env.SCHEMA_WORKER_CELL_THRESHOLD || 50000);
+const schemaPacketCache = new Map();
+const asyncSchemaPacketCache = new Map();
+
+function buildDatasetCacheKey(dataset, sampleSize) {
+  return [
+    dataset?.id || dataset?.name || "anonymous",
+    dataset?.rows?.length || 0,
+    dataset?.columns?.length || 0,
+    sampleSize,
+  ].join(":");
+}
+
+function sampleRowsForSchema(rows, sampleSize) {
+  if (!Array.isArray(rows) || rows.length <= sampleSize) {
+    return rows;
+  }
+
+  const sampledRows = [];
+  const lastIndex = rows.length - 1;
+
+  for (let index = 0; index < sampleSize; index += 1) {
+    const rowIndex = Math.round((index * lastIndex) / Math.max(sampleSize - 1, 1));
+    sampledRows.push(rows[rowIndex]);
+  }
+
+  return sampledRows;
+}
+
+function extractNumericStats(values) {
   const numbers = [];
   let nullCount = 0;
   let invalidCount = 0;
 
   for (const val of values) {
     if (!isMeaningfulValue(val)) {
-      nullCount++;
+      nullCount += 1;
       continue;
     }
 
     const num = toNumber(val);
     if (num === null) {
-      invalidCount++;
+      invalidCount += 1;
     } else {
       numbers.push(num);
     }
@@ -40,8 +74,7 @@ function extractNumericStats(values, columnName) {
   const median = sorted.length % 2 === 0
     ? (sorted[mid - 1] + sorted[mid]) / 2
     : sorted[mid];
-
-  const variance = numbers.reduce((sum, num) => sum + Math.pow(num - mean, 2), 0) / numbers.length;
+  const variance = numbers.reduce((sumValue, num) => sumValue + ((num - mean) ** 2), 0) / numbers.length;
   const stdDev = Math.sqrt(variance);
 
   return {
@@ -59,22 +92,18 @@ function extractNumericStats(values, columnName) {
   };
 }
 
-/**
- * Extract categorical statistics from column
- */
-function extractCategoricalStats(values, columnName) {
+function extractCategoricalStats(values) {
   const valueCounts = new Map();
   let nullCount = 0;
 
   for (const val of values) {
     if (!isMeaningfulValue(val)) {
-      nullCount++;
+      nullCount += 1;
       continue;
     }
 
     const strVal = String(val).trim().substring(0, 100);
-    
-    if (valueCounts.size >= 100) {
+    if (valueCounts.size >= 100 && !valueCounts.has(strVal)) {
       continue;
     }
 
@@ -85,52 +114,145 @@ function extractCategoricalStats(values, columnName) {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
 
-  const topValues = Object.fromEntries(sorted);
-
   return {
     type: "categorical",
     isValid: true,
     nullCount,
     uniqueCount: valueCounts.size,
-    topValues,
+    topValues: Object.fromEntries(sorted),
     topValuesCount: sorted.length,
   };
+}
+
+function analyzeColumn(column, sampledRows) {
+  const columnValues = sampledRows.map((row) => row[column.name]);
+
+  if (column.type === "number") {
+    return {
+      name: column.name,
+      ...extractNumericStats(columnValues),
+    };
+  }
+
+  return {
+    name: column.name,
+    ...extractCategoricalStats(columnValues),
+  };
+}
+
+function shouldUseWorkerAnalysis(sampledRows, columns) {
+  const cellCount = (sampledRows?.length || 0) * (columns?.length || 0);
+  return (
+    Array.isArray(sampledRows)
+    && Array.isArray(columns)
+    && sampledRows.length >= WORKER_ROW_THRESHOLD
+    && columns.length > 1
+    && cellCount >= WORKER_CELL_THRESHOLD
+    && DEFAULT_SCHEMA_ANALYSIS_CONCURRENCY > 1
+  );
+}
+
+function chunkColumns(columns, chunkCount) {
+  const actualChunkCount = Math.max(1, Math.min(chunkCount, columns.length));
+  const chunks = Array.from({ length: actualChunkCount }, () => []);
+
+  columns.forEach((column, index) => {
+    chunks[index % actualChunkCount].push(column);
+  });
+
+  return chunks.filter((chunk) => chunk.length > 0);
+}
+
+function runWorkerBatch(columns, sampledRows) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./schema-packet-worker.js", import.meta.url), {
+      workerData: { columns, sampledRows },
+    });
+
+    worker.once("message", (message) => {
+      worker.terminate().catch(() => {});
+      if (message?.error) {
+        reject(new Error(message.error));
+        return;
+      }
+      resolve(Array.isArray(message?.columns) ? message.columns : []);
+    });
+
+    worker.once("error", (error) => {
+      worker.terminate().catch(() => {});
+      reject(error);
+    });
+
+    worker.once("exit", (code) => {
+      if (code !== 0) {
+        reject(new Error(`Schema worker exited with code ${code}`));
+      }
+    });
+  });
+}
+
+async function analyzeColumnsAsync(columns, sampledRows) {
+  if (!shouldUseWorkerAnalysis(sampledRows, columns)) {
+    return Promise.all(columns.map(async (column) => {
+      try {
+        return analyzeColumn(column, sampledRows);
+      } catch (error) {
+        return {
+          name: column.name,
+          type: column.type,
+          isValid: false,
+          error: error.message,
+        };
+      }
+    }));
+  }
+
+  const batches = chunkColumns(columns, DEFAULT_SCHEMA_ANALYSIS_CONCURRENCY);
+  const results = await Promise.all(
+    batches.map((batch) => runWorkerBatch(batch, sampledRows)),
+  );
+
+  return results.flat();
+}
+
+function createSchemaPacketSkeleton(dataset, sampledRows) {
+  return {
+    name: dataset.name || "Unnamed Dataset",
+    rowCount: dataset.rows.length,
+    columnCount: dataset.columns.length,
+    sampledRowCount: sampledRows.length,
+    columns: [],
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function sortColumnsByDatasetOrder(analyzedColumns, datasetColumns) {
+  const order = new Map(datasetColumns.map((column, index) => [column.name, index]));
+  return [...analyzedColumns].sort((left, right) => (order.get(left.name) || 0) - (order.get(right.name) || 0));
 }
 
 /**
  * Build schema packet (NO raw data, only metadata)
  */
-export function buildSchemaPacket(dataset) {
+export function buildSchemaPacket(dataset, options = {}) {
   if (!dataset || !Array.isArray(dataset.rows) || dataset.rows.length === 0) {
     throw new Error("Invalid dataset");
   }
 
-  const schemaPacket = {
-    name: dataset.name || "Unnamed Dataset",
-    rowCount: dataset.rows.length,
-    columnCount: dataset.columns.length,
-    columns: [],
-    timestamp: new Date().toISOString(),
-  };
+  const sampleSize = Number(options.sampleSize || DEFAULT_SCHEMA_SAMPLE_SIZE);
+  const cacheKey = buildDatasetCacheKey(dataset, sampleSize);
+  const cachedPacket = schemaPacketCache.get(cacheKey);
+
+  if (cachedPacket) {
+    return cachedPacket;
+  }
+
+  const sampledRows = sampleRowsForSchema(dataset.rows, sampleSize);
+  const schemaPacket = createSchemaPacketSkeleton(dataset, sampledRows);
 
   for (const column of dataset.columns) {
     try {
-      const columnValues = dataset.rows.map(row => row[column.name]);
-
-      let columnSchema;
-      if (column.type === "number") {
-        columnSchema = {
-          name: column.name,
-          ...extractNumericStats(columnValues, column.name),
-        };
-      } else {
-        columnSchema = {
-          name: column.name,
-          ...extractCategoricalStats(columnValues, column.name),
-        };
-      }
-
-      schemaPacket.columns.push(columnSchema);
+      schemaPacket.columns.push(analyzeColumn(column, sampledRows));
     } catch (error) {
       console.warn(`Error processing column "${column.name}":`, error.message);
       schemaPacket.columns.push({
@@ -142,7 +264,42 @@ export function buildSchemaPacket(dataset) {
     }
   }
 
+  schemaPacketCache.set(cacheKey, schemaPacket);
   return schemaPacket;
+}
+
+export async function buildSchemaPacketAsync(dataset, options = {}) {
+  if (!dataset || !Array.isArray(dataset.rows) || dataset.rows.length === 0) {
+    throw new Error("Invalid dataset");
+  }
+
+  const sampleSize = Number(options.sampleSize || DEFAULT_SCHEMA_SAMPLE_SIZE);
+  const cacheKey = buildDatasetCacheKey(dataset, sampleSize);
+
+  if (schemaPacketCache.has(cacheKey)) {
+    return schemaPacketCache.get(cacheKey);
+  }
+
+  if (asyncSchemaPacketCache.has(cacheKey)) {
+    return asyncSchemaPacketCache.get(cacheKey);
+  }
+
+  const packetPromise = (async () => {
+    const sampledRows = sampleRowsForSchema(dataset.rows, sampleSize);
+    const schemaPacket = createSchemaPacketSkeleton(dataset, sampledRows);
+    const analyzedColumns = await analyzeColumnsAsync(dataset.columns, sampledRows);
+    schemaPacket.columns = sortColumnsByDatasetOrder(analyzedColumns, dataset.columns);
+    schemaPacketCache.set(cacheKey, schemaPacket);
+    return schemaPacket;
+  })();
+
+  asyncSchemaPacketCache.set(cacheKey, packetPromise);
+
+  try {
+    return await packetPromise;
+  } finally {
+    asyncSchemaPacketCache.delete(cacheKey);
+  }
 }
 
 /**
@@ -152,7 +309,8 @@ export function formatSchemaForPrompt(schemaPacket) {
   let text = `DATASET: "${schemaPacket.name}"\n`;
   text += `ROWS: ${schemaPacket.rowCount}\n`;
   text += `COLUMNS: ${schemaPacket.columnCount}\n\n`;
-  text += `COLUMN DEFINITIONS:\n`;
+  text += `SCHEMA_SAMPLE_ROWS: ${schemaPacket.sampledRowCount || schemaPacket.rowCount}\n\n`;
+  text += "COLUMN DEFINITIONS:\n";
 
   for (const col of schemaPacket.columns) {
     if (!col.isValid) {
@@ -171,7 +329,7 @@ export function formatSchemaForPrompt(schemaPacket) {
       text += `  Unique: ${col.uniqueCount}, Nulls: ${col.nullCount}\n`;
       text += `  Top values: ${Object.entries(col.topValues)
         .slice(0, 3)
-        .map(([k, v]) => `${k}(${v})`)
+        .map(([key, value]) => `${key}(${value})`)
         .join(", ")}\n`;
     }
   }
@@ -188,7 +346,7 @@ export function validateColumnsExist(mentionedColumns, schemaPacket) {
   }
 
   const validColumns = new Set(
-    schemaPacket.columns.filter(c => c.isValid).map(c => c.name)
+    schemaPacket.columns.filter((column) => column.isValid).map((column) => column.name),
   );
 
   const invalidColumns = [];
@@ -200,7 +358,7 @@ export function validateColumnsExist(mentionedColumns, schemaPacket) {
 
   if (invalidColumns.length > 0) {
     throw new Error(
-      `Invalid columns: ${invalidColumns.join(", ")}. Valid: ${Array.from(validColumns).join(", ")}`
+      `Invalid columns: ${invalidColumns.join(", ")}. Valid: ${Array.from(validColumns).join(", ")}`,
     );
   }
 }

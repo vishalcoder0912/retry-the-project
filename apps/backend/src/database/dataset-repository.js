@@ -220,6 +220,8 @@ export const getChatMessages = (datasetId) =>
 
 export const saveChatMessages = (datasetId, messages) => {
   withTransaction(() => {
+    setMeta.run("current_dataset_id", datasetId);
+
     messages.forEach((message) => {
       insertChatMessage.run(
         message.id,

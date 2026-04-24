@@ -3,7 +3,7 @@ import { useData } from '@/features/data/context/useData';
 import KPICard from '@/features/dashboard/components/KPICard';
 import AnalyticsChart from '@/features/dashboard/components/AnalyticsChart';
 import DashboardFilters, { FilterState } from '@/features/dashboard/components/DashboardFilters';
-import { generateDemoKPIs, generateDemoCharts } from '@/features/data/model/dataStore';
+import { useKPIEngine } from '@/features/dashboard/hooks/useKPIEngine';
 import { Download, Search } from 'lucide-react';
 import { exportDatasetCSV } from '@/features/data/utils/exportUtils';
 import { Link } from 'react-router-dom';
@@ -61,6 +61,9 @@ const DashboardPage = () => {
     return { ...dataset, rows: filtered, rowCount: filtered.length };
   }, [dataset, filters, dateColumnName]);
 
+  const { analyticsBundle,kpis } = useKPIEngine(filteredDataset);
+  const charts = analyticsBundle?.charts ?? [];
+
   if (isHydrating) {
     return (
       <StatusPanel
@@ -96,9 +99,6 @@ const DashboardPage = () => {
     );
   }
 
-  const kpis = generateDemoKPIs(filteredDataset);
-  const charts = generateDemoCharts(filteredDataset);
-
   return (
     <div className="space-y-8 px-10 py-10">
       <div className="flex items-center justify-between gap-6">
@@ -129,7 +129,7 @@ const DashboardPage = () => {
         <h2 className="text-3xl uppercase tracking-[0.08em] text-foreground">1.1 Summary Metrics</h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {kpis.map((kpi, index) => (
-          <KPICard key={kpi.label} kpi={kpi} index={index} />
+          <KPICard key={kpi.title} kpi={kpi} index={index} />
         ))}
         </div>
       </section>

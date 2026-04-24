@@ -29,11 +29,77 @@ import { buildSchemaPacket, formatSchemaForPrompt } from "./schema-packet-builde
 // Re-export for backward compatibility
 export { normalizeColumns, generateDemoDataset, buildDatasetSchema };
 
-const isGreetingQuery = (query) => {
+/**
+ * Validate and fix AI-generated SQL to use correct values from dataset
+ */
+export function validateAndFixSQL(dataset, sql) {
+  if (!sql || !dataset?.rows?.length) {
+    return sql;
+  }
+
+  try {
+    const whereMatch = sql.match(/WHERE\s+(\w+)\s*=\s*['"]([^'"]+)['"]/gi);
+    if (!whereMatch) {
+      return sql;
+    }
+
+    const columnName = sql.match(/WHERE\s+(\w+)\s*=/i)?.[1];
+    if (!columnName) {
+      return sql;
+    }
+
+    const actualValues = new Set();
+    for (const row of dataset.rows) {
+      const val = row[columnName];
+      if (val !== null && val !== undefined && String(val).trim()) {
+        actualValues.add(String(val).trim().toLowerCase());
+      }
+    }
+
+    if (actualValues.size === 0) {
+      return sql;
+    }
+
+    let fixedSQL = sql;
+    for (const match of whereMatch) {
+      const valueMatch = match.match(/WHERE\s+(\w+)\s*=\s*['"]([^'"]+)['"]/i);
+      if (!valueMatch) continue;
+
+      const [, col, value] = valueMatch;
+      const normalizedValue = value.trim().toLowerCase();
+
+      if (!actualValues.has(normalizedValue)) {
+        const matchingValue = [...actualValues].find((v) => {
+          if (normalizedValue === "some college" && v === "high school") return true;
+          if (normalizedValue === "high school" && v === "some college") return true;
+          if (normalizedValue === "master" && v === "masters") return true;
+          if (normalizedValue === "masters" && v === "master") return true;
+          return v.includes(normalizedValue) || normalizedValue.includes(v);
+        });
+
+        if (matchingValue) {
+          console.log(`[analytics] 🔧 Fixing SQL value: '${value}' -> '${matchingValue}'`);
+          fixedSQL = fixedSQL.replace(/WHERE\s+\w+\s*=\s*['"][^'"]+['"]/i, `WHERE ${col} = '${matchingValue}'`);
+        }
+      }
+    }
+
+    return fixedSQL;
+  } catch (error) {
+    console.warn("[analytics] SQL validation error:", error.message);
+    return sql;
+  }
+}
+
+export const isGreetingQuery = (query) => {
   const normalizedQuery = normalizeText(query);
 
   return /^(hello|hi|hey|hola|good morning|good afternoon|good evening)( there)?$/.test(normalizedQuery);
 };
+
+const isDatasetHelpQuery = (normalizedQuery) =>
+  /\b(help|ask|question|questions|query|queries|prompt|prompts|analyse|analyze)\b/.test(normalizedQuery)
+  && /\b(dataset|data|table|file|column|columns)\b/.test(normalizedQuery);
 
 const singularizeWord = (word) => {
   if (word.length <= 3) return word;
@@ -55,6 +121,23 @@ const includesPhrase = (source, phrase) => {
   return (` ${source} `).includes(` ${phrase} `);
 };
 
+export const isDatasetOverviewQuery = (normalizedQuery) =>
+  /\b(what|waht|which|describe|explain|summary|summarize|overview|about)\b/.test(normalizedQuery)
+  && /\b(dataset|data|table|file)\b/.test(normalizedQuery);
+
+export const classifyChatQuery = (query) => {
+  const normalizedQuery = normalizeText(query);
+
+  if (isGreetingQuery(query)) {
+    return "greeting";
+  }
+
+  if (isDatasetOverviewQuery(normalizedQuery) || isDatasetHelpQuery(normalizedQuery)) {
+    return "dataset-help";
+  }
+
+  return "analysis";
+};
 
 const pickDimensionForQuery = (schema, queryLower) => {
   const dimensions = schema.columns.filter((column) => column.role === "dimension");
@@ -121,6 +204,17 @@ const buildAnalysisPlan = (dataset, schema, query) => {
   const mentionsMetric = schema.columns
     .filter((column) => column.role === "metric")
     .some((column) => includesPhrase(normalizedQuery, normalizeText(column.name)));
+  const overviewQuery = isDatasetOverviewQuery(normalizedQuery);
+
+  if (overviewQuery) {
+    return {
+      mode: "overview",
+      metric,
+      dimension: schema.primaryDimension ?? dimension,
+      chartType: "bar",
+      intent: "overview",
+    };
+  }
 
   if ((queryLower.includes("trend") || queryLower.includes("monthly") || queryLower.includes("over time")) && schema.primaryDimension) {
     const trendDimension = schema.columns.find((column) => column.name === schema.primaryDimension.name && (column.type === "date" || column.name === "month"))
@@ -199,6 +293,21 @@ const buildAnalysisPlan = (dataset, schema, query) => {
 };
 
 const materializePlan = (dataset, plan) => {
+  if (plan.mode === "overview" && plan.dimension) {
+    const data = countRowsByDimension(dataset.rows, plan.dimension).slice(0, 8);
+    if (data.length === 0) {
+      return null;
+    }
+
+    return {
+      type: data.length <= 6 ? "pie" : "bar",
+      title: `Dataset overview by ${humanize(plan.dimension.name)}`,
+      xKey: plan.dimension.name,
+      yKey: "count",
+      data,
+    };
+  }
+
   if (plan.mode === "metricByDimension" && plan.metric && plan.dimension) {
     const data = groupMetricByDimension(dataset.rows, plan.dimension, plan.metric, plan.aggregation);
     return {
@@ -237,6 +346,10 @@ const materializePlan = (dataset, plan) => {
 };
 
 const buildSqlForPlan = (plan) => {
+  if (plan.mode === "overview") {
+    return null;
+  }
+
   if (plan.mode === "metricByDimension" && plan.metric && plan.dimension) {
     const aggregationSql = plan.aggregation === "average" ? "AVG" : "SUM";
     return `SELECT ${plan.dimension.name}, ${aggregationSql}(${plan.metric.name}) AS ${plan.metric.name} FROM dataset_rows GROUP BY ${plan.dimension.name} ORDER BY ${plan.metric.name} DESC;`;
@@ -263,6 +376,9 @@ const buildInsightsFromSchema = (schema, plan) => {
 
   if (plan.mode === "metricByDimension" && plan.metric && plan.dimension) {
     base.push(`This response used the schema to pair metric \`${plan.metric.name}\` with dimension \`${plan.dimension.name}\`.`);
+  } else if (plan.mode === "overview") {
+    const primaryDimension = plan.dimension?.name ? `\`${plan.dimension.name}\`` : "the primary categorical columns";
+    base.push(`This response summarizes the dataset structure and highlights ${primaryDimension} as the main grouping field.`);
   } else if (plan.mode === "countByDimension" && plan.dimension) {
     base.push(`This response used the schema to count records by \`${plan.dimension.name}\` without sending row values to any AI system.`);
   } else if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && plan.matchValues.length > 0) {
@@ -273,26 +389,156 @@ const buildInsightsFromSchema = (schema, plan) => {
   return base;
 };
 
-export const createChatResponse = (dataset, query) => {
-  const analyticsDataset = prepareDatasetForAnalytics(dataset);
+const buildSuggestedQuestions = (schema) => {
+  const suggestions = [];
+  const primaryDimension = schema.primaryDimension;
+  const secondaryDimension = schema.secondaryDimension;
+  const primaryMetric = schema.primaryMetric;
 
-  if (isGreetingQuery(query)) {
+  if (primaryMetric && primaryDimension) {
+    suggestions.push(`Show ${humanize(primaryMetric.name)} by ${humanize(primaryDimension.name)}.`);
+    suggestions.push(`What is the average ${humanize(primaryMetric.name)} by ${humanize(primaryDimension.name)}?`);
+  }
+
+  const timeDimension = schema.columns.find((column) => column.type === "date" || normalizeText(column.name) === "month");
+  if (primaryMetric && timeDimension) {
+    suggestions.push(`Show the trend of ${humanize(primaryMetric.name)} over ${humanize(timeDimension.name)}.`);
+  }
+
+  if (secondaryDimension) {
+    suggestions.push(`How many records are there by ${humanize(secondaryDimension.name)}?`);
+  } else if (primaryDimension) {
+    suggestions.push(`Count records by ${humanize(primaryDimension.name)}.`);
+  }
+
+  const sampledDimension = schema.columns.find((column) => column.role === "dimension" && Array.isArray(column.sample) && column.sample.length > 0);
+  if (sampledDimension) {
+    const sampleValue = sampledDimension.sample.find((value) => normalizeText(value));
+    if (sampleValue) {
+      suggestions.push(`How many rows match ${humanize(sampledDimension.name)} = "${sampleValue}"?`);
+    }
+  }
+
+  return [...new Set(suggestions)].slice(0, 4);
+};
+
+const buildGuidedDatasetResponse = (schema, chart) => {
+  const suggestions = buildSuggestedQuestions(schema);
+  const dimensions = schema.columns.filter((column) => column.role === "dimension").map((column) => column.name);
+  const metrics = schema.columns.filter((column) => column.role === "metric").map((column) => column.name);
+  const topGroups = chart?.data?.slice(0, 3)
+    .map((item) => `${item[chart.xKey]}: ${Number(item[chart.yKey] ?? 0).toLocaleString()}`)
+    .join(", ");
+
+  const contentParts = [
+    `${schema.datasetName} contains ${schema.rowCount.toLocaleString()} rows and ${schema.columnCount} columns.`,
+  ];
+
+  if (dimensions.length > 0) {
+    contentParts.push(`Main categorical columns are ${dimensions.slice(0, 4).join(", ")}.`);
+  }
+
+  if (metrics.length > 0) {
+    contentParts.push(`Main numeric columns are ${metrics.slice(0, 4).join(", ")}.`);
+  }
+
+  if (topGroups && chart?.xKey) {
+    contentParts.push(`A quick overview by ${humanize(chart.xKey)} shows ${topGroups}.`);
+  }
+
+  if (suggestions.length > 0) {
+    contentParts.push(`You can ask follow-up questions like: ${suggestions.join(" ")}`);
+  }
+
+  return {
+    content: contentParts.join(" "),
+    insights: [
+      `Dataset name: ${schema.datasetName}`,
+      `Rows: ${schema.rowCount.toLocaleString()} | Columns: ${schema.columnCount}`,
+      ...suggestions.map((question) => `Try asking: ${question}`),
+    ],
+  };
+};
+
+const buildOverviewContent = (schema, chart) => {
+  const dimensions = schema.columns.filter((column) => column.role === "dimension").map((column) => column.name);
+  const metrics = schema.columns.filter((column) => column.role === "metric").map((column) => column.name);
+  const topGroups = chart?.data?.slice(0, 4)
+    .map((item) => `${item[chart.xKey]}: ${Number(item[chart.yKey] ?? 0).toLocaleString()}`)
+    .join(", ");
+
+  const parts = [
+    `${schema.datasetName} contains ${schema.rowCount.toLocaleString()} rows and ${schema.columnCount} columns.`,
+  ];
+
+  if (dimensions.length > 0) {
+    parts.push(`Main categorical fields: ${dimensions.slice(0, 4).join(", ")}.`);
+  }
+
+  if (metrics.length > 0) {
+    parts.push(`Main numeric fields: ${metrics.slice(0, 4).join(", ")}.`);
+  }
+
+  if (topGroups && chart?.xKey) {
+    parts.push(`Top ${humanize(chart.xKey)} groups: ${topGroups}.`);
+  }
+
+  return parts.join(" ");
+};
+
+const buildLocalResponse = (dataset, query) => {
+  const analyticsDataset = prepareDatasetForAnalytics(dataset);
+  const schema = buildDatasetSchema(analyticsDataset);
+  const queryType = classifyChatQuery(query);
+
+  if (queryType === "greeting") {
+    const chart = materializePlan(analyticsDataset, {
+      mode: "overview",
+      metric: schema.primaryMetric,
+      dimension: schema.primaryDimension ?? schema.secondaryDimension,
+      chartType: "bar",
+      intent: "overview",
+    });
+    const guided = buildGuidedDatasetResponse(schema, chart);
+
     return {
-      content: "Hello, how can I help you?",
+      content: `Hello. I can help you explore ${schema.datasetName}. ${guided.content}`,
       sql: null,
-      chart: null,
-      insights: [],
-      schema: buildDatasetSchema(analyticsDataset),
+      chart,
+      insights: guided.insights,
+      schema,
+      intent: "greeting",
     };
   }
 
-  const schema = buildDatasetSchema(analyticsDataset);
+  if (queryType === "dataset-help") {
+    const chart = materializePlan(analyticsDataset, {
+      mode: "overview",
+      metric: schema.primaryMetric,
+      dimension: schema.primaryDimension ?? schema.secondaryDimension,
+      chartType: "bar",
+      intent: "overview",
+    });
+    const guided = buildGuidedDatasetResponse(schema, chart);
+
+    return {
+      content: guided.content,
+      sql: null,
+      chart,
+      insights: guided.insights,
+      schema,
+      intent: "overview",
+    };
+  }
+
   const plan = buildAnalysisPlan(analyticsDataset, schema, query);
   const chart = materializePlan(analyticsDataset, plan);
 
   let content = `I analyzed the ${schema.datasetName} schema and used it to select an appropriate ${chart?.type ?? "summary"} view.`;
-  
-  if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && chart?.data?.length) {
+
+  if (plan.mode === "overview") {
+    content = buildOverviewContent(schema, chart);
+  } else if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && chart?.data?.length) {
     const total = chart.data.reduce((sum, item) => sum + Number(item.count ?? 0), 0);
     const breakdown = chart.data.map((item) => `${item[plan.dimension.name]}: ${Number(item.count ?? 0).toLocaleString()}`).join("; ");
     const valueList = plan.matchValues.map((value) => `"${value}"`).join(" and ");
@@ -314,7 +560,12 @@ export const createChatResponse = (dataset, query) => {
     chart,
     insights: buildInsightsFromSchema(schema, plan),
     schema,
+    intent: plan.intent,
   };
+};
+
+export const createChatResponse = (dataset, query) => {
+  return buildLocalResponse(dataset, query);
 };
 
 /**
@@ -322,6 +573,24 @@ export const createChatResponse = (dataset, query) => {
  * Cache hit = instant response ($0 cost)
  * Cache miss = call Gemini, then cache result
  */
+export const createLocalFallbackChatResponse = (dataset, query) => {
+  const response = buildLocalResponse(dataset, query);
+
+  return {
+    content: response.content,
+    sql: response.sql || null,
+    chart: response.chart || null,
+    insights: response.insights,
+    usedAI: false,
+    intent: response.intent,
+    confidence: 0.7,
+    model: "Local Analysis Engine",
+    fromCache: false,
+    cacheHit: false,
+    reason: "local-fallback",
+  };
+};
+
 export const createSchemaFirstChatResponse = async (dataset, query) => {
   const { getCachedQuery, cacheQuery } = await import("./query-cache.js");
   console.log("\n[analytics] ========================================");
@@ -348,6 +617,11 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
   if (cachedResult) {
     console.log("[analytics] ✅✅✅ CACHE HIT FOUND!");
     console.log("[analytics] Returning cached response immediately");
+    console.log("[analytics] ════════════════════════════════════════");
+    console.log("[analytics] CACHED RESPONSE:");
+    console.log(`[analytics]   Model Used: ${cachedResult.model || 'Local Analysis'}`);
+    console.log(`[analytics]   Response: ${cachedResult.content?.substring(0, 200)}...`);
+    console.log("[analytics] ════════════════════════════════════════");
     return {
       ...cachedResult,
       fromCache: true,
@@ -357,9 +631,12 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
   }
 
   console.log("[analytics] ❌ Cache MISS - will call AI or fallback");
+  console.log("[analytics] ════════════════════════════════════════");
+  console.log("[analytics] USER QUERY RECEIVED:");
+  console.log(`[analytics]   "${query}"`);
+  console.log("[analytics] ════════════════════════════════════════");
 
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
-  
   const datasetForAI = {
     name: dataset.name,
     rows: dataset.rows,
@@ -374,14 +651,6 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
   if (ollamaAvailable) {
     console.log("[analytics] STEP 2: Ollama available, calling Mistral...");
     try {
-      const datasetForAI = {
-        name: dataset.name,
-        rows: dataset.rows,
-        columns: dataset.columns,
-        rowCount: dataset.rows?.length || 0,
-        columnCount: dataset.columns?.length || 0,
-      };
-
       const aiResponse = await callOllamaAI(datasetForAI, query);
       console.log(`[analytics] AI response success: ${aiResponse.success}`);
       console.log(`[analytics] AI used: ${aiResponse.usedAI}`);
@@ -396,9 +665,11 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
           );
         }
 
+        const validatedSQL = validateAndFixSQL(dataset, aiResponse.sql);
+
         const response = {
           content: aiResponse.insight,
-          sql: aiResponse.sql,
+          sql: validatedSQL,
           chart: chart,
           insights: [
             `Analysis type: ${aiResponse.intent}`,
@@ -417,6 +688,15 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
         cacheQuery(dataset.id, query, response);
         console.log("[analytics] ✅ Response cached");
 
+        console.log("[analytics] ════════════════════════════════════════");
+        console.log("[analytics] 🤖 AI RESPONSE GENERATED:");
+        console.log(`[analytics]   Model: Mistral (Ollama)`);
+        console.log(`[analytics]   Intent: ${aiResponse.intent}`);
+        console.log(`[analytics]   Confidence: ${(aiResponse.confidence * 100).toFixed(0)}%`);
+        console.log(`[analytics]   Insight: ${aiResponse.insight?.substring(0, 150)}...`);
+        console.log(`[analytics]   SQL: ${aiResponse.sql?.substring(0, 100)}...`);
+        console.log("[analytics] ════════════════════════════════════════");
+
         return response;
       }
       console.log("[analytics] AI response not usable, falling back...");
@@ -430,23 +710,18 @@ export const createSchemaFirstChatResponse = async (dataset, query) => {
 
   // PRIORITY 3: Fallback to local analysis engine
   console.log("[analytics] STEP 4: AI failed or not available, using local analysis fallback (Priority 3)...");
-  const schema = buildDatasetSchema(analyticsDataset);
-  const plan = buildAnalysisPlan(analyticsDataset, schema, query);
-  const chart = materializePlan(analyticsDataset, plan);
-
-  const localResponse = {
-    content: `Local analysis: ${chart?.title || "Dataset analysis"}`,
-    sql: buildSqlForPlan(plan) || null,
-    chart: chart || null,
-    insights: buildInsightsFromSchema(schema, plan),
-    usedAI: false,
-    fromCache: false,
-    cacheHit: false,
-    reason: "local-fallback",
-  };
+  const localResponse = createLocalFallbackChatResponse(dataset, query);
 
   cacheQuery(dataset.id, query, localResponse);
   console.log("[analytics] ✅ Local response cached");
+
+  console.log("[analytics] ════════════════════════════════════════");
+  console.log("[analytics] 📊 LOCAL FALLBACK RESPONSE:");
+  console.log(`[analytics]   Model: Local Analysis Engine`);
+  console.log(`[analytics]   Intent: ${localResponse.intent}`);
+  console.log(`[analytics]   Response: ${localResponse.content?.substring(0, 150)}...`);
+  console.log(`[analytics]   SQL: ${localResponse.sql?.substring(0, 100)}...`);
+  console.log("[analytics] ════════════════════════════════════════");
 
   return localResponse;
 };

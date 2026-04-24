@@ -10,6 +10,30 @@ const dataDir = path.join(__dirname, '..', '..', '..', 'data', 'local-datasets')
 
 mkdirSync(dataDir, { recursive: true });
 
+const sanitizeColumns = (columns = []) => {
+  const seen = new Set();
+
+  return columns.reduce((acc, column, index) => {
+    const rawName = String(column?.name || `column_${index + 1}`).trim();
+    const normalizedName = rawName || `column_${index + 1}`;
+    const safeBaseName = normalizedName.toLowerCase() === 'id' ? '_source_id' : normalizedName;
+    let safeName = safeBaseName;
+    let suffix = 1;
+
+    while (seen.has(safeName.toLowerCase())) {
+      safeName = `${safeBaseName}_${suffix++}`;
+    }
+
+    seen.add(safeName.toLowerCase());
+    acc.push({
+      ...column,
+      name: safeName,
+      originalName: rawName,
+    });
+    return acc;
+  }, []);
+};
+
 /**
  * Creates a local SQLite database from uploaded file data
  * @param {Object} dataset - Dataset with schema and data
@@ -22,7 +46,7 @@ export const createLocalDatabase = (dataset) => {
   const db = new DatabaseSync(dbPath);
 
   // Create table based on schema
-  const columns = dataset.columns || [];
+  const columns = sanitizeColumns(dataset.columns || []);
   const columnDefs = columns.map(col => {
     let sqlType = 'TEXT';
     if (col.type === 'number') sqlType = 'REAL';
@@ -31,8 +55,8 @@ export const createLocalDatabase = (dataset) => {
   }).join(', ');
 
   db.exec(`
-    CREATE TABLE IF NOT EXISTS data (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+    CREATE TABLE IF NOT EXISTS dataset (
+      __row_id INTEGER PRIMARY KEY AUTOINCREMENT,
       ${columnDefs}
     );
   `);
@@ -42,7 +66,7 @@ export const createLocalDatabase = (dataset) => {
   const batchSize = 1000;
 
   const insert = db.prepare(`
-    INSERT INTO data (${columns.map(c => `"${c.name}"`).join(', ')})
+    INSERT INTO dataset (${columns.map(c => `"${c.name}"`).join(', ')})
     VALUES (${columns.map(() => '?').join(', ')})
   `);
 
@@ -52,7 +76,7 @@ export const createLocalDatabase = (dataset) => {
     const batch = rows.slice(i, i + batchSize);
     for (const row of batch) {
       const values = columns.map(col => {
-        const val = row[col.name];
+        const val = row[col.originalName] ?? row[col.name];
         if (val === null || val === undefined) return null;
         if (col.type === 'number') return Number(val) || 0;
         return String(val);
@@ -62,7 +86,6 @@ export const createLocalDatabase = (dataset) => {
   }
 
   db.exec('COMMIT');
-  insert.finalize();
   db.close();
 
   return {
@@ -106,13 +129,21 @@ export const executeLocalQuery = (datasetId, sql, page = 0, limit = 100) => {
       paginatedSQL = `${sql} LIMIT ${limit} OFFSET ${page * limit}`;
     }
 
-    const results = db.prepare(paginatedSQL).all();
+    const normalizedSQL = sql.replace(/\bdataset\b/gi, 'dataset').replace(/\bdata\b/gi, 'dataset');
+    const finalSQL = upperSQL.includes('LIMIT')
+      ? normalizedSQL
+      : `${normalizedSQL} LIMIT ${limit} OFFSET ${page * limit}`;
+
+    const results = db.prepare(finalSQL).all();
 
     // Get column names from results
     const columns = results.length > 0 ? Object.keys(results[0]) : [];
 
     // Get total count for pagination
-    const countSQL = sql.replace(/SELECT\s+.*?\s+FROM/i, 'SELECT COUNT(*) FROM').split('ORDER BY')[0].split('LIMIT')[0];
+    const countSQL = normalizedSQL
+      .replace(/SELECT\s+.*?\s+FROM/i, 'SELECT COUNT(*) FROM')
+      .split('ORDER BY')[0]
+      .split('LIMIT')[0];
     const totalCount = db.prepare(countSQL).get()['COUNT(*)'] || results.length;
 
     db.close();
@@ -151,9 +182,9 @@ export const getLocalData = (datasetId, page = 0, limit = 100) => {
 
   try {
     const offset = page * limit;
-    const rows = db.prepare(`SELECT * FROM data LIMIT ${limit} OFFSET ${offset}`).all();
+    const rows = db.prepare(`SELECT * FROM dataset LIMIT ${limit} OFFSET ${offset}`).all();
     
-    const totalCount = db.prepare('SELECT COUNT(*) as count FROM data').get().count;
+    const totalCount = db.prepare('SELECT COUNT(*) as count FROM dataset').get().count;
     const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
 
     db.close();

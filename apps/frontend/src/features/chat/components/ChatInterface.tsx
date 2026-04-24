@@ -11,6 +11,11 @@ const suggestedQueries = [
   'Compare profit margins',
 ];
 
+const extractFollowUpQuestions = (insights?: string[]) =>
+  (insights || [])
+    .filter((insight) => insight.startsWith('Try asking: '))
+    .map((insight) => insight.replace('Try asking: ', '').trim());
+
 const ChatInterface = () => {
   const { dataset, chatMessages, isProcessing, sendChatQuery } = useData();
   const [input, setInput] = useState('');
@@ -97,7 +102,7 @@ const ChatInterface = () => {
                 
                 {/* AI Badge - show if usedAI flag exists */}
                 {msg.role === 'assistant' && msg.usedAI !== undefined && (
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                       msg.usedAI
                         ? "bg-green-500/20 text-green-400 border border-green-500/30"
@@ -106,6 +111,11 @@ const ChatInterface = () => {
                       <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${msg.usedAI ? "bg-green-400" : "bg-gray-400"}`}></span>
                       {msg.usedAI ? "AI-Powered" : "Local Analysis"}
                     </span>
+                    {msg.model && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                        {msg.model}
+                      </span>
+                    )}
                     {msg.confidence !== undefined && (
                       <span className="text-xs text-muted-foreground">
                         Confidence: {(msg.confidence * 100).toFixed(0)}%
@@ -136,6 +146,23 @@ const ChatInterface = () => {
                       <p key={i} className="text-muted-foreground">
                         {insight}
                       </p>
+                    ))}
+                  </div>
+                )}
+
+                {msg.role === 'assistant' && extractFollowUpQuestions(msg.insights).length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {extractFollowUpQuestions(msg.insights).map((question) => (
+                      <button
+                        key={question}
+                        onClick={() => {
+                          void processQuery(question);
+                        }}
+                        disabled={isProcessing}
+                        className="border border-border px-3 py-2 text-xs uppercase tracking-[0.08em] text-foreground transition-colors hover:bg-primary hover:text-primary-foreground disabled:opacity-50"
+                      >
+                        {question}
+                      </button>
                     ))}
                   </div>
                 )}

@@ -87,4 +87,39 @@ export const api = {
     request<CorrelationResponse>(`/api/datasets/${datasetId}/ai-correlations`, {
       method: "GET",
     }),
+  getAIProfile: (datasetId: string) =>
+    request<{ success: boolean; profile: unknown }>(`/api/datasets/${datasetId}/ai/profile`, {
+      method: "GET",
+    }),
+  getAIAnomalies: (datasetId: string) =>
+    request<{ success: boolean; anomalies: unknown }>(`/api/datasets/${datasetId}/ai/anomalies`, {
+      method: "GET",
+    }),
+  getAIRelationships: (datasetId: string) =>
+    request<{ success: boolean; relationships: unknown }>(`/api/datasets/${datasetId}/ai/relationships`, {
+      method: "GET",
+    }),
+  getAICleaning: (datasetId: string) =>
+    request<{ success: boolean; suggestions: unknown }>(`/api/datasets/${datasetId}/ai/cleaning`, {
+      method: "GET",
+    }),
+  exportDataset: async (datasetId: string, format: 'json' | 'csv' | 'md') => {
+    const response = await fetch(`${apiBaseUrl}/api/datasets/${datasetId}/export/${format}`);
+    if (!response.ok) {
+      throw new Error(`Export failed with status ${response.status}`);
+    }
+    return response.blob();
+  },
+  getCascadeStatus: () =>
+    request<{ success: boolean; cascade: unknown }>("/api/cascade/status", {
+      method: "GET",
+    }),
+  generateQRSession: () =>
+    request<{ success: boolean; sessionId: string; uploadToken: string; expiresAt: string; uploadUrl: string }>("/api/qr-upload/generate", {
+      method: "POST",
+    }),
+  getQRSessionStatus: (sessionId: string, token: string) =>
+    request<{ success: boolean; status: string; fileInfo?: unknown }>(`/api/qr-upload/${sessionId}/status?token=${token}`, {
+      method: "GET",
+    }),
 };

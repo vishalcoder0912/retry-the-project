@@ -1,333 +1,160 @@
-import { describe, expect, it } from "vitest";
-import { Dataset, generateAnalyticsHealthSummary, generateDemoCharts, generateDemoKPIs } from "@/features/data/model/dataStore";
+import { describe,expect,it } from "vitest";
+import { renderHook } from "@testing-library/react";
+import type { Dataset } from "@/features/data/model/dataStore";
+import {
+  aggregateAverageByDimension,
+  aggregateEducationDistribution,
+  aggregateMultivalueFrequency,
+  buildAnalyticsDashboard,
+  cleanDatasetForAnalytics,
+} from "@/features/data/model/analyticsEngine";
+import { useKPIEngine } from "@/features/dashboard/hooks/useKPIEngine";
 
-describe("dataStore dashboard helpers", () => {
-  it("builds charts for arbitrary uploaded datasets without demo-only columns", () => {
-    const dataset: Dataset = {
-      id: "custom-1",
-      name: "Regional Sales",
-      uploadedAt: new Date("2026-04-06T00:00:00.000Z"),
-      rowCount: 3,
-      columns: [
-        { name: "country", type: "string", sample: ["India", "USA"] },
-        { name: "sales", type: "number", sample: ["100", "200"] },
-        { name: "orders", type: "number", sample: ["4", "7"] },
-      ],
-      rows: [
-        { country: "India", sales: 100, orders: 4 },
-        { country: "USA", sales: 200, orders: 7 },
-        { country: "India", sales: 150, orders: 5 },
-      ],
-    };
+const analyticsDataset:Dataset = {
+  id:"salary-analytics-1",
+  name:"Global Developer Compensation",
+  uploadedAt:new Date("2026-04-22T00:00:00.000Z"),
+  rowCount:11,
+  columns:[
+    { name:"country",type:"string",sample:["USA","India","Germany"] },
+    { name:"salary_usd",type:"number",sample:["120000","40000","90000"] },
+    { name:"experience",type:"number",sample:["3","8","6"] },
+    { name:"education",type:"string",sample:["Bachelor","Master","PhD"] },
+    { name:"languages",type:"string",sample:["Python, SQL","Python, R"] },
+  ],
+  rows:[
+    { country:"USA",salary_usd:"120000",experience:"3",education:"Bachelor",languages:"Python, SQL" },
+    { country:"USA",salary_usd:"150000",experience:"7",education:"Master",languages:"Python, SQL, JavaScript" },
+    { country:"India",salary_usd:"40000",experience:"2",education:"Bachelor",languages:"Python, SQL" },
+    { country:"India",salary_usd:"60000",experience:"5",education:"Master",languages:"Python, R" },
+    { country:"Germany",salary_usd:"90000",experience:"6",education:"PhD",languages:"Python, SQL, Scala" },
+    { country:"Germany",salary_usd:"95000",experience:"8",education:"Master",languages:"SQL, Scala" },
+    { country:"Canada",salary_usd:"110000",experience:"9",education:"PhD",languages:"Python, SQL" },
+    { country:"Canada",salary_usd:"115000",experience:"11",education:"Master",languages:"Python, Go" },
+    { country:"USA",salary_usd:"150000",experience:"7",education:"Master",languages:"Python, SQL, JavaScript" },
+    { country:"Brazil",salary_usd:null,experience:"4",education:"Bachelor",languages:null },
+    { country:"USA",salary_usd:"9999999",experience:"65",education:"PhD",languages:"Cobol" },
+  ],
+};
 
-    expect(() => generateDemoCharts(dataset)).not.toThrow();
-    expect(() => generateDemoKPIs(dataset)).not.toThrow();
+describe("analytics engine",()=>{
+  it("cleans datasets and reports missing values, duplicates, and outliers",()=>{
+    const result = cleanDatasetForAnalytics(analyticsDataset);
 
-    const charts = generateDemoCharts(dataset);
-    expect(charts.length).toBeGreaterThan(0);
-    expect(charts[0].data.length).toBeGreaterThan(0);
+    expect(result.validationSummary).toEqual({
+      totalRows:11,
+      validRows:8,
+      missingPercentage:3.64,
+      duplicateCount:1,
+      outlierCount:2,
+    });
+    expect(result.missingByColumn.salary_usd).toBe(1);
+    expect(result.missingByColumn.languages).toBe(1);
+    expect(result.cleanedDataset.rows).toHaveLength(8);
   });
 
-  it("returns stable output for an empty dataset", () => {
-    const dataset: Dataset = {
-      id: "empty-1",
-      name: "Empty Dataset",
-      uploadedAt: new Date("2026-04-06T00:00:00.000Z"),
-      rowCount: 0,
-      columns: [{ name: "score", type: "number", sample: [] }],
-      rows: [],
-    };
+  it("aggregates salary by country using averages rather than totals",()=>{
+    const { cleanedDataset } = cleanDatasetForAnalytics(analyticsDataset);
+    const countryColumn = cleanedDataset.columns.find((column)=>column.name === "country");
+    const salaryColumn = cleanedDataset.columns.find((column)=>column.name === "salary_usd");
 
-    expect(() => generateDemoKPIs(dataset)).not.toThrow();
-    expect(() => generateDemoCharts(dataset)).not.toThrow();
-    expect(generateDemoCharts(dataset)).toEqual([]);
-  });
+    expect(countryColumn).toBeDefined();
+    expect(salaryColumn).toBeDefined();
 
-  it("builds pie charts from counts when uploaded data only has non-additive numeric metrics", () => {
-    const dataset: Dataset = {
-      id: "survey-1",
-      name: "Customer Survey",
-      uploadedAt: new Date("2026-04-06T00:00:00.000Z"),
-      rowCount: 4,
-      columns: [
-        { name: "team", type: "string", sample: ["A", "B"] },
-        { name: "region", type: "string", sample: ["North", "South"] },
-        { name: "rating", type: "number", sample: ["4.5", "3.8"] },
-      ],
-      rows: [
-        { team: "A", region: "North", rating: 4.5 },
-        { team: "A", region: "North", rating: 4.2 },
-        { team: "B", region: "South", rating: 3.8 },
-        { team: "C", region: "North", rating: 4.9 },
-      ],
-    };
+    const salaryByCountry = aggregateAverageByDimension(cleanedDataset.rows,countryColumn!,salaryColumn!,{ normalizeByTotalEntries:true });
 
-    const charts = generateDemoCharts(dataset);
-    const pieChart = charts.find((chart) => chart.type === "pie");
-
-    expect(pieChart).toBeDefined();
-    expect(pieChart?.title).toBe("Count by Team");
-    expect(pieChart?.yKey).toBe("count");
-    expect(pieChart?.data).toEqual([
-      { team: "A", count: 2 },
-      { team: "B", count: 1 },
-      { team: "C", count: 1 },
+    expect(salaryByCountry).toEqual([
+      { country:"USA",salary_usd:135000,sampleSize:2,normalizedValue:16875 },
+      { country:"Canada",salary_usd:112500,sampleSize:2,normalizedValue:14062.5 },
+      { country:"Germany",salary_usd:92500,sampleSize:2,normalizedValue:11562.5 },
+      { country:"India",salary_usd:60000,sampleSize:1,normalizedValue:7500 },
     ]);
   });
 
-  it("prioritizes salary columns for salary datasets", () => {
-    const dataset: Dataset = {
-      id: "salary-1",
-      name: "Developer Salaries",
-      uploadedAt: new Date("2026-04-06T00:00:00.000Z"),
-      rowCount: 3,
-      columns: [
-        { name: "experience", type: "number", sample: ["5", "10"] },
-        { name: "country", type: "string", sample: ["USA", "India"] },
-        { name: "education", type: "string", sample: ["Masters", "Bachelors"] },
-        { name: "salary_usd", type: "number", sample: ["100000", "200000"] },
-      ],
-      rows: [
-        { experience: 5, country: "USA", education: "Masters", salary_usd: 100000 },
-        { experience: 10, country: "USA", education: "Bachelors", salary_usd: 200000 },
-        { experience: 2, country: "India", education: "Masters", salary_usd: 50000 },
-      ],
-    };
+  it("parses multivalue language fields and sorts frequencies descending",()=>{
+    const { cleanedDataset } = cleanDatasetForAnalytics(analyticsDataset);
+    const languageColumn = cleanedDataset.columns.find((column)=>column.name === "languages");
 
-    const kpis = generateDemoKPIs(dataset);
-    const charts = generateDemoCharts(dataset);
+    expect(languageColumn).toBeDefined();
 
-    expect(kpis[2]).toMatchObject({
-      label: "Total Salary Usd",
-      value: `$${(350000).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-    });
-    expect(kpis[3]).toMatchObject({ label: "Avg Experience", value: "5.67" });
-    expect(charts[0]).toMatchObject({
-      title: "Salary Usd by Country",
-      xKey: "country",
-      yKey: "salary_usd",
-      data: [
-        { country: "India", salary_usd: 50000 },
-        { country: "USA", salary_usd: 300000 },
-      ],
-    });
-    expect(charts.find((chart) => chart.type === "pie")).toMatchObject({
-      title: "Count by Education",
-      yKey: "count",
-    });
+    const languageFrequency = aggregateMultivalueFrequency(cleanedDataset.rows,languageColumn!);
+
+    expect(languageFrequency.slice(0,5)).toEqual([
+      { languages:"Python",count:6,percentage:37.5 },
+      { languages:"SQL",count:5,percentage:31.25 },
+      { languages:"Scala",count:2,percentage:12.5 },
+      { languages:"JavaScript",count:1,percentage:6.25 },
+      { languages:"R",count:1,percentage:6.25 },
+    ]);
   });
 
-  it("uses the primary metric for pie charts instead of the first numeric column", () => {
-    const dataset: Dataset = {
-      id: "salary-pie-1",
-      name: "Salary Pie Dataset",
-      uploadedAt: new Date("2026-04-06T00:00:00.000Z"),
-      rowCount: 4,
-      columns: [
-        { name: "experience", type: "number", sample: ["5", "10"] },
-        { name: "country", type: "string", sample: ["USA", "India"] },
-        { name: "education", type: "string", sample: ["Masters", "Bachelors"] },
-        { name: "salary_usd", type: "number", sample: ["100000", "200000"] },
-      ],
-      rows: [
-        { experience: 5, country: "USA", education: "Masters", salary_usd: 100000 },
-        { experience: 10, country: "USA", education: "Bachelors", salary_usd: 200000 },
-        { experience: 2, country: "India", education: "Masters", salary_usd: 50000 },
-        { experience: 8, country: "India", education: "PhD", salary_usd: 150000 },
-      ],
-    };
+  it("counts real education distribution and keeps logical education order",()=>{
+    const { cleanedDataset } = cleanDatasetForAnalytics(analyticsDataset);
+    const educationColumn = cleanedDataset.columns.find((column)=>column.name === "education");
 
-    const charts = generateDemoCharts(dataset);
+    expect(educationColumn).toBeDefined();
 
-    expect(charts[1]).toMatchObject({
-      type: "pie",
-      title: "Count by Education",
-      xKey: "education",
-      yKey: "count",
-      data: [
-        { education: "Bachelors", count: 1 },
-        { education: "Masters", count: 2 },
-        { education: "PhD", count: 1 },
-      ],
-    });
+    const educationDistribution = aggregateEducationDistribution(cleanedDataset.rows,educationColumn!);
+
+    expect(educationDistribution).toEqual([
+      { education:"Bachelor",count:2,percentage:25 },
+      { education:"Master",count:4,percentage:50 },
+      { education:"PhD",count:2,percentage:25 },
+    ]);
   });
 
-  it("averages mark-like columns using only valid numeric values", () => {
-    const dataset: Dataset = {
-      id: "student-avg-1",
-      name: "Research Students",
-      uploadedAt: new Date("2026-04-10T00:00:00.000Z"),
-      rowCount: 6,
-      columns: [
-        { name: "Branch", type: "string", sample: ["CSE", "ECE"] },
-        { name: "Gender", type: "string", sample: ["Male", "Female"] },
-        { name: "Marks[10th]", type: "number", sample: ["91", "88"] },
-      ],
-      rows: [
-        { Branch: "CSE", Gender: "Male", "Marks[10th]": "91" },
-        { Branch: "CSE", Gender: "Male", "Marks[10th]": "95" },
-        { Branch: "ECE", Gender: "Female", "Marks[10th]": "88" },
-        { Branch: "ECE", Gender: "Female", "Marks[10th]": "92" },
-        { Branch: "MECH", Gender: "Male", "Marks[10th]": null },
-        { Branch: "MECH", Gender: "Male", "Marks[10th]": "not available" },
-      ],
-    };
+  it("builds a memoizable dashboard bundle with statistically correct chart semantics",()=>{
+    const bundle = buildAnalyticsDashboard(analyticsDataset);
 
-    const charts = generateDemoCharts(dataset);
-
-    expect(charts[0]).toMatchObject({
-      title: "Average Marks[10th] by Branch",
-      xKey: "Branch",
-      yKey: "Marks[10th]",
-      data: [
-        { Branch: "CSE", "Marks[10th]": 93 },
-        { Branch: "ECE", "Marks[10th]": 90 },
-      ],
+    expect(bundle.structuredData.salaryByCountry[0]).toMatchObject({ country:"USA",salary_usd:135000 });
+    expect(bundle.structuredData.experienceByCountry[0]).toMatchObject({ country:"Canada",experience:10 });
+    expect(bundle.charts.map((chart)=>chart.title)).toEqual([
+      "Average Salary Usd by Country",
+      "Average Experience by Country",
+      "Language Frequency",
+      "Education Distribution",
+      "Average Salary Usd by Education",
+      "Salary Usd vs Experience",
+    ]);
+    expect(bundle.charts[5]).toMatchObject({
+      type:"scatter",
+      xKey:"experience",
+      yKey:"salary_usd",
     });
+    expect(bundle.insights.length).toBeGreaterThan(0);
   });
 
-  it("normalizes gender labels before averaging marks", () => {
-    const dataset: Dataset = {
-      id: "student-gender-1",
-      name: "Research Students",
-      uploadedAt: new Date("2026-04-10T00:00:00.000Z"),
-      rowCount: 6,
-      columns: [
-        { name: "Branch", type: "string", sample: ["CSE", "ECE"] },
-        { name: "Gender", type: "string", sample: ["male", "Female"] },
-        { name: "Marks[10th]", type: "number", sample: ["91", "88"] },
-      ],
-      rows: [
-        { Branch: "CSE", Gender: "male", "Marks[10th]": "91" },
-        { Branch: "CSE", Gender: "Male", "Marks[10th]": "95" },
-        { Branch: "ECE", Gender: "M", "Marks[10th]": "89" },
-        { Branch: "ECE", Gender: "female", "Marks[10th]": "88" },
-        { Branch: "MECH", Gender: "Female", "Marks[10th]": "92" },
-        { Branch: "IT", Gender: "F", "Marks[10th]": "90" },
-      ],
-    };
+  it("returns dynamic, insight-driven KPIs from the KPI engine hook",()=>{
+    const { result } = renderHook(()=>useKPIEngine(analyticsDataset));
 
-    const charts = generateDemoCharts(dataset);
-    const genderAverageChart = charts.find((chart) => chart.title === "Average Marks[10th] by Gender");
-
-    expect(genderAverageChart).toMatchObject({
-      xKey: "Gender",
-      yKey: "Marks[10th]",
-      data: [
-        { Gender: "Female", "Marks[10th]": 90 },
-        { Gender: "Male", "Marks[10th]": 91.67 },
-      ],
+    expect(result.current.kpis.map((kpi)=>kpi.title)).toEqual([
+      "Data Quality",
+      "Avg Salary",
+      "Experience-Salary Correlation",
+      "Top Country",
+      "Most Popular Language",
+      "Education Impact",
+    ]);
+    expect(result.current.kpis[0]).toMatchObject({
+      title:"Data Quality",
+      value:"72.73%",
+      trend:"stable",
+      status:"critical",
     });
-  });
-
-  it("normalizes board labels before counting grouped records", () => {
-    const dataset: Dataset = {
-      id: "student-board-1",
-      name: "Research Students",
-      uploadedAt: new Date("2026-04-10T00:00:00.000Z"),
-      rowCount: 7,
-      columns: [
-        { name: "Branch", type: "string", sample: ["CSE", "ECE"] },
-        { name: "Gender", type: "string", sample: ["Male", "Female"] },
-        { name: "Board", type: "string", sample: ["cbse", "ICSE"] },
-        { name: "Marks[10th]", type: "number", sample: ["91", "88"] },
-      ],
-      rows: [
-        { Branch: "CSE", Gender: "Male", Board: "cbse", "Marks[10th]": "91" },
-        { Branch: "CSE", Gender: "Male", Board: "CBSE", "Marks[10th]": "95" },
-        { Branch: "ECE", Gender: "Female", Board: "Cbse", "Marks[10th]": "88" },
-        { Branch: "ECE", Gender: "Female", Board: "ICSE", "Marks[10th]": "92" },
-        { Branch: "MECH", Gender: "Female", Board: "icse", "Marks[10th]": "90" },
-        { Branch: "IT", Gender: "Male", Board: "STATE BOARD", "Marks[10th]": "85" },
-        { Branch: "IT", Gender: "Male", Board: "state board", "Marks[10th]": "87" },
-      ],
-    };
-
-    const charts = generateDemoCharts(dataset);
-    const boardCountChart = charts.find((chart) => chart.title === "Count by Board");
-
-    expect(boardCountChart).toMatchObject({
-      xKey: "Board",
-      yKey: "count",
-      data: [
-        { Board: "CBSE", count: 3 },
-        { Board: "ICSE", count: 2 },
-        { Board: "State Board", count: 2 },
-      ],
+    expect(result.current.kpis[1]).toMatchObject({
+      title:"Avg Salary",
+      status:"good",
     });
-  });
-
-  it("excludes branch groups below the minimum sample threshold", () => {
-    const dataset: Dataset = {
-      id: "branch-threshold-1",
-      name: "Branch Threshold",
-      uploadedAt: new Date("2026-04-10T00:00:00.000Z"),
-      rowCount: 5,
-      columns: [
-        { name: "Branch", type: "string", sample: ["CSE", "ECE"] },
-        { name: "Marks[10th]", type: "number", sample: ["91", "88"] },
-      ],
-      rows: [
-        { Branch: "CSE", "Marks[10th]": "91" },
-        { Branch: "CSE", "Marks[10th]": "95" },
-        { Branch: "ECE", "Marks[10th]": "88" },
-        { Branch: "IT", "Marks[10th]": "85" },
-        { Branch: "IT", "Marks[10th]": "87" },
-      ],
-    };
-
-    const charts = generateDemoCharts(dataset);
-
-    expect(charts[0]).toMatchObject({
-      title: "Average Marks[10th] by Branch",
-      data: [
-        { Branch: "CSE", "Marks[10th]": 93 },
-        { Branch: "IT", "Marks[10th]": 86 },
-      ],
+    expect(result.current.kpis[2].insight).toContain("correlation");
+    expect(result.current.kpis[3]).toMatchObject({
+      title:"Top Country",
+      value:"USA",
+      status:"good",
     });
-  });
-
-  it("builds analytics health summary from sanitized data", () => {
-    const dataset: Dataset = {
-      id: "health-summary-1",
-      name: "Health Summary",
-      uploadedAt: new Date("2026-04-10T00:00:00.000Z"),
-      rowCount: 6,
-      columns: [
-        { name: "Branch", type: "string", sample: ["CSE", "ECE"] },
-        { name: "Marks[10th]", type: "number", sample: ["91", "88"] },
-      ],
-      rows: [
-        { Branch: "CSE", "Marks[10th]": "91" },
-        { Branch: "CSE", "Marks[10th]": "95" },
-        { Branch: "ECE", "Marks[10th]": "88" },
-        { Branch: "IT", "Marks[10th]": "87" },
-        { Branch: "", "Marks[10th]": "not available" },
-        { Branch: "", "Marks[10th]": null },
-      ],
-    };
-
-    const summary = generateAnalyticsHealthSummary(dataset);
-
-    expect(summary).toMatchObject({
-      integrity: {
-        totalRows: 6,
-        analyticsRows: 5,
-        removedEmptyRows: 1,
-        invalidNumericValues: 1,
-      },
-      risk: {
-        level: "LOW",
-        metricName: "Marks[10th]",
-        average: 90.25,
-        threshold: 60,
-      },
-      branchCoverage: {
-        totalGroups: 3,
-        includedGroups: 1,
-        excludedGroups: 2,
-        minimumGroupCount: 2,
-      },
+    expect(result.current.kpis[4]).toMatchObject({
+      title:"Most Popular Language",
+      value:"Python",
     });
+    expect(result.current.kpis[5].value).toMatch(/%|N\/A/);
   });
 });

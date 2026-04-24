@@ -185,12 +185,23 @@ async function generateSuggestedAnalyses(rows, columns, quality) {
 
   for (const catCol of categoricalCols) {
     if (new Set(rows.map(r => r[catCol.name])).size <= 10) {
+      const metricCol = numericCols[0];
       suggestions.push({
         type: "breakdown",
-        query: `Show ${numCol.name ? numCol.name : 'distribution'} by ${catCol.name}`,
+        query: `Show ${metricCol?.name ? metricCol.name : 'distribution'} by ${catCol.name}`,
         priority: "high",
       });
     }
+  }
+
+  // When the dataset has quality issues but no numeric columns, still offer a
+  // useful starting point instead of returning an empty list.
+  if (suggestions.length === 0 && quality?.issues?.length) {
+    suggestions.push({
+      type: "data_quality",
+      query: `Show me the data quality issues for this dataset`,
+      priority: "high",
+    });
   }
 
   for (let i = 0; i < numericCols.length; i++) {
@@ -225,7 +236,7 @@ async function generateSuggestedAnalyses(rows, columns, quality) {
     }
   }
 
-  return suggestions.slice(0, 8);
+  return suggestions.filter(Boolean).slice(0, 8);
 }
 
 async function generateAIInsights(rows, columns, profile) {

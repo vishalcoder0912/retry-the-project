@@ -84,10 +84,11 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
   const chartData = useMemo(() => {
     const data = config.data || [];
     if (chartType === 'bar' || chartType === 'pie') {
-      return [...data].sort((a, b) => Number(a[config.yKey] ?? 0) - Number(b[config.yKey] ?? 0));
+      return [...data].sort((a, b) => Number(b[config.yKey] ?? 0) - Number(a[config.yKey] ?? 0));
     }
     return data;
   }, [config.data, chartType, config.yKey]);
+  const hasRenderableChart = Array.isArray(chartData) && chartData.length > 0 && Boolean(config.xKey) && Boolean(config.yKey);
 
   useEffect(() => {
     setShowLegend(chartType === 'pie');
@@ -215,6 +216,7 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
   };
 
   return (
+    hasRenderableChart ? (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
@@ -353,6 +355,7 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
         </ResponsiveContainer>
       </div>
     </motion.div>
+    ) : null
   );
 };
 
