@@ -56,10 +56,9 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -4 }}
+      initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.15 }}
-      className="terminal-panel flex flex-wrap items-center gap-3 p-4"
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-border/50 bg-card/50 p-3"
     >
       <Popover>
         <PopoverTrigger asChild>
@@ -67,11 +66,11 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
             variant="outline"
             size="sm"
             className={cn(
-              'h-10 gap-2 rounded-none font-mono text-xs uppercase tracking-[0.08em] border-border bg-background hover:bg-secondary',
-              filters.dateRange.from && 'border-primary/40 text-primary',
+              'h-9 gap-2 rounded-lg font-medium text-sm border-border/50 bg-background/80 hover:bg-muted transition-all',
+              filters.dateRange.from && 'border-primary/50 text-primary bg-primary/5',
             )}
           >
-            <CalendarIcon className="w-3.5 h-3.5" />
+            <CalendarIcon className="h-4 w-4" />
             {filters.dateRange.from
               ? `${format(filters.dateRange.from, 'MMM d')}${filters.dateRange.to ? ` - ${format(filters.dateRange.to, 'MMM d')}` : ''}`
               : 'Date range'}
@@ -85,7 +84,7 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
               onChange({ ...filters, dateRange: { from: range?.from, to: range?.to } })
             }
             numberOfMonths={2}
-            className="p-3 pointer-events-auto"
+            className="p-2"
           />
         </PopoverContent>
       </Popover>
@@ -98,16 +97,15 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
         >
           <SelectTrigger
             className={cn(
-              'h-9 w-auto min-w-[120px] gap-2 font-mono text-xs border-border bg-card',
-              'rounded-none uppercase tracking-[0.08em]',
-              filters.columns[column.name] && 'border-primary/40 text-primary',
+              'h-9 w-auto min-w-[130px] gap-2 font-medium text-sm border-border/50 bg-background/80 rounded-lg',
+              filters.columns[column.name] && 'border-primary/50 text-primary bg-primary/5',
             )}
           >
             <SelectValue placeholder={column.name} />
           </SelectTrigger>
           <SelectContent>
             {uniqueValues[column.name]?.map((value) => (
-              <SelectItem key={value} value={value} className="text-xs font-mono">
+              <SelectItem key={value} value={value} className="text-sm">
                 {value}
               </SelectItem>
             ))}
@@ -116,27 +114,27 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
       ))}
 
       {activeCount > 0 && (
-        <div className="flex items-center gap-2 ml-1">
+        <div className="flex items-center gap-2 ml-2">
           {Object.entries(filters.columns)
             .filter(([, value]) => value)
             .map(([columnName, value]) => (
               <Badge
                 key={columnName}
                 variant="secondary"
-                className="gap-1 rounded-none border border-border bg-background text-xs font-mono uppercase cursor-pointer hover:bg-destructive/20"
+                className="gap-1.5 rounded-full border border-border/50 bg-background/80 px-3 py-1 text-sm font-medium cursor-pointer hover:bg-muted/80"
                 onClick={() => removeColumnFilter(columnName)}
               >
-                {columnName}: {value}
-                <X className="w-3 h-3" />
+                <span className="text-muted-foreground">{columnName}:</span> {value}
+                <X className="h-3 w-3" />
               </Badge>
             ))}
           <Button
             variant="ghost"
             size="sm"
             onClick={clearAll}
-            className="h-7 text-xs text-muted-foreground hover:text-destructive"
+            className="h-8 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
           >
-            Clear all
+            Clear
           </Button>
         </div>
       )}

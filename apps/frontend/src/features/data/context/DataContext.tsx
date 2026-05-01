@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { api, DatasetImportPayload } from '@/features/data/api/dataApi';
-import { ChatMessage, Dataset, DatasetCellValue, DatasetRow } from '@/features/data/model/dataStore';
+import { ChartConfig, ChatMessage, Dataset, DatasetAnalysis, DatasetCellValue, DatasetRow } from '@/features/data/model/dataStore';
 import { DataContext } from '@/features/data/context/data-context-store';
 
 function inferType(values: string[]): 'string' | 'number' | 'date' {
@@ -58,13 +58,17 @@ const normalizeChatMessage = (message: ChatMessage): ChatMessage => ({
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [analysis, setAnalysis] = useState<DatasetAnalysis | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isHydrating, setIsHydrating] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const applyApiState = useCallback((nextDataset: Dataset | null, nextMessages: ChatMessage[]) => {
+  const applyApiState = useCallback((nextDataset: Dataset | null, nextMessages: ChatMessage[], nextAnalysis?: DatasetAnalysis) => {
     setDataset(normalizeDataset(nextDataset));
     setChatMessages(nextMessages.map(normalizeChatMessage));
+    if (nextAnalysis) {
+      setAnalysis(nextAnalysis);
+    }
   }, []);
 
   const hydrateState = useCallback(async () => {
@@ -75,7 +79,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       for (let attempt = 0; attempt < 6; attempt += 1) {
         try {
           const state = await api.getState();
-          applyApiState(state.dataset, state.chatMessages);
+          applyApiState(state.dataset, state.chatMessages, state.analysis);
           setApiError(null);
           return;
         } catch (error) {
@@ -120,7 +124,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const importDatasetPayload = useCallback(async (payload: DatasetImportPayload) => {
     try {
       const state = await api.importDataset(payload);
-      applyApiState(state.dataset, state.chatMessages);
+      applyApiState(state.dataset, state.chatMessages, state.analysis || undefined);
       setApiError(null);
     } catch (error) {
       setApiError(getErrorMessage(error));
@@ -203,7 +207,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadDemo = useCallback(async () => {
     try {
       const state = await api.loadDemo();
-      applyApiState(state.dataset, state.chatMessages);
+      applyApiState(state.dataset, state.chatMessages, state.analysis || undefined);
       setApiError(null);
     } catch (error) {
       setApiError(getErrorMessage(error));
@@ -252,6 +256,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{
       dataset,
       chatMessages,
+      analysis,
       isProcessing,
       isHydrating,
       apiError,
