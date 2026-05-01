@@ -49,6 +49,7 @@ import {
 import { aiAnalyzer } from "./services/ai-analyzer.js";
 import { buildUnifiedSchema } from "./services/data-merger.js";
 import { smartAutoChartGenerationForSingle, smartAutoChartGenerationForMerged, classifyColumns, buildEnhancedSchema } from "./services/schema-detector.js";
+import { reportGenerator } from "./services/report-generator.js";
 
 const port = Number(process.env.PORT || 3001);
 
