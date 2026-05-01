@@ -246,6 +246,8 @@ function startServer() {
         } : null
       });
       return;
+    } catch (e) {
+      throw e;
     }
 
       // GET cache stats for specific dataset
@@ -1154,12 +1156,6 @@ function startServer() {
       }
 
       sendJson(response, 404, { error: "Route not found" });
-    } catch (error) {
-      console.error("[handler] Unhandled error:", error);
-      sendJson(response, 500, {
-        error: error instanceof Error ? error.message : "Internal server error",
-      });
-    }
   });
 
     const analyzeMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/analyze$/);
