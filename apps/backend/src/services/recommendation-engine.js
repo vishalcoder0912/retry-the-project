@@ -1,5 +1,14 @@
 import { toNumber, buildDatasetSchema } from '@insightflow/shared-analytics';
-import { getCleanColumnClassification } from './schema-detector.js';
+import { classifyColumns } from './schema-detector.js';
+
+function getCleanColumnClassification(rows) {
+  const classification = classifyColumns(rows);
+  return {
+    numeric: classification.numeric || [],
+    categorical: classification.categorical || [],
+    date: classification.date || []
+  };
+}
 
 export class RecommendationEngine {
   constructor() {

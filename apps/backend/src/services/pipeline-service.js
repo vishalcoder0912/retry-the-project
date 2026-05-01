@@ -1,9 +1,18 @@
 import { prepareDatasetForAnalytics, buildDatasetSchema, toNumber } from '@insightflow/shared-analytics';
-import { getCleanColumnClassification, smartAutoChartGeneration, buildEnhancedSchema, detectOutliers } from './schema-detector.js';
+import { classifyColumns, smartAutoChartGeneration, buildEnhancedSchema } from './schema-detector.js';
 import { reportGenerator } from './report-generator.js';
 import { predictiveAnalytics } from './predictive-analytics.js';
 import { alertService } from './alert-service.js';
 import { recommendationEngine } from './recommendation-engine.js';
+
+function getCleanColumnClassification(rows) {
+  const classification = classifyColumns(rows);
+  return {
+    numeric: classification.numeric || [],
+    categorical: classification.categorical || [],
+    date: classification.date || []
+  };
+}
 
 export class DataPipeline {
   constructor() {
