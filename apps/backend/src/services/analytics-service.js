@@ -26,7 +26,6 @@ import { ollamaAIService, isOllamaConfigured, callOllamaAI } from "./ollama-ai-s
 import { sanitizeQueryContext, validateSchemaOnlyContext } from '../utils/schema-extractor.js';
 import { handleSmartQuery } from './smart-query-handler.js';
 
-import { callOllamaAI, isOllamaConfigured } from "./ollama-ai-service.js";
 import { buildSchemaPacket, formatSchemaForPrompt } from "./schema-packet-builder.js";
 
 // Re-export for backward compatibility
@@ -460,8 +459,6 @@ export const createChatResponse = async (dataset, query) => {
     console.warn('[analytics] Smart query handler error:', error.message);
   }
 
-  const schema = buildDatasetSchema(analyticsDataset);
-  
   // Try to get AI-enhanced response first with Ollama + Mistral
   try {
     // Check if Ollama is available
