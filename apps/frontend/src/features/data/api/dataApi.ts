@@ -1,4 +1,16 @@
-import { ChatMessage, Dataset } from "@/features/data/model/dataStore";
+import { ChartConfig, ChatMessage, Dataset, DatasetAnalysis } from "@/features/data/model/dataStore";
+import logger from "@/shared/lib/logger";
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public code?: string
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 export interface CorrelationResult {
   column1: string;
@@ -26,6 +38,7 @@ export interface DatasetImportPayload {
 interface ApiState {
   dataset: Dataset | null;
   chatMessages: ChatMessage[];
+  analysis?: DatasetAnalysis;
 }
 
 interface ChatResponse {
@@ -42,24 +55,61 @@ const apiBaseUrl = (() => {
 })();
 
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers || {}),
-    },
-    ...init,
-  });
+  const startTime = Date.now();
+  const method = init?.method || "GET";
 
-  if (!response.ok) {
-    const errorPayload = await response.json().catch(() => null);
-    throw new Error(errorPayload?.error || `Request failed with status ${response.status}`);
+  try {
+    const response = await fetch(`${apiBaseUrl}${path}`, {
+      headers: {
+        "Content-Type": "application/json",
+        ...(init?.headers || {}),
+      },
+      ...init,
+    });
+
+    const duration = Date.now() - startTime;
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      const errorMessage = errorPayload?.error || `Request failed with status ${response.status}`;
+      
+      logger.error(`API Error: ${method} ${path}`, {
+        statusCode: response.status,
+        duration,
+        path,
+        method,
+      });
+
+      throw new ApiError(errorMessage, response.status, errorPayload?.code);
+    }
+
+    logger.info(`API: ${method} ${path}`, {
+      statusCode: response.status,
+      duration,
+    });
+
+    if (response.status === 204) {
+      return {} as T;
+    }
+
+    return response.json() as Promise<T>;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    
+    logger.error(`Network error: ${method} ${path}`, {
+      error: error instanceof Error ? error.message : "Unknown error",
+      path,
+      method,
+    }, error instanceof Error ? error : undefined);
+    
+    throw new ApiError(
+      error instanceof Error ? error.message : "Network request failed",
+      0,
+      "NETWORK_ERROR"
+    );
   }
-
-  if (response.status === 204) {
-    return {} as T;
-  }
-
-  return response.json() as Promise<T>;
 };
 
 export const api = {

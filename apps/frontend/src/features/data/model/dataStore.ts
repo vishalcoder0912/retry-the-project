@@ -49,6 +49,19 @@ export interface Dataset {
   fileName?: string | null;
 }
 
+export interface DatasetAnalysis {
+  dataType: string;
+  dataTypeLabel: string;
+  chartRecommendations: ChartConfig[];
+  insights: Array<{
+    type: string;
+    title: string;
+    message: string;
+    [key: string]: unknown;
+  }>;
+  aiInsights?: unknown;
+}
+
 export interface KPI {
   title: string;
   value: string;
@@ -61,10 +74,15 @@ export interface KPI {
 }
 
 export interface ChartConfig {
-  type: "line" | "bar" | "pie" | "area" | "scatter" | "radar" | "composed";
+  type: "line" | "bar" | "pie" | "area" | "scatter" | "radar" | "composed" | "histogram" | "heatmap";
   title: string;
   xKey: string;
   yKey: string;
+  zKey?: string;
+  xLabel?: string;
+  yLabel?: string;
+  category?: string;
+  id?: string;
   data: ChartDatum[];
 }
 
@@ -211,6 +229,163 @@ const prepareDatasetForAnalytics = (data: Dataset) => {
     },
   };
 };
+
+export interface DataQualityIssue {
+  type: 'duplicate' | 'outlier' | 'missing' | 'invalid' | 'inconsistent';
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  column?: string;
+  rowIndex?: number;
+  message: string;
+  count: number;
+  affectedValues?: string[];
+}
+
+export interface DataQualityReport {
+  totalRows: number;
+  issues: DataQualityIssue[];
+  summary: {
+    duplicates: number;
+    outliers: number;
+    missingValues: number;
+    invalidValues: number;
+    totalIssues: number;
+    qualityScore: number;
+  };
+  columnStats: Array<{
+    name: string;
+    type: string;
+    missing: number;
+    outliers: number;
+    invalid: number;
+  }>;
+}
+
+export function analyzeDataQuality(data: Dataset): DataQualityReport {
+  const issues: DataQualityIssue[] = [];
+  const columnStats: DataQualityReport['columnStats'] = [];
+  let duplicates = 0;
+  let missingValues = 0;
+  let invalidValues = 0;
+  let outliers = 0;
+
+  const rowSignatures = new Map<string, number[]>();
+  data.rows.forEach((row, idx) => {
+    const signature = data.columns.map(col => String(row[col.name] ?? '')).join('|');
+    if (!rowSignatures.has(signature)) {
+      rowSignatures.set(signature, []);
+    }
+    rowSignatures.get(signature)!.push(idx);
+  });
+
+  rowSignatures.forEach((indices) => {
+    if (indices.length > 1) {
+      duplicates += indices.length;
+      issues.push({
+        type: 'duplicate',
+        severity: 'medium',
+        message: `Found ${indices.length} duplicate rows`,
+        count: indices.length,
+        affectedValues: indices.slice(0, 5).map(String)
+      });
+    }
+  });
+
+  data.columns.forEach((column) => {
+    let colMissing = 0;
+    let colInvalid = 0;
+    let colOutliers = 0;
+    const numericValues: number[] = [];
+
+    data.rows.forEach((row, idx) => {
+      const value = row[column.name];
+      
+      if (value === null || value === undefined || value === '') {
+        colMissing++;
+      } else if (column.type === 'number') {
+        const num = Number(value);
+        if (isNaN(num)) {
+          colInvalid++;
+        } else {
+          numericValues.push(num);
+        }
+      }
+    });
+
+    missingValues += colMissing;
+    invalidValues += colInvalid;
+
+    if (numericValues.length > 10 && column.type === 'number') {
+      const sorted = [...numericValues].sort((a, b) => a - b);
+      const q1 = sorted[Math.floor(sorted.length * 0.25)];
+      const q3 = sorted[Math.floor(sorted.length * 0.75)];
+      const iqr = q3 - q1;
+      const lowerBound = q1 - 1.5 * iqr;
+      const upperBound = q3 + 1.5 * iqr;
+
+      numericValues.forEach((val) => {
+        if (val < lowerBound || val > upperBound) {
+          colOutliers++;
+        }
+      });
+
+      if (colOutliers > 0) {
+        outliers += colOutliers;
+        issues.push({
+          type: 'outlier',
+          severity: 'low',
+          column: column.name,
+          message: `Found ${colOutliers} outlier(s) in ${column.name} (IQR method)`,
+          count: colOutliers
+        });
+      }
+    }
+
+    if (colMissing > 0) {
+      issues.push({
+        type: 'missing',
+        severity: colMissing > data.rows.length * 0.5 ? 'critical' : colMissing > data.rows.length * 0.1 ? 'high' : 'low',
+        column: column.name,
+        message: `${column.name} has ${colMissing} missing values (${((colMissing / data.rows.length) * 100).toFixed(1)}%)`,
+        count: colMissing
+      });
+    }
+
+    if (colInvalid > 0) {
+      issues.push({
+        type: 'invalid',
+        severity: 'high',
+        column: column.name,
+        message: `${column.name} has ${colInvalid} invalid numeric values`,
+        count: colInvalid
+      });
+    }
+
+    columnStats.push({
+      name: column.name,
+      type: column.type,
+      missing: colMissing,
+      outliers: colOutliers,
+      invalid: colInvalid
+    });
+  });
+
+  const totalIssues = duplicates + outliers + missingValues + invalidValues;
+  const qualityScore = Math.max(0, Math.min(100, 100 - (totalIssues / data.rows.length) * 100));
+
+  return {
+    totalRows: data.rows.length,
+    issues,
+    summary: {
+      duplicates,
+      outliers,
+      missingValues,
+      invalidValues,
+      totalIssues,
+      qualityScore: Math.round(qualityScore * 10) / 10
+    },
+    columnStats
+  };
+}
 
 const calculateAverage = (values: number[]) =>
   values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
@@ -535,7 +710,7 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
     }
   }
 
-  return dedupeCharts(charts).slice(0, 6);
+  return dedupeCharts(charts).slice(0, 12);
 };
 
 export const generateAnalyticsHealthSummary = (data: Dataset): AnalyticsHealthSummary => {

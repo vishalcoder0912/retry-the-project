@@ -147,43 +147,49 @@ const DataTablePage = () => {
   };
 
   return (
-    <div className="flex h-full flex-col space-y-6 px-10 py-10">
+    <div className="flex h-full flex-col space-y-6 p-8">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="terminal-label">2.0 Data Master Table</p>
-          <p className="mt-3 text-sm uppercase tracking-[0.08em] text-muted-foreground">
-            Total Records: {sorted.length.toLocaleString()} // source: local registry
+          <h2 className="text-xl font-semibold text-foreground">Data Table</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {sorted.length.toLocaleString()} records
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="relative w-80">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
-            placeholder="Search registry..."
-            className="h-16 rounded-none border-border bg-background pl-12 text-base font-mono uppercase tracking-[0.08em]"
-          />
-        </div>
-          <button className="terminal-button gap-2"><Filter className="h-4 w-4" />Filter</button>
-          <button className="terminal-button-inverse gap-2"><Download className="h-4 w-4" />Export</button>
+        <div className="flex items-center gap-3">
+          <div className="relative w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+              placeholder="Search..."
+              className="h-10 rounded-lg border-border/50 bg-background pl-10"
+            />
+          </div>
+          <Button variant="outline" className="rounded-lg gap-2">
+            <Filter className="h-4 w-4" />
+            Filter
+          </Button>
+          <Button variant="outline" className="rounded-lg gap-2">
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
         </div>
       </div>
 
-      <div className="terminal-panel flex flex-1 flex-col overflow-hidden">
-        <div className="overflow-auto flex-1">
+      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+        <div className="overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 z-10 bg-primary text-primary-foreground">
-              <tr className="border-b border-border">
-                <th className="w-12 py-4 px-4 text-left font-mono font-medium uppercase tracking-[0.08em]">#</th>
+            <thead className="sticky top-0 z-10 bg-muted/50">
+              <tr className="border-b border-border/50">
+                <th className="w-12 py-3 px-4 text-left text-xs font-medium text-muted-foreground">#</th>
                 {dataset.columns.map((col) => (
                   <th
                     key={col.name}
                     onClick={() => handleSort(col.name)}
-                    className="cursor-pointer select-none px-4 py-4 text-left font-mono font-medium uppercase tracking-[0.08em]"
+                    className="cursor-pointer select-none px-4 py-3 text-left text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <div className="flex items-center gap-1.5">
                       {col.name}
@@ -197,14 +203,14 @@ const DataTablePage = () => {
               {pageRows.map((row, rowIdx) => {
                 const globalIdx = page * pageSize + rowIdx;
                 return (
-                  <tr key={globalIdx} className="border-b border-border/70 group">
-                    <td className="px-4 py-4 font-mono text-muted-foreground/80">{globalIdx + 1}</td>
+                  <tr key={globalIdx} className="border-b border-border/30 hover:bg-muted/30 transition-colors group">
+                    <td className="px-4 py-3 text-muted-foreground/80">{globalIdx + 1}</td>
                     {dataset.columns.map((col) => {
                       const isEditing = editingCell?.row === globalIdx && editingCell?.col === col.name;
 
                       if (isEditing) {
                         return (
-                          <td key={col.name} className="py-1 px-2">
+                          <td key={col.name} className="py-2 px-2">
                             <div className="flex items-center gap-1">
                               <input
                                 autoFocus
@@ -214,13 +220,13 @@ const DataTablePage = () => {
                                   if (e.key === 'Enter') void commitEdit();
                                   if (e.key === 'Escape') cancelEdit();
                                 }}
-                                className="w-full border border-border bg-background px-2 py-2 text-xs font-mono uppercase tracking-[0.08em] text-foreground outline-none"
+                                className="w-full border border-border rounded-md px-2 py-1.5 text-sm bg-background outline-none focus:border-primary"
                               />
-                              <button onClick={() => { void commitEdit(); }} className="p-0.5 hover:text-primary text-muted-foreground">
-                                <Check className="w-3.5 h-3.5" />
+                              <button onClick={() => { void commitEdit(); }} className="p-1 hover:text-green-600 text-muted-foreground">
+                                <Check className="w-4 h-4" />
                               </button>
-                              <button onClick={cancelEdit} className="p-0.5 hover:text-destructive text-muted-foreground">
-                                <X className="w-3.5 h-3.5" />
+                              <button onClick={cancelEdit} className="p-1 hover:text-red-500 text-muted-foreground">
+                                <X className="w-4 h-4" />
                               </button>
                             </div>
                           </td>
@@ -231,16 +237,10 @@ const DataTablePage = () => {
                         <td
                           key={col.name}
                           onClick={() => startEdit(rowIdx, col.name)}
-                          className={`relative cursor-pointer px-4 py-4 font-mono uppercase tracking-[0.06em] group/cell ${
-                            col.name.toLowerCase().includes('salary')
-                              ? 'text-success'
-                              : col.name.toLowerCase().includes('class') || col.name.toLowerCase().includes('education')
-                                ? 'text-accent'
-                                : 'text-foreground'
-                          }`}
+                          className="relative cursor-pointer px-4 py-3 text-sm group/cell hover:text-foreground"
                         >
                           <span>{typeof row[col.name] === 'number' ? row[col.name].toLocaleString() : String(row[col.name])}</span>
-                          <Pencil className="w-3 h-3 text-muted-foreground/0 group-hover/cell:text-muted-foreground/50 absolute right-2 top-1/2 -translate-y-1/2 transition-colors" />
+                          <Pencil className="w-3 h-3 text-muted-foreground/0 group-hover/cell:text-muted-foreground/50 absolute right-3 top-1/2 -translate-y-1/2 transition-colors" />
                         </td>
                       );
                     })}
@@ -251,29 +251,29 @@ const DataTablePage = () => {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-border px-6 py-5 bg-card">
+        <div className="flex items-center justify-between border-t border-border/50 px-4 py-3 bg-muted/20">
           <div className="flex items-center gap-3">
-            <span className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Rows per page</span>
+            <span className="text-sm text-muted-foreground">Rows per page</span>
             <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(0); }}>
-              <SelectTrigger className="h-10 w-[90px] rounded-none border-border bg-transparent text-xs font-mono uppercase tracking-[0.08em]">
+              <SelectTrigger className="h-8 w-[80px] rounded-md border-border/50 bg-background">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {PAGE_SIZES.map((size) => (
-                  <SelectItem key={size} value={String(size)} className="text-xs font-mono">{size}</SelectItem>
+                  <SelectItem key={size} value={String(size)}>{size}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs uppercase tracking-[0.08em] text-muted-foreground font-mono">
+            <span className="text-sm text-muted-foreground">
               {(page * pageSize + 1).toLocaleString()}-{Math.min((page + 1) * pageSize, sorted.length).toLocaleString()} of {sorted.length.toLocaleString()}
             </span>
-            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-none border border-border" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-md" disabled={page === 0} onClick={() => setPage((current) => current - 1)}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-none border border-border" disabled={page >= totalPages - 1} onClick={() => setPage((current) => current + 1)}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-md" disabled={page >= totalPages - 1} onClick={() => setPage((current) => current + 1)}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>

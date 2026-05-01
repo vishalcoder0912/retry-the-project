@@ -1,38 +1,31 @@
-import { callOllamaAI } from './apps/backend/src/services/ollama-service.js';
-import { callGeminiAI } from './apps/backend/src/services/gemini-ai-service.js';
+import { config } from 'dotenv';
+config();
+import { ollamaService } from './apps/backend/src/services/ai-providers/ollama-service.js';
 
-// Load .env variables since we are running this script directly
-import dotenv from 'dotenv';
-dotenv.config();
+async function testOllama() {
+  console.log('Testing Ollama API Integration...');
+  console.log('Model configured:', process.env.OLLAMA_MODEL || 'llama3.2:latest');
 
-async function test() {
-  const dataset = {
-    name: 'Test Dataset',
-    rowCount: 100,
-    columns: [
-      { name: 'id', type: 'number' },
-      { name: 'department', type: 'string' },
-      { name: 'salary', type: 'number' }
-    ]
-  };
-  
-  console.log("===============================");
-  console.log("1. Testing Ollama AI...");
-  const startOllama = Date.now();
-  const ollamaResponse = await callOllamaAI(dataset, "What is the average salary by department?");
-  console.log(`⏱️ Took ${Date.now() - startOllama}ms`);
-  console.log(ollamaResponse);
-  
-  console.log("\n===============================");
-  console.log("2. Testing Gemini AI...");
-  const startGemini = Date.now();
   try {
-    const geminiResponse = await callGeminiAI(dataset, "What is the average salary by department?");
-    console.log(`⏱️ Took ${Date.now() - startGemini}ms`);
-    console.log(geminiResponse);
-  } catch (error) {
-    console.log("Gemini failed:", error.message);
+    const isAvailable = await ollamaService.isAvailable();
+    console.log('Ollama is Available:', isAvailable);
+
+    if (isAvailable) {
+      console.log('Testing Connection/Version...');
+      const connectionData = await ollamaService.testConnection();
+      console.log('Connection Info:', connectionData);
+
+      console.log('\nTesting generateResponse...');
+      const response = await ollamaService.generateResponse('Hello, tell me a short joke about data analysis.', {
+        dataset: { name: 'Test Dataset', rowCount: 100 },
+        schema: { columns: [] },
+        query: 'test query'
+      });
+      console.log('Response:', response);
+    }
+  } catch (err) {
+    console.error('Error during test:', err.message);
   }
 }
 
-test();
+testOllama();
