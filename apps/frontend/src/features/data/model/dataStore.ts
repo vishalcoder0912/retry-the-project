@@ -63,9 +63,13 @@ export interface DatasetAnalysis {
 }
 
 export interface KPI {
-  label: string;
+  title: string;
   value: string;
   change?: number;
+  trend?: "up" | "down" | "stable";
+  status?: "good" | "warning" | "critical";
+  insight?: string;
+  sparkline?: number[];
   icon: string;
 }
 
@@ -90,6 +94,15 @@ export interface ChatMessage {
   chart?: ChartConfig;
   insights?: string[];
   timestamp: Date;
+  usedAI?: boolean;
+  model?: string;
+  confidence?: number;
+  intent?: string;
+  reason?: string;
+  metadata?: {
+    durationMs?: number;
+    dataQualityScore?: number;
+  };
 }
 
 export interface AnalyticsHealthSummary {
