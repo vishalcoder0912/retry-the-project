@@ -11,6 +11,23 @@ const iconMap: Record<string, React.ElementType> = {
   rows: Table2,
   columns: Columns3,
   chart: BarChart3,
+  shield: Shield,
+  globe: Globe,
+  code: Code,
+  alert: AlertTriangle,
+  risk: Siren,
+};
+
+const statusColors: Record<string, string> = {
+  good: 'border-success/40 bg-success/10 text-success',
+  warning: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-500',
+  critical: 'border-destructive/40 bg-destructive/10 text-destructive',
+};
+
+const trendColors: Record<string, string> = {
+  up: 'text-success',
+  down: 'text-destructive',
+  stable: 'text-muted-foreground',
 };
 
 interface KPICardProps {
@@ -20,7 +37,18 @@ interface KPICardProps {
 
 const KPICard = ({ kpi, index }: KPICardProps) => {
   const Icon = iconMap[kpi.icon] || DollarSign;
-  const isPositive = (kpi.change ?? 0) >= 0;
+  const trend = kpi.trend ?? 'stable';
+  const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
+  const statusClass = kpi.status ? statusColors[kpi.status] : 'border-border bg-card text-muted-foreground';
+  const sparklineValues = kpi.sparkline ?? [];
+  const maxValue = sparklineValues.length > 0 ? Math.max(...sparklineValues) : 0;
+  const minValue = sparklineValues.length > 0 ? Math.min(...sparklineValues) : 0;
+  const range = maxValue - minValue || 1;
+  const points = sparklineValues.map((value, pointIndex) => {
+    const x = sparklineValues.length === 1 ? 100 : (pointIndex / Math.max(sparklineValues.length - 1, 1)) * 100;
+    const y = 28 - (((value - minValue) / range) * 24);
+    return `${x},${y}`;
+  }).join(' ');
 
   const colorSchemes = [
     { bg: 'bg-blue-50', border: 'border-blue-100', icon: 'text-blue-600', trend: 'text-blue-600', trendBg: 'bg-blue-50' },

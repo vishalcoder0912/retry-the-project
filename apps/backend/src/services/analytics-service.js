@@ -26,14 +26,83 @@ import { ollamaAIService, isOllamaConfigured, callOllamaAI } from "./ollama-ai-s
 import { sanitizeQueryContext, validateSchemaOnlyContext } from '../utils/schema-extractor.js';
 import { handleSmartQuery } from './smart-query-handler.js';
 
+import { callOllamaAI, isOllamaConfigured } from "./ollama-ai-service.js";
+import { buildSchemaPacket, formatSchemaForPrompt } from "./schema-packet-builder.js";
+
 // Re-export for backward compatibility
 export { normalizeColumns, generateDemoDataset, buildDatasetSchema };
 
-const isGreetingQuery = (query) => {
+/**
+ * Validate and fix AI-generated SQL to use correct values from dataset
+ */
+export function validateAndFixSQL(dataset, sql) {
+  if (!sql || !dataset?.rows?.length) {
+    return sql;
+  }
+
+  try {
+    const whereMatch = sql.match(/WHERE\s+(\w+)\s*=\s*['"]([^'"]+)['"]/gi);
+    if (!whereMatch) {
+      return sql;
+    }
+
+    const columnName = sql.match(/WHERE\s+(\w+)\s*=/i)?.[1];
+    if (!columnName) {
+      return sql;
+    }
+
+    const actualValues = new Set();
+    for (const row of dataset.rows) {
+      const val = row[columnName];
+      if (val !== null && val !== undefined && String(val).trim()) {
+        actualValues.add(String(val).trim().toLowerCase());
+      }
+    }
+
+    if (actualValues.size === 0) {
+      return sql;
+    }
+
+    let fixedSQL = sql;
+    for (const match of whereMatch) {
+      const valueMatch = match.match(/WHERE\s+(\w+)\s*=\s*['"]([^'"]+)['"]/i);
+      if (!valueMatch) continue;
+
+      const [, col, value] = valueMatch;
+      const normalizedValue = value.trim().toLowerCase();
+
+      if (!actualValues.has(normalizedValue)) {
+        const matchingValue = [...actualValues].find((v) => {
+          if (normalizedValue === "some college" && v === "high school") return true;
+          if (normalizedValue === "high school" && v === "some college") return true;
+          if (normalizedValue === "master" && v === "masters") return true;
+          if (normalizedValue === "masters" && v === "master") return true;
+          return v.includes(normalizedValue) || normalizedValue.includes(v);
+        });
+
+        if (matchingValue) {
+          console.log(`[analytics] 🔧 Fixing SQL value: '${value}' -> '${matchingValue}'`);
+          fixedSQL = fixedSQL.replace(/WHERE\s+\w+\s*=\s*['"][^'"]+['"]/i, `WHERE ${col} = '${matchingValue}'`);
+        }
+      }
+    }
+
+    return fixedSQL;
+  } catch (error) {
+    console.warn("[analytics] SQL validation error:", error.message);
+    return sql;
+  }
+}
+
+export const isGreetingQuery = (query) => {
   const normalizedQuery = normalizeText(query);
 
   return /^(hello|hi|hey|hola|good morning|good afternoon|good evening)( there)?$/.test(normalizedQuery);
 };
+
+const isDatasetHelpQuery = (normalizedQuery) =>
+  /\b(help|ask|question|questions|query|queries|prompt|prompts|analyse|analyze)\b/.test(normalizedQuery)
+  && /\b(dataset|data|table|file|column|columns)\b/.test(normalizedQuery);
 
 const singularizeWord = (word) => {
   if (word.length <= 3) return word;
@@ -55,6 +124,23 @@ const includesPhrase = (source, phrase) => {
   return (` ${source} `).includes(` ${phrase} `);
 };
 
+export const isDatasetOverviewQuery = (normalizedQuery) =>
+  /\b(what|waht|which|describe|explain|summary|summarize|overview|about)\b/.test(normalizedQuery)
+  && /\b(dataset|data|table|file)\b/.test(normalizedQuery);
+
+export const classifyChatQuery = (query) => {
+  const normalizedQuery = normalizeText(query);
+
+  if (isGreetingQuery(query)) {
+    return "greeting";
+  }
+
+  if (isDatasetOverviewQuery(normalizedQuery) || isDatasetHelpQuery(normalizedQuery)) {
+    return "dataset-help";
+  }
+
+  return "analysis";
+};
 
 const pickDimensionForQuery = (schema, queryLower) => {
   const dimensions = schema.columns.filter((column) => column.role === "dimension");
@@ -125,6 +211,17 @@ const buildAnalysisPlan = (dataset, schema, query) => {
   const mentionsMetric = schema.columns
     .filter((column) => column.role === "metric")
     .some((column) => includesPhrase(normalizedQuery, normalizeText(column.name)));
+  const overviewQuery = isDatasetOverviewQuery(normalizedQuery);
+
+  if (overviewQuery) {
+    return {
+      mode: "overview",
+      metric,
+      dimension: schema.primaryDimension ?? dimension,
+      chartType: "bar",
+      intent: "overview",
+    };
+  }
 
   if ((queryLower.includes("trend") || queryLower.includes("monthly") || queryLower.includes("over time")) && schema.primaryDimension) {
     const trendDimension = schema.columns.find((column) => column.name === schema.primaryDimension.name && (column.type === "date" || column.name === "month"))
@@ -203,6 +300,21 @@ const buildAnalysisPlan = (dataset, schema, query) => {
 };
 
 const materializePlan = (dataset, plan) => {
+  if (plan.mode === "overview" && plan.dimension) {
+    const data = countRowsByDimension(dataset.rows, plan.dimension).slice(0, 8);
+    if (data.length === 0) {
+      return null;
+    }
+
+    return {
+      type: data.length <= 6 ? "pie" : "bar",
+      title: `Dataset overview by ${humanize(plan.dimension.name)}`,
+      xKey: plan.dimension.name,
+      yKey: "count",
+      data,
+    };
+  }
+
   if (plan.mode === "metricByDimension" && plan.metric && plan.dimension) {
     const data = groupMetricByDimension(dataset.rows, plan.dimension, plan.metric, plan.aggregation);
     return {
@@ -241,6 +353,10 @@ const materializePlan = (dataset, plan) => {
 };
 
 const buildSqlForPlan = (plan) => {
+  if (plan.mode === "overview") {
+    return null;
+  }
+
   if (plan.mode === "metricByDimension" && plan.metric && plan.dimension) {
     const aggregationSql = plan.aggregation === "average" ? "AVG" : "SUM";
     return `SELECT ${plan.dimension.name}, ${aggregationSql}(${plan.metric.name}) AS ${plan.metric.name} FROM dataset_rows GROUP BY ${plan.dimension.name} ORDER BY ${plan.metric.name} DESC;`;
@@ -267,6 +383,9 @@ const buildInsightsFromSchema = (schema, plan) => {
 
   if (plan.mode === "metricByDimension" && plan.metric && plan.dimension) {
     base.push(`This response used the schema to pair metric \`${plan.metric.name}\` with dimension \`${plan.dimension.name}\`.`);
+  } else if (plan.mode === "overview") {
+    const primaryDimension = plan.dimension?.name ? `\`${plan.dimension.name}\`` : "the primary categorical columns";
+    base.push(`This response summarizes the dataset structure and highlights ${primaryDimension} as the main grouping field.`);
   } else if (plan.mode === "countByDimension" && plan.dimension) {
     base.push(`This response used the schema to count records by \`${plan.dimension.name}\` without sending row values to any AI system.`);
   } else if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && plan.matchValues.length > 0) {
@@ -279,14 +398,46 @@ const buildInsightsFromSchema = (schema, plan) => {
 
 export const createChatResponse = async (dataset, query) => {
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
+  const schema = buildDatasetSchema(analyticsDataset);
+  const queryType = classifyChatQuery(query);
 
-  if (isGreetingQuery(query)) {
+  if (queryType === "greeting") {
+    const chart = materializePlan(analyticsDataset, {
+      mode: "overview",
+      metric: schema.primaryMetric,
+      dimension: schema.primaryDimension ?? schema.secondaryDimension,
+      chartType: "bar",
+      intent: "overview",
+    });
+    const guided = buildGuidedDatasetResponse(schema, chart);
+
     return {
       content: "Hello! I'm here to help you analyze your data. What would you like to explore?",
       sql: null,
-      chart: null,
-      insights: [],
-      schema: buildDatasetSchema(analyticsDataset),
+      chart,
+      insights: guided.insights,
+      schema,
+      intent: "greeting",
+    };
+  }
+
+  if (queryType === "dataset-help") {
+    const chart = materializePlan(analyticsDataset, {
+      mode: "overview",
+      metric: schema.primaryMetric,
+      dimension: schema.primaryDimension ?? schema.secondaryDimension,
+      chartType: "bar",
+      intent: "overview",
+    });
+    const guided = buildGuidedDatasetResponse(schema, chart);
+
+    return {
+      content: guided.content,
+      sql: null,
+      chart,
+      insights: guided.insights,
+      schema,
+      intent: "overview",
     };
   }
 
@@ -403,11 +554,23 @@ export const createChatResponse = async (dataset, query) => {
   const chart = materializePlan(analyticsDataset, plan);
 
   let content = `I analyzed the ${schema.datasetName} schema and used it to select an appropriate ${chart?.type ?? "summary"} view.`;
-  if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && chart?.data?.length) {
+
+  if (plan.mode === "overview") {
+    content = buildOverviewContent(schema, chart);
+  } else if (plan.mode === "countMatchingValues" && plan.dimension && Array.isArray(plan.matchValues) && chart?.data?.length) {
     const total = chart.data.reduce((sum, item) => sum + Number(item.count ?? 0), 0);
     const breakdown = chart.data.map((item) => `${item[plan.dimension.name]}: ${Number(item.count ?? 0).toLocaleString()}`).join("; ");
     const valueList = plan.matchValues.map((value) => `"${value}"`).join(" and ");
-    content = `${total.toLocaleString()} records match ${humanize(plan.dimension.name)} = ${valueList}. ${breakdown}.`;
+    const percentage = ((total / schema.rowCount) * 100).toFixed(1);
+    content = `Found ${total.toLocaleString()} records (${percentage}%) matching ${humanize(plan.dimension.name)} = ${valueList} out of ${schema.rowCount.toLocaleString()} total records. Breakdown: ${breakdown}.`;
+  } else if (plan.mode === "countByDimension" && plan.dimension && chart?.data?.length) {
+    const total = chart.data.reduce((sum, item) => sum + Number(item.count ?? 0), 0);
+    const topItems = chart.data.slice(0, 5).map((item) => `${item[plan.dimension.name]}: ${Number(item.count ?? 0).toLocaleString()}`).join(", ");
+    content = `Counted ${total.toLocaleString()} records by ${humanize(plan.dimension.name)}. Top categories: ${topItems}.`;
+  } else if (plan.mode === "metricByDimension" && plan.metric && plan.dimension && chart?.data?.length) {
+    const total = chart.data.reduce((sum, item) => sum + Number(item[plan.metric.name] ?? 0), 0);
+    const avg = chart.data.length > 0 ? (total / chart.data.length).toFixed(2) : 0;
+    content = `Aggregated ${humanize(plan.metric.name)} by ${humanize(plan.dimension.name)} using ${plan.aggregation}. Total: ${Number(total).toLocaleString()}, Average: ${avg}.`;
   }
 
   return {
