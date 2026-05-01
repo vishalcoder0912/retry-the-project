@@ -1,5 +1,9 @@
 import initSqlJs from "sql.js";
 import { randomUUID } from "node:crypto";
+import logger from "../src/utils/logger.js";
+import { buildEnhancedSchema, classifyColumns, smartAutoChartGeneration, smartAutoChartGenerationForSingle, smartAutoChartGenerationForMerged } from "../src/services/schema-detector.js";
+import { aiAnalyzer } from "../src/services/ai-analyzer.js";
+import { buildUnifiedSchema, mergeDatasets } from "../src/services/data-merger.js";
 
 let db = null;
 let dbReady = null;
@@ -226,7 +230,16 @@ const generateCorrelationAnalysis = (ds) => {
 const sendJson = (statusCode, payload, headers = {}) => {
   return new Response(JSON.stringify(payload), {
     status: statusCode,
-    headers: { "Content-Type": "application/json; charset=utf-8", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "Content-Type", "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS", ...headers },
+    headers: { 
+      "Content-Type": "application/json; charset=utf-8", 
+      "Access-Control-Allow-Origin": "*", 
+      "Access-Control-Allow-Headers": "Content-Type", 
+      "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "X-XSS-Protection": "1; mode=block",
+      ...headers 
+    },
   });
 };
 
@@ -235,76 +248,333 @@ const readJsonBody = async (request) => {
 };
 
 export async function GET(request) {
-  await initDB();
-  const url = new URL(request.url);
-  const pathname = url.pathname;
-  if (pathname === "/api/health") return sendJson(200, { status: "ok", database: "SQLite" });
-  if (pathname === "/api/state") {
-    const currentDatasetId = getCurrentDatasetId();
-    return sendJson(200, { dataset: currentDatasetId ? getDatasetById(currentDatasetId) : null, chatMessages: currentDatasetId ? getChatMessages(currentDatasetId) : [] });
+  const startTime = Date.now();
+  try {
+    await initDB();
+    const url = new URL(request.url);
+    const pathname = url.pathname;
+    if (pathname === "/api/health") return sendJson(200, { status: "ok", database: "SQLite" });
+    if (pathname === "/api/state") {
+      const currentDatasetId = getCurrentDatasetId();
+      return sendJson(200, { dataset: currentDatasetId ? getDatasetById(currentDatasetId) : null, chatMessages: currentDatasetId ? getChatMessages(currentDatasetId) : [] });
+    }
+    const schemaMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema$/);
+    if (schemaMatch) { const ds = getDatasetById(schemaMatch[1]); return ds ? sendJson(200, { schema: buildDatasetSchema(ds) }) : sendJson(404, { error: "Not found" }); }
+    const aiCorrMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai-correlations$/);
+    if (aiCorrMatch) { const ds = getDatasetById(aiCorrMatch[1]); return ds ? sendJson(200, generateCorrelationAnalysis(ds)) : sendJson(404, { error: "Not found" }); }
+    return sendJson(404, { error: "Route not found" });
+  } catch (error) {
+    logger.error("GET request failed", { pathname: new URL(request.url).pathname, error: error.message });
+    return sendJson(500, { error: "Internal server error" });
+  } finally {
+    logger.logRequest("GET", new URL(request.url).pathname, 200, Date.now() - startTime);
   }
-  const schemaMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema$/);
-  if (schemaMatch) { const ds = getDatasetById(schemaMatch[1]); return ds ? sendJson(200, { schema: buildDatasetSchema(ds) }) : sendJson(404, { error: "Not found" }); }
-  const aiCorrMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/ai-correlations$/);
-  if (aiCorrMatch) { const ds = getDatasetById(aiCorrMatch[1]); return ds ? sendJson(200, generateCorrelationAnalysis(ds)) : sendJson(404, { error: "Not found" }); }
-  return sendJson(404, { error: "Route not found" });
 }
 
 export async function POST(request) {
-  await initDB();
+  const startTime = Date.now();
   const pathname = new URL(request.url).pathname;
-  const body = await readJsonBody(request);
-  
-  if (pathname === "/api/datasets/demo") {
-    const demo = generateDemoDataset();
-    const id = randomUUID();
-    db.run("INSERT INTO datasets VALUES (?,?,?,?,?,?,?,?,?)", [id, demo.name, demo.sourceType, demo.fileName, new Date().toISOString(), demo.rows.length, demo.columns.length, JSON.stringify(demo.columns), JSON.stringify(demo.rows)]);
-    setCurrentDatasetId(id);
-    return sendJson(201, { dataset: getDatasetById(id), chatMessages: [] });
+  try {
+    await initDB();
+    const body = await readJsonBody(request);
+    
+    if (pathname === "/api/datasets/demo") {
+      const demo = generateDemoDataset();
+      const id = randomUUID();
+      db.run("INSERT INTO datasets VALUES (?,?,?,?,?,?,?,?,?)", [id, demo.name, demo.sourceType, demo.fileName, new Date().toISOString(), demo.rows.length, demo.columns.length, JSON.stringify(demo.columns), JSON.stringify(demo.rows)]);
+      setCurrentDatasetId(id);
+      
+      const dataset = getDatasetById(id);
+      console.log('[DEMO] Columns:', demo.columns.length, 'Rows:', demo.rows.length);
+      
+      let analysisResult = null;
+      try {
+        console.log('[DEMO] Running AI analysis...');
+        analysisResult = await aiAnalyzer.analyzeDataset(demo.columns, demo.rows);
+        console.log('[DEMO] AI result:', analysisResult ? 'received' : 'null');
+      } catch (error) {
+        console.log('[DEMO] AI analysis error:', error.message);
+        try {
+          const schema = buildEnhancedSchema(demo.columns, demo.rows);
+          console.log('[DEMO] Schema result:', schema.dataType);
+          analysisResult = {
+            schema,
+            chartRecommendations: schema.recommendedCharts || [],
+            insights: schema.insights || []
+          };
+        } catch (e) {
+          console.log('[DEMO] Schema error:', e.message);
+        }
+      }
+      
+      console.log('[DEMO] Final analysisResult:', analysisResult ? 'present' : 'null');
+      
+      const analysisOutput = analysisResult ? {
+        dataType: analysisResult.schema?.dataType || 'SALES',
+        dataTypeLabel: analysisResult.schema?.dataTypeLabel || 'Sales Data',
+        chartRecommendations: analysisResult.chartRecommendations || [],
+        insights: analysisResult.insights || [],
+        aiInsights: analysisResult.aiInsights
+      } : null;
+      
+      console.log('[DEMO] Sending response with analysis:', analysisOutput ? 'yes' : 'no');
+      
+      return sendJson(201, { 
+        dataset, 
+        chatMessages: [],
+        analysis: analysisOutput
+      });
+    }
+    
+    if (pathname === "/api/datasets/import") {
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      if (rows.length === 0) return sendJson(400, { error: "Dataset must contain at least one row" });
+      const columns = normalizeColumns(rows, Array.isArray(body.columns) ? body.columns : []);
+      const id = randomUUID();
+      db.run("INSERT INTO datasets VALUES (?,?,?,?,?,?,?,?,?)", [id, body.name || "Uploaded Dataset", body.sourceType || "upload", body.fileName || null, new Date().toISOString(), rows.length, columns.length, JSON.stringify(columns), JSON.stringify(rows)]);
+      setCurrentDatasetId(id);
+      
+      const dataset = getDatasetById(id);
+      
+      logger.info("Running auto-analysis on imported dataset", { datasetId: id, rowCount: rows.length, columnCount: columns.length });
+      
+      let analysisResult = null;
+      try {
+        analysisResult = await aiAnalyzer.analyzeDataset(columns, rows);
+        logger.info("Auto-analysis completed", { 
+          dataType: analysisResult.schema.dataType, 
+          chartCount: analysisResult.chartRecommendations?.length || 0,
+          insightCount: analysisResult.insights?.length || 0
+        });
+      } catch (error) {
+        logger.warn("Auto-analysis failed, using schema detection only", { error: error.message });
+        try {
+          const schema = buildEnhancedSchema(columns, rows);
+          analysisResult = {
+            schema,
+            chartRecommendations: schema.recommendedCharts || [],
+            insights: schema.insights || [],
+            aiInsights: null,
+            generatedAt: new Date().toISOString()
+          };
+        } catch (schemaError) {
+          logger.error("Schema detection also failed", { error: schemaError.message });
+        }
+      }
+      
+      logger.info("Running automatic chart generation", { rowCount: rows.length });
+      
+      let autoGeneratedCharts = [];
+      try {
+        const columnClassification = classifyColumns(rows);
+        autoGeneratedCharts = smartAutoChartGenerationForSingle(rows, columnClassification);
+        logger.info("Auto-generated charts", { count: autoGeneratedCharts.length, pipeline: 'single-file' });
+      } catch (autoError) {
+        logger.warn("Auto chart generation failed", { error: autoError.message });
+      }
+      
+      const allCharts = [...(analysisResult?.chartRecommendations || []), ...autoGeneratedCharts];
+      const seen = new Set();
+      const uniqueCharts = allCharts.filter(chart => {
+        if (seen.has(chart.title)) return false;
+        seen.add(chart.title);
+        return true;
+      }).slice(0, 10);
+      
+      const response = {
+        dataset: dataset,
+        chatMessages: [],
+        pipeline: 'single-file',
+        analysis: analysisResult ? {
+          dataType: analysisResult.schema?.dataType || 'GENERAL',
+          dataTypeLabel: analysisResult.schema?.dataTypeLabel || 'Generic Data',
+          chartRecommendations: uniqueCharts,
+          insights: analysisResult.insights || [],
+          aiInsights: analysisResult.aiInsights
+        } : null
+      };
+      
+      return sendJson(201, response);
+    }
+
+    if (pathname === "/api/datasets/merge") {
+      const datasets = Array.isArray(body.datasets) ? body.datasets : [];
+      if (datasets.length === 0) return sendJson(400, { error: "At least one dataset is required for merging" });
+      if (datasets.length === 1) {
+        const rows = datasets[0].rows || [];
+        const columns = normalizeColumns(rows, datasets[0].columns || []);
+        const id = randomUUID();
+        db.run("INSERT INTO datasets VALUES (?,?,?,?,?,?,?,?,?)", [id, datasets[0].name || "Uploaded Dataset", "upload", datasets[0].fileName || null, new Date().toISOString(), rows.length, columns.length, JSON.stringify(columns), JSON.stringify(rows)]);
+        setCurrentDatasetId(id);
+        const dataset = getDatasetById(id);
+        
+        let analysisResult = null;
+        try {
+          analysisResult = await aiAnalyzer.analyzeDataset(columns, rows);
+        } catch (error) {
+          logger.warn("Merge analysis failed", { error: error.message });
+          try {
+            const schema = buildEnhancedSchema(columns, rows);
+            analysisResult = { schema, chartRecommendations: schema.recommendedCharts || [], insights: schema.insights || [] };
+          } catch (e) {}
+        }
+        
+        return sendJson(201, {
+          dataset,
+          chatMessages: [],
+          analysis: analysisResult ? { dataType: analysisResult.schema?.dataType || 'GENERAL', dataTypeLabel: analysisResult.schema?.dataTypeLabel || 'Merged Data', chartRecommendations: analysisResult.chartRecommendations || [], insights: analysisResult.insights || [] } : null
+        });
+      }
+
+      logger.info("Merging multiple datasets", { count: datasets.length, names: datasets.map(d => d.name).join(', ') });
+      
+      const unified = buildUnifiedSchema(datasets);
+      if (!unified || !unified.mergedDataset) {
+        return sendJson(400, { error: "Failed to merge datasets" });
+      }
+
+      const mergedDataset = unified.mergedDataset;
+      const mergedColumns = normalizeColumns(mergedDataset.rows, mergedDataset.columns);
+      const id = randomUUID();
+      
+      db.run("INSERT INTO datasets VALUES (?,?,?,?,?,?,?,?,?)", [
+        id,
+        mergedDataset.name,
+        "merged",
+        JSON.stringify(datasets.map(d => d.fileName || d.name)),
+        new Date().toISOString(),
+        mergedDataset.rows.length,
+        mergedColumns.length,
+        JSON.stringify(mergedColumns),
+        JSON.stringify(mergedDataset.rows)
+      ]);
+      
+      setCurrentDatasetId(id);
+      const savedDataset = getDatasetById(id);
+      
+      logger.info("Running AI analysis on merged dataset", { datasetId: id, rowCount: mergedDataset.rows.length, columnCount: mergedColumns.length });
+      
+      let analysisResult = null;
+      try {
+        analysisResult = await aiAnalyzer.analyzeDataset(mergedColumns, mergedDataset.rows);
+        if (analysisResult && analysisResult.schema) {
+          analysisResult.schema.dataTypeLabel = mergedDataset.name;
+        }
+        logger.info("Merged dataset analysis completed", { dataType: analysisResult?.schema?.dataType, chartCount: analysisResult?.chartRecommendations?.length || 0 });
+      } catch (error) {
+        logger.warn("AI analysis failed on merged data", { error: error.message });
+      }
+      
+      if (!analysisResult) {
+        try {
+          const schema = buildEnhancedSchema(mergedColumns, mergedDataset.rows);
+          schema.dataTypeLabel = "Merged Dataset";
+          analysisResult = {
+            schema,
+            chartRecommendations: schema.recommendedCharts || [],
+            insights: schema.insights || []
+          };
+          logger.info("Schema-based analysis completed", { dataType: schema.dataType, chartCount: schema.recommendedCharts?.length || 0 });
+        } catch (e) {
+          logger.error("Schema detection also failed", { error: e.message });
+        }
+      }
+
+      const finalDataType = analysisResult?.schema?.dataType || unified.detectedDataTypes?.[0]?.type || 'GENERAL';
+      const finalDataTypeLabel = analysisResult?.schema?.dataTypeLabel || 'Merged Dataset';
+      
+      const chartRecommendations = analysisResult?.chartRecommendations || [];
+      const insights = analysisResult?.insights || [];
+      
+      logger.info("Running automatic chart generation for merged dataset", { rowCount: mergedDataset.rows.length, columnCount: mergedColumns.length });
+      
+      let autoGeneratedCharts = [];
+      try {
+        const columnClassification = classifyColumns(mergedDataset.rows);
+        autoGeneratedCharts = smartAutoChartGenerationForMerged(mergedDataset.rows, columnClassification);
+        logger.info("Auto-generated charts", { count: autoGeneratedCharts.length, chartTypes: autoGeneratedCharts.map(c => c.type), pipeline: 'multi-file-merged' });
+      } catch (autoError) {
+        logger.warn("Auto chart generation failed", { error: autoError.message });
+      }
+      
+const allCharts = [...chartRecommendations, ...autoGeneratedCharts];
+      const seen = new Set();
+      const uniqueCharts = allCharts.filter(chart => {
+        if (seen.has(chart.title)) return false;
+        seen.add(chart.title);
+        return true;
+      }).slice(0, 10);
+      
+      const mergeSummary = { type: 'summary', title: 'Merge Summary', message: `Combined ${datasets.length} datasets with ${mergedDataset.rows.length} total rows and ${mergedColumns.length} columns` };
+      const allInsights = [mergeSummary, ...insights];
+
+      return sendJson(201, {
+        dataset: savedDataset,
+        chatMessages: [],
+        pipeline: 'multi-file-merged',
+        analysis: {
+          dataType: finalDataType,
+          dataTypeLabel: finalDataTypeLabel,
+          chartRecommendations: uniqueCharts,
+          insights: allInsights,
+          aiInsights: analysisResult?.aiInsights || null,
+          mergeInfo: {
+            originalDatasets: datasets.length,
+            totalRows: mergedDataset.rows.length,
+            commonColumns: unified.summary.commonColumns,
+            uniqueColumns: unified.summary.uniqueColumns,
+            detectedDataTypes: unified.detectedDataTypes
+          }
+        }
+      });
+    }
+    
+    const chatMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/chat$/);
+    if (chatMatch) {
+      const ds = getDatasetById(chatMatch[1]);
+      if (!ds) return sendJson(404, { error: "Dataset not found" });
+      const query = String(body.query || "").trim();
+      if (!query) return sendJson(400, { error: "Query is required" });
+      const analysis = createChatResponse(ds, query);
+      const now = new Date().toISOString();
+      const userId = randomUUID();
+      const assistantId = randomUUID();
+      db.run("INSERT INTO chat_messages VALUES (?,?,?,?,?,?,?,?)", [userId, chatMatch[1], "user", query, null, null, null, now]);
+      db.run("INSERT INTO chat_messages VALUES (?,?,?,?,?,?,?,?)", [assistantId, chatMatch[1], "assistant", analysis.content, analysis.sql || null, analysis.chart ? JSON.stringify(analysis.chart) : null, JSON.stringify(analysis.insights), now]);
+      return sendJson(201, { userMessage: { id: userId, role: "user", content: query, timestamp: now }, assistantMessage: { id: assistantId, role: "assistant", content: analysis.content, chart: analysis.chart, insights: analysis.insights, timestamp: now } });
+    }
+    return sendJson(404, { error: "Route not found" });
+  } catch (error) {
+    logger.error("POST request failed", { pathname, error: error.message });
+    return sendJson(500, { error: "Internal server error" });
+  } finally {
+    logger.logRequest("POST", pathname, 201, Date.now() - startTime);
   }
-  
-  if (pathname === "/api/datasets/import") {
-    const rows = Array.isArray(body.rows) ? body.rows : [];
-    if (rows.length === 0) return sendJson(400, { error: "Dataset must contain at least one row" });
-    const columns = normalizeColumns(rows, Array.isArray(body.columns) ? body.columns : []);
-    const id = randomUUID();
-    db.run("INSERT INTO datasets VALUES (?,?,?,?,?,?,?,?,?)", [id, body.name || "Uploaded Dataset", body.sourceType || "upload", body.fileName || null, new Date().toISOString(), rows.length, columns.length, JSON.stringify(columns), JSON.stringify(rows)]);
-    setCurrentDatasetId(id);
-    return sendJson(201, { dataset: getDatasetById(id), chatMessages: [] });
-  }
-  
-  const chatMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/chat$/);
-  if (chatMatch) {
-    const ds = getDatasetById(chatMatch[1]);
-    if (!ds) return sendJson(404, { error: "Dataset not found" });
-    const query = String(body.query || "").trim();
-    if (!query) return sendJson(400, { error: "Query is required" });
-    const analysis = createChatResponse(ds, query);
-    const now = new Date().toISOString();
-    const userId = randomUUID();
-    const assistantId = randomUUID();
-    db.run("INSERT INTO chat_messages VALUES (?,?,?,?,?,?,?,?)", [userId, chatMatch[1], "user", query, null, null, null, now]);
-    db.run("INSERT INTO chat_messages VALUES (?,?,?,?,?,?,?,?)", [assistantId, chatMatch[1], "assistant", analysis.content, analysis.sql || null, analysis.chart ? JSON.stringify(analysis.chart) : null, JSON.stringify(analysis.insights), now]);
-    return sendJson(201, { userMessage: { id: userId, role: "user", content: query, timestamp: now }, assistantMessage: { id: assistantId, role: "assistant", content: analysis.content, chart: analysis.chart, insights: analysis.insights, timestamp: now } });
-  }
-  return sendJson(404, { error: "Route not found" });
 }
 
 export async function PATCH(request) {
-  await initDB();
+  const startTime = Date.now();
   const pathname = new URL(request.url).pathname;
-  const body = await readJsonBody(request);
-  const rowMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/rows\/([^/]+)$/);
-  if (rowMatch) {
-    const ds = getDatasetById(rowMatch[1]);
-    if (!ds) return sendJson(404, { error: "Dataset not found" });
-    const rowId = Number(rowMatch[2]);
-    if (ds.rows[rowId]) {
-      ds.rows[rowId] = { ...ds.rows[rowId], [body.column]: body.value };
-      db.run("UPDATE datasets SET rows_json = ? WHERE id = ?", [JSON.stringify(ds.rows), rowMatch[1]]);
-      return sendJson(200, { dataset: getDatasetById(rowMatch[1]) });
+  try {
+    await initDB();
+    const body = await readJsonBody(request);
+    const rowMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/rows\/([^/]+)$/);
+    if (rowMatch) {
+      const ds = getDatasetById(rowMatch[1]);
+      if (!ds) return sendJson(404, { error: "Dataset not found" });
+      const rowId = Number(rowMatch[2]);
+      if (ds.rows[rowId]) {
+        ds.rows[rowId] = { ...ds.rows[rowId], [body.column]: body.value };
+        db.run("UPDATE datasets SET rows_json = ? WHERE id = ?", [JSON.stringify(ds.rows), rowMatch[1]]);
+        return sendJson(200, { dataset: getDatasetById(rowMatch[1]) });
+      }
+      return sendJson(404, { error: "Row not found" });
     }
-    return sendJson(404, { error: "Row not found" });
+    return sendJson(404, { error: "Route not found" });
+  } catch (error) {
+    logger.error("PATCH request failed", { pathname, error: error.message });
+    return sendJson(500, { error: "Internal server error" });
+  } finally {
+    logger.logRequest("PATCH", pathname, 200, Date.now() - startTime);
   }
-  return sendJson(404, { error: "Route not found" });
 }

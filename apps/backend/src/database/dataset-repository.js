@@ -114,8 +114,8 @@ const getDatasetRecord = db.prepare("SELECT * FROM datasets WHERE id = ?");
 const getDatasetColumns = db.prepare("SELECT name, type, sample_json FROM dataset_columns WHERE dataset_id = ? ORDER BY id ASC");
 const getDatasetRows = db.prepare("SELECT id, row_index, row_json FROM dataset_rows WHERE dataset_id = ? ORDER BY row_index ASC");
 const getChatMessageRows = db.prepare("SELECT * FROM chat_messages WHERE dataset_id = ? ORDER BY created_at ASC");
-const getDatasetRow = db.prepare("SELECT id, row_json FROM dataset_rows WHERE dataset_id = ? AND id = ?");
-const updateDatasetRow = db.prepare("UPDATE dataset_rows SET row_json = ? WHERE dataset_id = ? AND id = ?");
+const getDatasetRow = db.prepare("SELECT id, row_json FROM dataset_rows WHERE dataset_id = ? AND row_index = ?");
+const updateDatasetRow = db.prepare("UPDATE dataset_rows SET row_json = ? WHERE dataset_id = ? AND row_index = ?");
 
 const mapDataset = (datasetRecord) => {
   if (!datasetRecord) return null;

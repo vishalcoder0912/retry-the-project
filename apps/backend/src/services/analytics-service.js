@@ -18,10 +18,13 @@ import {
   filterGroupedEntries,
   groupMetricByDimension,
   countRowsByDimension,
-  countRowsMatchingValues,
   buildDatasetSchema,
   calculatePearsonCorrelation,
 } from "@insightflow/shared-analytics";
+import { aiRouter } from "./ai-providers/ai-router.js";
+import { ollamaAIService, isOllamaConfigured, callOllamaAI } from "./ollama-ai-service.js";
+import { sanitizeQueryContext, validateSchemaOnlyContext } from '../utils/schema-extractor.js';
+import { handleSmartQuery } from './smart-query-handler.js';
 
 // Re-export for backward compatibility
 export { normalizeColumns, generateDemoDataset, buildDatasetSchema };
@@ -76,13 +79,17 @@ const detectQueryValueFilter = (dataset, schema, normalizedQuery) => {
   for (const dimension of dimensions) {
     const values = new Set();
 
-    for (const row of dataset.rows) {
-      const label = normalizeDimensionLabel(dimension.name, row[dimension.name]);
-      if (label) {
-        values.add(label);
-      }
-      if (values.size >= 50) {
-        break;
+    // Only analyze schema structure, not actual data values
+    // This prevents data leakage to AI services
+    if (dataset && dataset.rows) {
+      for (const row of dataset.rows) {
+        const label = normalizeDimensionLabel(dimension.name, row[dimension.name]);
+        if (label) {
+          values.add(label);
+        }
+        if (values.size >= 50) {
+          break;
+        }
       }
     }
 
@@ -270,12 +277,12 @@ const buildInsightsFromSchema = (schema, plan) => {
   return base;
 };
 
-export const createChatResponse = (dataset, query) => {
+export const createChatResponse = async (dataset, query) => {
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
 
   if (isGreetingQuery(query)) {
     return {
-      content: "Hello, how can I help you?",
+      content: "Hello! I'm here to help you analyze your data. What would you like to explore?",
       sql: null,
       chart: null,
       insights: [],
@@ -283,7 +290,115 @@ export const createChatResponse = (dataset, query) => {
     };
   }
 
+  // Use smart query handler for better responses
+  try {
+    console.log('[analytics] Calling smart query handler for:', query);
+    const smartResponse = handleSmartQuery(dataset, query);
+    console.log('[analytics] Smart response:', JSON.stringify(smartResponse)?.substring(0, 100) || 'null/undefined');
+    if (smartResponse && typeof smartResponse === 'object' && 'content' in smartResponse && smartResponse.content) {
+      console.log('[analytics] Using smart query handler result');
+      return {
+        ...smartResponse,
+        schema: buildDatasetSchema(analyticsDataset),
+        aiProvider: 'smart-handler',
+      };
+    } else {
+      console.log('[analytics] Smart response empty, falling through');
+    }
+  } catch (error) {
+    console.warn('[analytics] Smart query handler error:', error.message);
+  }
+
   const schema = buildDatasetSchema(analyticsDataset);
+  
+  // Try to get AI-enhanced response first with Ollama + Mistral
+  try {
+    // Check if Ollama is available
+    const ollamaAvailable = await isOllamaConfigured();
+    
+    if (ollamaAvailable) {
+      console.log('[analytics] Using Ollama + Mistral for AI analysis');
+      
+      // Prepare dataset for AI (schema-only)
+      const datasetForAI = {
+        name: dataset.name,
+        rowCount: dataset.rowCount,
+        columns: dataset.columns,
+      };
+      
+      const aiResponse = await callOllamaAI(datasetForAI, query);
+      
+      if (aiResponse.success && aiResponse.usedAI) {
+        console.log('[analytics] Ollama analysis successful');
+        
+        // Generate chart if AI suggested one
+        let chart = null;
+        if (aiResponse.chart_type && aiResponse.chart_type !== "table") {
+          const plan = buildPlanFromAIResponse(analyticsDataset, aiResponse);
+          chart = materializePlan(analyticsDataset, plan);
+        }
+        
+        return {
+          content: aiResponse.insight,
+          sql: aiResponse.sql,
+          chart,
+          insights: [
+            `Analysis type: ${aiResponse.intent}`,
+            `Confidence: ${(aiResponse.confidence * 100).toFixed(0)}%`,
+            aiResponse.reasoning,
+            `Using local Mistral model (schema-only analysis)`,
+          ],
+          schema,
+          aiProvider: 'ollama',
+          aiModel: aiResponse.model || 'mistral',
+          usedAI: true,
+          confidence: aiResponse.confidence,
+          intent: aiResponse.intent,
+        };
+      }
+    } else {
+      console.log('[analytics] Ollama not available, trying AI router fallback');
+      
+      // Fallback to existing AI router
+      const aiContext = {
+        dataset: {
+          name: dataset.name,
+          rowCount: dataset.rowCount,
+        },
+        schema,
+        query,
+      };
+      
+      const sanitizedContext = sanitizeQueryContext(aiContext);
+      const validation = validateSchemaOnlyContext(sanitizedContext);
+      
+      if (!validation.isValid) {
+        console.warn('Analytics service detected potential data leakage:', validation.violations);
+      }
+      
+      const aiResult = await aiRouter.generateResponse(query, sanitizedContext);
+      
+      if (aiResult.success) {
+        const plan = buildAnalysisPlan(analyticsDataset, schema, query);
+        const chart = materializePlan(analyticsDataset, plan);
+        
+        return {
+          content: aiResult.content,
+          sql: buildSqlForPlan(plan),
+          chart,
+          insights: buildInsightsFromSchema(schema, plan),
+          schema,
+          aiProvider: aiResult.provider,
+          aiModel: aiResult.model,
+          fallbackUsed: aiResult.fallbackUsed,
+        };
+      }
+    }
+  } catch (error) {
+    console.warn('AI response failed, falling back to traditional analysis:', error.message);
+  }
+
+  // Fallback to traditional analysis
   const plan = buildAnalysisPlan(analyticsDataset, schema, query);
   const chart = materializePlan(analyticsDataset, plan);
 
@@ -301,9 +416,55 @@ export const createChatResponse = (dataset, query) => {
     chart,
     insights: buildInsightsFromSchema(schema, plan),
     schema,
+    aiProvider: 'traditional',
   };
 };
 
+/**
+ * Build analysis plan from AI response
+ */
+const buildPlanFromAIResponse = (analyticsDataset, aiResponse) => {
+  const { intent, columns_used, chart_type } = aiResponse;
+  
+  // Find dimension and metric from columns_used
+  const dimensions = analyticsDataset.columns.filter(col => col.role === 'dimension');
+  const metrics = analyticsDataset.columns.filter(col => col.role === 'metric');
+  
+  let dimension = dimensions.find(col => columns_used.includes(col.name)) || dimensions[0];
+  let metric = metrics.find(col => columns_used.includes(col.name)) || metrics[0];
+  
+  // Determine mode based on intent
+  let mode = 'summary';
+  let aggregation = 'sum';
+  
+  switch (intent) {
+    case 'aggregation':
+    case 'comparison':
+      mode = 'metricByDimension';
+      aggregation = 'average';
+      break;
+    case 'count':
+      mode = 'countByDimension';
+      break;
+    case 'trend':
+      mode = 'metricByDimension';
+      break;
+    case 'distribution':
+      mode = 'countByDimension';
+      break;
+    default:
+      mode = 'summary';
+  }
+  
+  return {
+    mode,
+    metric,
+    dimension,
+    aggregation,
+    chartType: chart_type || 'bar',
+    intent,
+  };
+};
 
 export const generateCorrelationAnalysis = (dataset) => {
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
