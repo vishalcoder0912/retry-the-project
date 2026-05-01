@@ -1,9 +1,10 @@
 import { createContext } from "react";
-import { ChatMessage, Dataset } from "@/features/data/model/dataStore";
+import { ChatMessage, Dataset, DatasetAnalysis } from "@/features/data/model/dataStore";
 
 export interface DataContextType {
   dataset: Dataset | null;
   chatMessages: ChatMessage[];
+  analysis: DatasetAnalysis | null;
   isProcessing: boolean;
   isHydrating: boolean;
   apiError: string | null;

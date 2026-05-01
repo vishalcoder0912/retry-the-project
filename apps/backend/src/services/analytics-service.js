@@ -18,10 +18,13 @@ import {
   filterGroupedEntries,
   groupMetricByDimension,
   countRowsByDimension,
-  countRowsMatchingValues,
   buildDatasetSchema,
   calculatePearsonCorrelation,
 } from "@insightflow/shared-analytics";
+import { aiRouter } from "./ai-providers/ai-router.js";
+import { ollamaAIService, isOllamaConfigured, callOllamaAI } from "./ollama-ai-service.js";
+import { sanitizeQueryContext, validateSchemaOnlyContext } from '../utils/schema-extractor.js';
+import { handleSmartQuery } from './smart-query-handler.js';
 
 import { callOllamaAI, isOllamaConfigured } from "./ollama-ai-service.js";
 import { buildSchemaPacket, formatSchemaForPrompt } from "./schema-packet-builder.js";
@@ -162,13 +165,17 @@ const detectQueryValueFilter = (dataset, schema, normalizedQuery) => {
   for (const dimension of dimensions) {
     const values = new Set();
 
-    for (const row of dataset.rows) {
-      const label = normalizeDimensionLabel(dimension.name, row[dimension.name]);
-      if (label) {
-        values.add(label);
-      }
-      if (values.size >= 50) {
-        break;
+    // Only analyze schema structure, not actual data values
+    // This prevents data leakage to AI services
+    if (dataset && dataset.rows) {
+      for (const row of dataset.rows) {
+        const label = normalizeDimensionLabel(dimension.name, row[dimension.name]);
+        if (label) {
+          values.add(label);
+        }
+        if (values.size >= 50) {
+          break;
+        }
       }
     }
 
@@ -389,104 +396,7 @@ const buildInsightsFromSchema = (schema, plan) => {
   return base;
 };
 
-const buildSuggestedQuestions = (schema) => {
-  const suggestions = [];
-  const primaryDimension = schema.primaryDimension;
-  const secondaryDimension = schema.secondaryDimension;
-  const primaryMetric = schema.primaryMetric;
-
-  if (primaryMetric && primaryDimension) {
-    suggestions.push(`Show ${humanize(primaryMetric.name)} by ${humanize(primaryDimension.name)}.`);
-    suggestions.push(`What is the average ${humanize(primaryMetric.name)} by ${humanize(primaryDimension.name)}?`);
-  }
-
-  const timeDimension = schema.columns.find((column) => column.type === "date" || normalizeText(column.name) === "month");
-  if (primaryMetric && timeDimension) {
-    suggestions.push(`Show the trend of ${humanize(primaryMetric.name)} over ${humanize(timeDimension.name)}.`);
-  }
-
-  if (secondaryDimension) {
-    suggestions.push(`How many records are there by ${humanize(secondaryDimension.name)}?`);
-  } else if (primaryDimension) {
-    suggestions.push(`Count records by ${humanize(primaryDimension.name)}.`);
-  }
-
-  const sampledDimension = schema.columns.find((column) => column.role === "dimension" && Array.isArray(column.sample) && column.sample.length > 0);
-  if (sampledDimension) {
-    const sampleValue = sampledDimension.sample.find((value) => normalizeText(value));
-    if (sampleValue) {
-      suggestions.push(`How many rows match ${humanize(sampledDimension.name)} = "${sampleValue}"?`);
-    }
-  }
-
-  return [...new Set(suggestions)].slice(0, 4);
-};
-
-const buildGuidedDatasetResponse = (schema, chart) => {
-  const suggestions = buildSuggestedQuestions(schema);
-  const dimensions = schema.columns.filter((column) => column.role === "dimension").map((column) => column.name);
-  const metrics = schema.columns.filter((column) => column.role === "metric").map((column) => column.name);
-  const topGroups = chart?.data?.slice(0, 3)
-    .map((item) => `${item[chart.xKey]}: ${Number(item[chart.yKey] ?? 0).toLocaleString()}`)
-    .join(", ");
-
-  const contentParts = [
-    `${schema.datasetName} contains ${schema.rowCount.toLocaleString()} rows and ${schema.columnCount} columns.`,
-  ];
-
-  if (dimensions.length > 0) {
-    contentParts.push(`Main categorical columns are ${dimensions.slice(0, 4).join(", ")}.`);
-  }
-
-  if (metrics.length > 0) {
-    contentParts.push(`Main numeric columns are ${metrics.slice(0, 4).join(", ")}.`);
-  }
-
-  if (topGroups && chart?.xKey) {
-    contentParts.push(`A quick overview by ${humanize(chart.xKey)} shows ${topGroups}.`);
-  }
-
-  if (suggestions.length > 0) {
-    contentParts.push(`You can ask follow-up questions like: ${suggestions.join(" ")}`);
-  }
-
-  return {
-    content: contentParts.join(" "),
-    insights: [
-      `Dataset name: ${schema.datasetName}`,
-      `Rows: ${schema.rowCount.toLocaleString()} | Columns: ${schema.columnCount}`,
-      ...suggestions.map((question) => `Try asking: ${question}`),
-    ],
-  };
-};
-
-const buildOverviewContent = (schema, chart) => {
-  const dimensions = schema.columns.filter((column) => column.role === "dimension").map((column) => column.name);
-  const metrics = schema.columns.filter((column) => column.role === "metric").map((column) => column.name);
-  const topGroups = chart?.data?.slice(0, 4)
-    .map((item) => `${item[chart.xKey]}: ${Number(item[chart.yKey] ?? 0).toLocaleString()}`)
-    .join(", ");
-
-  const parts = [
-    `${schema.datasetName} contains ${schema.rowCount.toLocaleString()} rows and ${schema.columnCount} columns.`,
-  ];
-
-  if (dimensions.length > 0) {
-    parts.push(`Main categorical fields: ${dimensions.slice(0, 4).join(", ")}.`);
-  }
-
-  if (metrics.length > 0) {
-    parts.push(`Main numeric fields: ${metrics.slice(0, 4).join(", ")}.`);
-  }
-
-  if (topGroups && chart?.xKey) {
-    parts.push(`Top ${humanize(chart.xKey)} groups: ${topGroups}.`);
-  }
-
-  return parts.join(" ");
-};
-
-const buildLocalResponse = (dataset, query) => {
+export const createChatResponse = async (dataset, query) => {
   const analyticsDataset = prepareDatasetForAnalytics(dataset);
   const schema = buildDatasetSchema(analyticsDataset);
   const queryType = classifyChatQuery(query);
@@ -502,7 +412,7 @@ const buildLocalResponse = (dataset, query) => {
     const guided = buildGuidedDatasetResponse(schema, chart);
 
     return {
-      content: `Hello. I can help you explore ${schema.datasetName}. ${guided.content}`,
+      content: "Hello! I'm here to help you analyze your data. What would you like to explore?",
       sql: null,
       chart,
       insights: guided.insights,
@@ -531,6 +441,115 @@ const buildLocalResponse = (dataset, query) => {
     };
   }
 
+  // Use smart query handler for better responses
+  try {
+    console.log('[analytics] Calling smart query handler for:', query);
+    const smartResponse = handleSmartQuery(dataset, query);
+    console.log('[analytics] Smart response:', JSON.stringify(smartResponse)?.substring(0, 100) || 'null/undefined');
+    if (smartResponse && typeof smartResponse === 'object' && 'content' in smartResponse && smartResponse.content) {
+      console.log('[analytics] Using smart query handler result');
+      return {
+        ...smartResponse,
+        schema: buildDatasetSchema(analyticsDataset),
+        aiProvider: 'smart-handler',
+      };
+    } else {
+      console.log('[analytics] Smart response empty, falling through');
+    }
+  } catch (error) {
+    console.warn('[analytics] Smart query handler error:', error.message);
+  }
+
+  const schema = buildDatasetSchema(analyticsDataset);
+  
+  // Try to get AI-enhanced response first with Ollama + Mistral
+  try {
+    // Check if Ollama is available
+    const ollamaAvailable = await isOllamaConfigured();
+    
+    if (ollamaAvailable) {
+      console.log('[analytics] Using Ollama + Mistral for AI analysis');
+      
+      // Prepare dataset for AI (schema-only)
+      const datasetForAI = {
+        name: dataset.name,
+        rowCount: dataset.rowCount,
+        columns: dataset.columns,
+      };
+      
+      const aiResponse = await callOllamaAI(datasetForAI, query);
+      
+      if (aiResponse.success && aiResponse.usedAI) {
+        console.log('[analytics] Ollama analysis successful');
+        
+        // Generate chart if AI suggested one
+        let chart = null;
+        if (aiResponse.chart_type && aiResponse.chart_type !== "table") {
+          const plan = buildPlanFromAIResponse(analyticsDataset, aiResponse);
+          chart = materializePlan(analyticsDataset, plan);
+        }
+        
+        return {
+          content: aiResponse.insight,
+          sql: aiResponse.sql,
+          chart,
+          insights: [
+            `Analysis type: ${aiResponse.intent}`,
+            `Confidence: ${(aiResponse.confidence * 100).toFixed(0)}%`,
+            aiResponse.reasoning,
+            `Using local Mistral model (schema-only analysis)`,
+          ],
+          schema,
+          aiProvider: 'ollama',
+          aiModel: aiResponse.model || 'mistral',
+          usedAI: true,
+          confidence: aiResponse.confidence,
+          intent: aiResponse.intent,
+        };
+      }
+    } else {
+      console.log('[analytics] Ollama not available, trying AI router fallback');
+      
+      // Fallback to existing AI router
+      const aiContext = {
+        dataset: {
+          name: dataset.name,
+          rowCount: dataset.rowCount,
+        },
+        schema,
+        query,
+      };
+      
+      const sanitizedContext = sanitizeQueryContext(aiContext);
+      const validation = validateSchemaOnlyContext(sanitizedContext);
+      
+      if (!validation.isValid) {
+        console.warn('Analytics service detected potential data leakage:', validation.violations);
+      }
+      
+      const aiResult = await aiRouter.generateResponse(query, sanitizedContext);
+      
+      if (aiResult.success) {
+        const plan = buildAnalysisPlan(analyticsDataset, schema, query);
+        const chart = materializePlan(analyticsDataset, plan);
+        
+        return {
+          content: aiResult.content,
+          sql: buildSqlForPlan(plan),
+          chart,
+          insights: buildInsightsFromSchema(schema, plan),
+          schema,
+          aiProvider: aiResult.provider,
+          aiModel: aiResult.model,
+          fallbackUsed: aiResult.fallbackUsed,
+        };
+      }
+    }
+  } catch (error) {
+    console.warn('AI response failed, falling back to traditional analysis:', error.message);
+  }
+
+  // Fallback to traditional analysis
   const plan = buildAnalysisPlan(analyticsDataset, schema, query);
   const chart = materializePlan(analyticsDataset, plan);
 
@@ -560,279 +579,54 @@ const buildLocalResponse = (dataset, query) => {
     chart,
     insights: buildInsightsFromSchema(schema, plan),
     schema,
-    intent: plan.intent,
+    aiProvider: 'traditional',
   };
-};
-
-export const createChatResponse = (dataset, query) => {
-  return buildLocalResponse(dataset, query);
 };
 
 /**
- * Create chat response using AI with intelligent caching
- * Cache hit = instant response ($0 cost)
- * Cache miss = call Gemini, then cache result
+ * Build analysis plan from AI response
  */
-export const createLocalFallbackChatResponse = (dataset, query) => {
-  const response = buildLocalResponse(dataset, query);
-
-  return {
-    content: response.content,
-    sql: response.sql || null,
-    chart: response.chart || null,
-    insights: response.insights,
-    usedAI: false,
-    intent: response.intent,
-    confidence: 0.7,
-    model: "Local Analysis Engine",
-    fromCache: false,
-    cacheHit: false,
-    reason: "local-fallback",
-  };
-};
-
-export const createSchemaFirstChatResponse = async (dataset, query) => {
-  const { getCachedQuery, cacheQuery } = await import("./query-cache.js");
-  console.log("\n[analytics] ========================================");
-  console.log(`[analytics] NEW QUERY: "${query.substring(0, 60)}..."`);
-  console.log(`[analytics] Dataset ID: ${dataset.id}`);
-  console.log("[analytics] ========================================");
-
-  if (isGreetingQuery(query)) {
-    console.log("[analytics] → Greeting query (skipping cache)");
-    return {
-      content: "Hello! I'm your AI data analyst. Ask me anything about your dataset!",
-      sql: null,
-      chart: null,
-      insights: [],
-      usedAI: false,
-      reason: "greeting",
-      fromCache: false,
-    };
-  }
-
-  console.log("[analytics] STEP 1: Checking cache...");
-  const cachedResult = getCachedQuery(dataset.id, query);
-
-  if (cachedResult) {
-    console.log("[analytics] ✅✅✅ CACHE HIT FOUND!");
-    console.log("[analytics] Returning cached response immediately");
-    console.log("[analytics] ════════════════════════════════════════");
-    console.log("[analytics] CACHED RESPONSE:");
-    console.log(`[analytics]   Model Used: ${cachedResult.model || 'Local Analysis'}`);
-    console.log(`[analytics]   Response: ${cachedResult.content?.substring(0, 200)}...`);
-    console.log("[analytics] ════════════════════════════════════════");
-    return {
-      ...cachedResult,
-      fromCache: true,
-      cacheHit: true,
-      cacheMessage: "⚡ Retrieved from cache (instant response, $0 cost)",
-    };
-  }
-
-  console.log("[analytics] ❌ Cache MISS - will call AI or fallback");
-  console.log("[analytics] ════════════════════════════════════════");
-  console.log("[analytics] USER QUERY RECEIVED:");
-  console.log(`[analytics]   "${query}"`);
-  console.log("[analytics] ════════════════════════════════════════");
-
-  const analyticsDataset = prepareDatasetForAnalytics(dataset);
-  const datasetForAI = {
-    name: dataset.name,
-    rows: dataset.rows,
-    columns: dataset.columns,
-    rowCount: dataset.rows?.length || 0,
-    columnCount: dataset.columns?.length || 0,
-  };
-
-  // Check if Ollama is available
-  const ollamaAvailable = await isOllamaConfigured();
-
-  if (ollamaAvailable) {
-    console.log("[analytics] STEP 2: Ollama available, calling Mistral...");
-    try {
-      const aiResponse = await callOllamaAI(datasetForAI, query);
-      console.log(`[analytics] AI response success: ${aiResponse.success}`);
-      console.log(`[analytics] AI used: ${aiResponse.usedAI}`);
-
-      if (aiResponse.success && aiResponse.usedAI) {
-        console.log("[analytics] ✅ Ollama analysis successful");
-        let chart = null;
-        if (aiResponse.chart_type && aiResponse.chart_type !== 'table') {
-          chart = materializePlan(
-            analyticsDataset,
-            buildPlanFromAIResponse(analyticsDataset, aiResponse)
-          );
-        }
-
-        const validatedSQL = validateAndFixSQL(dataset, aiResponse.sql);
-
-        const response = {
-          content: aiResponse.insight,
-          sql: validatedSQL,
-          chart: chart,
-          insights: [
-            `Analysis type: ${aiResponse.intent}`,
-            `Confidence: ${(aiResponse.confidence * 100).toFixed(0)}%`,
-            aiResponse.reasoning,
-          ],
-          usedAI: true,
-          intent: aiResponse.intent,
-          confidence: aiResponse.confidence,
-          fromCache: false,
-          cacheHit: false,
-          model: "Mistral (Ollama)",
-        };
-
-        console.log("[analytics] STEP 3: Caching AI response...");
-        cacheQuery(dataset.id, query, response);
-        console.log("[analytics] ✅ Response cached");
-
-        console.log("[analytics] ════════════════════════════════════════");
-        console.log("[analytics] 🤖 AI RESPONSE GENERATED:");
-        console.log(`[analytics]   Model: Mistral (Ollama)`);
-        console.log(`[analytics]   Intent: ${aiResponse.intent}`);
-        console.log(`[analytics]   Confidence: ${(aiResponse.confidence * 100).toFixed(0)}%`);
-        console.log(`[analytics]   Insight: ${aiResponse.insight?.substring(0, 150)}...`);
-        console.log(`[analytics]   SQL: ${aiResponse.sql?.substring(0, 100)}...`);
-        console.log("[analytics] ════════════════════════════════════════");
-
-        return response;
-      }
-      console.log("[analytics] AI response not usable, falling back...");
-    } catch (error) {
-      console.warn("[analytics] Ollama call failed:", error.message);
-      console.log("[analytics] Falling back to local analysis...");
-    }
-  } else {
-    console.log("[analytics] Ollama not configured, using local analysis");
-  }
-
-  // PRIORITY 3: Fallback to local analysis engine
-  console.log("[analytics] STEP 4: AI failed or not available, using local analysis fallback (Priority 3)...");
-  const localResponse = createLocalFallbackChatResponse(dataset, query);
-
-  cacheQuery(dataset.id, query, localResponse);
-  console.log("[analytics] ✅ Local response cached");
-
-  console.log("[analytics] ════════════════════════════════════════");
-  console.log("[analytics] 📊 LOCAL FALLBACK RESPONSE:");
-  console.log(`[analytics]   Model: Local Analysis Engine`);
-  console.log(`[analytics]   Intent: ${localResponse.intent}`);
-  console.log(`[analytics]   Response: ${localResponse.content?.substring(0, 150)}...`);
-  console.log(`[analytics]   SQL: ${localResponse.sql?.substring(0, 100)}...`);
-  console.log("[analytics] ════════════════════════════════════════");
-
-  return localResponse;
-};
-
-/**
- * Build plan from AI response
- */
-function buildPlanFromAIResponse(dataset, aiResponse) {
-  const schema = buildDatasetSchema(prepareDatasetForAnalytics(dataset));
+const buildPlanFromAIResponse = (analyticsDataset, aiResponse) => {
+  const { intent, columns_used, chart_type } = aiResponse;
   
-  const columnsInSchema = (aiResponse.columns_used || [])
-    .map(name => schema.columns.find(c => c.name === name))
-    .filter(Boolean);
-
-  const metrics = columnsInSchema.filter(c => c.role === "metric");
-  const dimensions = columnsInSchema.filter(c => c.role === "dimension");
-
-  return {
-    mode: metrics.length > 0 && dimensions.length > 0
-      ? "metricByDimension"
-      : dimensions.length > 0
-      ? "countByDimension"
-      : "summary",
-    metric: metrics[0] || null,
-    dimension: dimensions[0] || null,
-    chartType: aiResponse.chart_type,
-    intent: aiResponse.intent,
-  };
-}
-
-/**
- * Fallback to local analysis (FREE, no external API)
- */
-function fallbackToLocalAnalysis(dataset, query) {
-  console.log("[analytics] Using local fallback analysis");
-
-  const analyticsDataset = prepareDatasetForAnalytics(dataset);
-  const schema = buildDatasetSchema(analyticsDataset);
-  const plan = buildAnalysisPlan(analyticsDataset, schema, query);
-  const chart = materializePlan(analyticsDataset, plan);
-
-  return {
-    content: `Using local analysis: ${chart?.title || "Analyzing your data"}`,
-    sql: buildSqlForPlan(plan),
-    chart,
-    insights: buildInsightsFromSchema(schema, plan),
-    usedAI: false,
-    reason: "local-fallback",
-    fromCache: false,
-  };
-}
-
-/**
- * Build chart data from SQL query result
- */
-const buildChartFromSQL = (dataset, sql, chartType, columns) => {
-  try {
-    // Basic SQL parsing to determine aggregation
-    const sqlLower = sql.toLowerCase();
-    const hasGroupBy = sqlLower.includes('group by');
-    const hasOrderBy = sqlLower.includes('order by');
-    
-    // Get dimension and metric from query
-    let dimension = columns?.[0];
-    let metric = columns?.[1];
-    
-    // If no explicit columns, try to infer from schema
-    if (!dimension) {
-      const analyticsDataset = prepareDatasetForAnalytics(dataset);
-      const dims = analyticsDataset.columns.filter(c => c.role === 'dimension');
-      const mets = analyticsDataset.columns.filter(c => c.role === 'metric');
-      dimension = dims[0]?.name;
-      metric = mets[0]?.name;
-    }
-
-    if (!dimension) return null;
-
-    // Execute simple aggregation locally
-    const rows = dataset.rows || [];
-    const grouped = {};
-    
-    for (const row of rows) {
-      const key = String(row[dimension] || 'Unknown');
-      if (!grouped[key]) {
-        grouped[key] = { count: 0, sum: 0 };
-      }
-      grouped[key].count++;
-      if (metric && row[metric]) {
-        grouped[key].sum += Number(row[metric]) || 0;
-      }
-    }
-
-    const data = Object.entries(grouped)
-      .map(([name, vals]) => ({
-        [dimension]: name,
-        count: vals.count,
-        ...(metric ? { [metric]: vals.sum } : {})
-      }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    return {
-      type: chartType === 'pie' && data.length <= 6 ? 'pie' : chartType || 'bar',
-      title: `Analysis: ${dimension}`,
-      xKey: dimension,
-      yKey: metric || 'count',
-      data,
-    };
-  } catch {
-    return null;
+  // Find dimension and metric from columns_used
+  const dimensions = analyticsDataset.columns.filter(col => col.role === 'dimension');
+  const metrics = analyticsDataset.columns.filter(col => col.role === 'metric');
+  
+  let dimension = dimensions.find(col => columns_used.includes(col.name)) || dimensions[0];
+  let metric = metrics.find(col => columns_used.includes(col.name)) || metrics[0];
+  
+  // Determine mode based on intent
+  let mode = 'summary';
+  let aggregation = 'sum';
+  
+  switch (intent) {
+    case 'aggregation':
+    case 'comparison':
+      mode = 'metricByDimension';
+      aggregation = 'average';
+      break;
+    case 'count':
+      mode = 'countByDimension';
+      break;
+    case 'trend':
+      mode = 'metricByDimension';
+      break;
+    case 'distribution':
+      mode = 'countByDimension';
+      break;
+    default:
+      mode = 'summary';
   }
+  
+  return {
+    mode,
+    metric,
+    dimension,
+    aggregation,
+    chartType: chart_type || 'bar',
+    intent,
+  };
 };
 
 export const generateCorrelationAnalysis = (dataset) => {

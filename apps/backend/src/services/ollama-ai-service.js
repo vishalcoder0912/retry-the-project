@@ -1,287 +1,122 @@
 /**
  * Ollama AI Service - Replace Gemini with Ollama + Mistral
- * Uses local Mistral model for data analytics
+ * Uses local Mistral model for data analytics with schema-only approach
  */
 
-import axios from "axios";
-import { buildSchemaPacketAsync, formatSchemaForPrompt } from "./schema-packet-builder.js";
+import { extractSchemaForAI, buildSchemaOnlyPrompt, validateSchemaOnlyContext } from '../utils/schema-extractor.js';
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
-const OLLAMA_MODEL_CANDIDATES = (process.env.OLLAMA_MODEL_CANDIDATES || "llama3.2,mistral,gemma4")
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
-const OLLAMA_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 60000);
-const OLLAMA_NUM_CTX = Number(process.env.OLLAMA_NUM_CTX || 4096);
-const OLLAMA_NUM_PREDICT = Number(process.env.OLLAMA_NUM_PREDICT || 140);
-const OLLAMA_TEMPERATURE = Number(process.env.OLLAMA_TEMPERATURE || 0.1);
-const OLLAMA_KEEP_ALIVE = process.env.OLLAMA_KEEP_ALIVE || "10m";
-const SCHEMA_PACKET_SAMPLE_SIZE = Number(process.env.SCHEMA_PACKET_SAMPLE_SIZE || 100);
-const OLLAMA_RETRY_SAMPLE_SIZES = (process.env.OLLAMA_RETRY_SAMPLE_SIZES || "100,40,20")
-  .split(",")
-  .map((value) => Number(value.trim()))
-  .filter((value) => Number.isFinite(value) && value > 0);
+const API_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS) || 60000;
 
-function isTimeoutError(error) {
-  return error?.code === "ECONNABORTED" || /timeout/i.test(error?.message || "");
+/**
+ * Check if Ollama is configured and running
+ */
+export async function isOllamaConfigured() {
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await response.json();
+    console.log(`[ollama] Ollama is running with models:`, data.models?.map(m => m.name));
+    return true;
+  } catch (error) {
+    console.warn(`[ollama] Ollama not available:`, error.message);
+    return false;
+  }
 }
 
-function resolveModelNameFromAvailable(candidate, availableNames) {
-  if (availableNames.includes(candidate)) {
-    return candidate;
+/**
+ * Call Ollama AI with Mistral model using schema-only approach
+ */
+export async function callOllamaAI(dataset, query) {
+  const configured = await isOllamaConfigured();
+  if (!configured) {
+    throw new Error("Ollama service not available. Please start Ollama with: ollama serve");
   }
-
-  const taggedMatch = availableNames.find((name) => name === `${candidate}:latest`);
-  if (taggedMatch) {
-    return taggedMatch;
-  }
-
-  const prefixMatch = availableNames.find((name) => name.startsWith(`${candidate}:`));
-  return prefixMatch || null;
-}
-
-async function resolveOllamaModelNames() {
-  const models = await getAvailableModels();
-  const availableNames = models.map((model) => model.name);
-  const candidates = [OLLAMA_MODEL, ...OLLAMA_MODEL_CANDIDATES];
-  const resolved = [];
-
-  for (const candidate of candidates) {
-    const resolvedName = resolveModelNameFromAvailable(candidate, availableNames);
-    if (resolvedName && !resolved.includes(resolvedName)) {
-      resolved.push(resolvedName);
-    }
-  }
-
-  for (const availableName of availableNames) {
-    if (!resolved.includes(availableName)) {
-      resolved.push(availableName);
-    }
-  }
-
-  return resolved.length > 0 ? resolved : [OLLAMA_MODEL];
-}
-
-function buildOllamaPrompts(schemaText, query) {
-  const systemPrompt = `You are an expert data analyst.
-
-You receive only dataset schema metadata, not raw rows.
-Generate a concise SQLite query and a short answer for the user.
-
-CRITICAL RULES:
-1. For categorical columns (like education, country, etc.), you MUST use the EXACT values shown in "Top values" from the schema
-2. NEVER guess or infer values - only use values explicitly listed in the schema's topValues
-3. If user mentions "high school", look for "High School" in education topValues
-4. If user mentions "master" or "masters", look for "Masters" in education topValues
-5. Use only columns present in the schema
-6. Never invent columns
-7. Table name: dataset
-8. If a column is marked [INVALID], do not use it
-9. Return JSON only
-
-JSON shape:
-{
-  "intent": "aggregation",
-  "columns_used": ["column1"],
-  "sql": "SELECT ... FROM dataset",
-  "insight": "short finding",
-  "chart_type": "bar",
-  "confidence": 0.95,
-  "reasoning": "short reason"
-}`;
-
-  const userPrompt = `SCHEMA:
-${schemaText}
-
-QUESTION:
-${query}
-
-Return JSON only.`;
-
-  return { systemPrompt, userPrompt };
-}
-
-async function requestOllama({ model, systemPrompt, userPrompt }) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
 
   try {
+    console.log(`[ollama] Calling ${OLLAMA_MODEL} for query:`, query);
+
+    // Build schema-only context (no raw data)
+    const schemaInfo = extractSchemaForAI(dataset, buildDatasetSchema(dataset));
+    
+    // Create prompt for Mistral with schema-only information
+    const systemPrompt = `You are a data analytics expert. Analyze the provided dataset schema and user queries.
+    
+When analyzing, respond ONLY with valid JSON in this exact format:
+{
+  "intent": "aggregation|filter|comparison|distribution|correlation|count|trend|unclear",
+  "columns_used": ["column_name"],
+  "sql": "SELECT ... FROM dataset_rows WHERE ...",
+  "insight": "1-2 sentence explanation",
+  "chart_type": "bar|line|pie|histogram|scatter|table",
+  "confidence": 0.0,
+  "reasoning": "explain your analysis"
+}
+
+Be concise and accurate. Always validate that columns exist in the schema.
+IMPORTANT: You only have access to schema information, not actual data values.`;
+
+    const userPrompt = `
+DATASET SCHEMA:
+${formatSchemaForPrompt(schemaInfo)}
+
+USER QUERY: "${query}"
+
+Respond with valid JSON only, no additional text.`;
+
+    // Call Ollama API
     const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model,
-        system: systemPrompt,
-        prompt: userPrompt,
+        model: OLLAMA_MODEL,
+        prompt: `${systemPrompt}\n\n${userPrompt}`,
         stream: false,
-        format: "json",
-        keep_alive: OLLAMA_KEEP_ALIVE,
-        options: {
-          num_ctx: OLLAMA_NUM_CTX,
-          num_predict: OLLAMA_NUM_PREDICT,
-          temperature: OLLAMA_TEMPERATURE,
-        },
+        temperature: 0.2,
+        num_predict: 500,
       }),
-      signal: controller.signal,
+      signal: AbortSignal.timeout(API_TIMEOUT),
     });
 
     if (!response.ok) {
-      throw new Error(`Ollama HTTP ${response.status}`);
+      throw new Error(`Ollama API error: ${response.statusText}`);
     }
 
-    return response.json();
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      const timeoutError = new Error(`timeout of ${OLLAMA_TIMEOUT_MS}ms exceeded`);
-      timeoutError.code = "ECONNABORTED";
-      throw timeoutError;
+    const data = await response.json();
+    const responseText = data.response;
+
+    // Extract JSON from response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("No valid JSON in Ollama response");
     }
 
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
+    const aiResponse = JSON.parse(jsonMatch[0]);
 
-/**
- * Check if Ollama service is running and configured
- */
-export async function isOllamaConfigured() {
-  try {
-    console.log("[ollama] Checking if Ollama is running at", OLLAMA_BASE_URL);
-    const response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`, {
-      timeout: 3000,
-    });
-    console.log("[ollama] ✅ Ollama is available");
-    return true;
-  } catch (error) {
-    console.log("[ollama] ❌ Ollama not available:", error.message);
-    return false;
-  }
-}
-
-/**
- * Check model availability
- */
-export async function getAvailableModels() {
-  try {
-    const response = await axios.get(`${OLLAMA_BASE_URL}/api/tags`, {
-      timeout: 3000,
-    });
-    return response.data.models || [];
-  } catch (error) {
-    console.error("[ollama] Error fetching models:", error.message);
-    return [];
-  }
-}
-
-/**
- * Call Ollama AI with schema packet
- */
-export async function callOllamaAI(dataset, query) {
-  try {
-    const modelNames = await resolveOllamaModelNames();
-    const attemptedSampleSizes = [...new Set([SCHEMA_PACKET_SAMPLE_SIZE, ...OLLAMA_RETRY_SAMPLE_SIZES])];
-    let responseText = "";
-    let finalSchemaPacket = null;
-    let selectedModelName = modelNames[0];
-
-    modelLoop:
-    for (const modelName of modelNames) {
-      selectedModelName = modelName;
-      console.log("[ollama] Trying model:", modelName);
-
-      for (const sampleSize of attemptedSampleSizes) {
-        console.log("[ollama] Building schema packet for Ollama...");
-
-        const schemaPacket = await buildSchemaPacketAsync(dataset, { sampleSize });
-        const schemaText = formatSchemaForPrompt(schemaPacket);
-        const { systemPrompt, userPrompt } = buildOllamaPrompts(schemaText, query);
-
-        console.log("[ollama] Sending request to Ollama...");
-        console.log("[ollama] Model:", modelName);
-        console.log("[ollama] Schema length:", schemaText.length, "chars");
-        console.log("[ollama] Schema sample rows:", schemaPacket.sampledRowCount);
-        console.log("[ollama] Timeout:", OLLAMA_TIMEOUT_MS, "ms");
-
-        try {
-          const response = await requestOllama({ model: modelName, systemPrompt, userPrompt });
-          console.log("[ollama] Response received from Ollama");
-          responseText = response.response.trim();
-          finalSchemaPacket = schemaPacket;
-          break modelLoop;
-        } catch (error) {
-          if (isTimeoutError(error) && sampleSize !== attemptedSampleSizes.at(-1)) {
-            console.warn(`[ollama] Timeout with sample size ${sampleSize}, retrying with smaller schema packet...`);
-            continue;
-          }
-
-          console.warn(`[ollama] Model ${modelName} failed with sample size ${sampleSize}: ${error.message}`);
-          break;
-        }
-      }
+    // Validate response
+    const validation = validateAIResponse(aiResponse);
+    if (!validation.valid) {
+      console.warn("[ollama] Response validation failed:", validation.errors);
+      return {
+        success: false,
+        error: "Invalid response format",
+        usedAI: false,
+        shouldFallback: true,
+      };
     }
-
-    if (!responseText) {
-      throw new Error(`All Ollama models failed: ${modelNames.join(", ")}`);
-    }
-
-    console.log("[ollama] Raw response length:", responseText.length);
-
-    let aiResponse;
-    try {
-      let cleanedResponse = responseText
-        .replace(/```json\n?/g, '')
-        .replace(/```\n?/g, '')
-        .trim();
-      
-      aiResponse = JSON.parse(cleanedResponse);
-    } catch (parseError) {
-      console.error("[ollama] JSON parse error:", parseError.message);
-      console.error("[ollama] Raw response:", responseText.substring(0, 500));
-      throw new Error(`Invalid JSON from Ollama: ${responseText.substring(0, 100)}`);
-    }
-
-    if (!aiResponse.intent || !aiResponse.sql) {
-      throw new Error("Missing required fields: intent or sql");
-    }
-
-    if (finalSchemaPacket && Array.isArray(aiResponse.columns_used)) {
-      const validColumns = new Set(finalSchemaPacket.columns.map((column) => column.name));
-      aiResponse.columns_used = aiResponse.columns_used.filter((column) => validColumns.has(column));
-    }
-
-    // Ensure chart_type is set based on intent
-    const intentToChartType = {
-      'aggregation': 'bar',
-      'filter': 'table',
-      'comparison': 'bar',
-      'distribution': 'histogram',
-      'correlation': 'scatter',
-      'count': 'pie',
-      'trend': 'line',
-      'summary': 'table'
-    };
-    if (!aiResponse.chart_type) {
-      aiResponse.chart_type = intentToChartType[aiResponse.intent] || 'table';
-    }
-
-    console.log("[ollama] ✅ Ollama analysis successful");
-    console.log("[ollama] Intent:", aiResponse.intent);
-    console.log("[ollama] Chart type:", aiResponse.chart_type);
-    console.log("[ollama] Confidence:", aiResponse.confidence);
 
     return {
       success: true,
       ...aiResponse,
       usedAI: true,
-      model: `${selectedModelName} (Ollama)`,
+      model: OLLAMA_MODEL,
     };
   } catch (error) {
-    console.error("[ollama] Error:", error.message);
+    console.error("[ollama] Error calling Ollama:", error.message);
     return {
       success: false,
       error: error.message,
@@ -290,3 +125,201 @@ export async function callOllamaAI(dataset, query) {
     };
   }
 }
+
+/**
+ * Build dataset schema (no raw data) - using existing shared analytics
+ */
+function buildDatasetSchema(dataset) {
+  // Import the shared analytics function to build schema
+  const columns = (dataset.columns || []).map(col => ({
+    name: col.name,
+    type: col.type || 'string',
+    role: col.role || 'dimension',
+    sampleValues: col.sample || [],
+  }));
+
+  return {
+    datasetName: dataset.name,
+    rowCount: dataset.rowCount || 0,
+    columnCount: columns.length,
+    columns,
+    primaryDimension: columns.find(col => col.role === 'dimension'),
+    primaryMetric: columns.find(col => col.role === 'metric'),
+  };
+}
+
+/**
+ * Format schema for prompt
+ */
+function formatSchemaForPrompt(schemaInfo) {
+  const { dataset, schema, dataSummary } = schemaInfo;
+  
+  return `
+Dataset: ${dataset.name}
+Rows: ${dataset.rowCount}
+Columns: ${dataset.columnCount}
+
+Data Summary:
+- Numeric columns: ${dataSummary.numericColumns}
+- Text columns: ${dataSummary.textColumns}
+- Date columns: ${dataSummary.dateColumns}
+
+COLUMNS:
+${schema.columns
+  .map(col => {
+    let info = `- ${col.name} (${col.type}, ${col.role})`;
+    if (col.sampleValues && col.sampleValues.length > 0) {
+      const samples = col.sampleValues.slice(0, 3).join(', ');
+      info += ` - Sample values: ${samples}`;
+    }
+    return info;
+  })
+  .join("\n")}
+
+Primary Dimension: ${schema.primaryDimension?.name || 'none'}
+Primary Metric: ${schema.primaryMetric?.name || 'none'}
+`;
+}
+
+/**
+ * Validate AI response
+ */
+function validateAIResponse(response) {
+  const required = ["intent", "columns_used", "sql", "insight", "chart_type", "confidence"];
+  const errors = [];
+
+  for (const field of required) {
+    if (!(field in response)) {
+      errors.push(`Missing: ${field}`);
+    }
+  }
+
+  if (typeof response.confidence !== "number" || response.confidence < 0 || response.confidence > 1) {
+    errors.push("Invalid confidence");
+  }
+
+  if (!Array.isArray(response.columns_used)) {
+    errors.push("columns_used must be an array");
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  };
+}
+
+/**
+ * Enhanced Ollama service class for AI router integration
+ */
+class OllamaAIService {
+  constructor() {
+    this.baseUrl = OLLAMA_BASE_URL;
+    this.model = OLLAMA_MODEL;
+    this.timeout = API_TIMEOUT;
+  }
+
+  async isAvailable() {
+    return await isOllamaConfigured();
+  }
+
+  async generateResponse(prompt, context = {}) {
+    try {
+      // Validate that no actual data is being sent
+      const validation = validateSchemaOnlyContext(context);
+      if (!validation.isValid) {
+        console.warn('Ollama AI service detected potential data leakage:', validation.violations);
+      }
+
+      const { dataset, schema } = context;
+      
+      if (!dataset || !schema) {
+        return {
+          success: false,
+          error: 'Dataset and schema are required',
+          provider: 'ollama',
+        };
+      }
+
+      // Use schema-only approach
+      const schemaInfo = extractSchemaForAI(dataset, schema);
+      const systemPrompt = buildSchemaOnlyPrompt(prompt, schemaInfo);
+
+      const response = await fetch(`${this.baseUrl}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: this.model,
+          prompt: systemPrompt,
+          stream: false,
+          temperature: parseFloat(process.env.AI_TEMPERATURE) || 0.7,
+          num_predict: parseInt(process.env.AI_MAX_TOKENS) || 2048,
+        }),
+        signal: AbortSignal.timeout(this.timeout),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Ollama API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const content = data.response?.trim() || '';
+
+      return {
+        success: true,
+        content,
+        provider: 'ollama',
+        model: this.model,
+      };
+    } catch (error) {
+      console.error('Ollama AI Error:', error.message);
+      return {
+        success: false,
+        error: error.message,
+        provider: 'ollama',
+      };
+    }
+  }
+
+  async testConnection() {
+    try {
+      const available = await this.isAvailable();
+      if (!available) {
+        return {
+          success: false,
+          error: 'Ollama service not available',
+        };
+      }
+
+      const response = await fetch(`${this.baseUrl}/api/generate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: this.model,
+          prompt: 'Hello, can you respond with "Connection successful"?',
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        model: this.model,
+        response: data.response?.trim() || '',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+  }
+}
+
+export const ollamaAIService = new OllamaAIService();
+export { buildDatasetSchema, formatSchemaForPrompt, validateAIResponse };

@@ -14,10 +14,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@insightflow/shared-analytics": "../packages/shared-analytics",
-    "axios": "1.14.0",
+    "axios": "^1.15.1",
     "dotenv": "^17.4.2"
-  },
-  "devDependencies": {
-    "vitest": "^3.2.4"
   }
 }
