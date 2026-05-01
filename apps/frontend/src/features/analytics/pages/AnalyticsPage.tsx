@@ -306,6 +306,12 @@ const AnalyticsPage = () => {
                   Data integrity removed {analyticsHealth?.integrity.removedEmptyRows ?? 0} empty rows and {analyticsHealth?.integrity.invalidNumericValues ?? 0} invalid values.
                 </p>
               </div>
+              {insights.map((insight) => (
+                <div key={insight} className="flex gap-4">
+                  <CheckCircle2 className="mt-1 h-5 w-5 text-success" />
+                  <p>{insight}</p>
+                </div>
+              ))}
             </div>
             <Button
               onClick={runAICorrelationTest}

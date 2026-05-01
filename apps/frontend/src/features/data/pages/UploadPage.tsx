@@ -2,6 +2,8 @@ import { useCallback, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, ArrowRight, Layers, File, X, Loader2 } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
+import { useLocalData } from '@/features/data/context/localDataContext';
+import type { DatasetRow } from '@/features/data/model/dataStore';
 import { useNavigate } from 'react-router-dom';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
@@ -22,6 +24,7 @@ let fileIdCounter = 0;
 
 const UploadPage = () => {
   const { dataset, uploadFile, loadDemo } = useData();
+  const { localDataset, importLocalDataset: importLocal } = useLocalData();
   const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -93,7 +96,7 @@ const UploadPage = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [uploadFile]);
+  }, [uploadFile, localMode, importLocal]);
 
   const handleMultipleFiles = useCallback(async (files: FileList) => {
     const fileArray = Array.from(files);
