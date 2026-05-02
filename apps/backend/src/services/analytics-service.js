@@ -33,8 +33,8 @@ export { normalizeColumns, generateDemoDataset, buildDatasetSchema };
 
 function buildGuidedDatasetResponse(schema, chart) {
   const dataTypeLabel = schema?.dataTypeLabel || "Data";
-  const primaryMetric = schema?.primaryMetric || "values";
-  const primaryDimension = schema?.primaryDimension || "category";
+  const primaryMetric = schema?.primaryMetric?.name || schema?.primaryMetric || "values";
+  const primaryDimension = schema?.primaryDimension?.name || schema?.primaryDimension || "category";
 
   return {
     content: `This is your ${dataTypeLabel} dataset. You can ask me about trends, comparisons, or insights. For example, you could ask "Show me the top 5 ${primaryDimension} by ${primaryMetric}" or "What are the main patterns in this data?"`,
