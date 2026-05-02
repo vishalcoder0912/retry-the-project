@@ -128,10 +128,15 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ column, value }),
     }),
-  sendChatQuery: (datasetId: string, query: string) =>
+  sendChatQuery: (datasetId: string, query: string, preferences?: {
+    chartCount?: string;
+    chartTypes?: string[];
+    showTrends?: boolean;
+    showCorrelations?: boolean;
+  }) =>
     request<ChatResponse>(`/api/datasets/${datasetId}/chat`, {
       method: "POST",
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, ...preferences }),
     }),
   getAICorrelations: (datasetId: string) =>
     request<CorrelationResponse>(`/api/datasets/${datasetId}/ai-correlations`, {

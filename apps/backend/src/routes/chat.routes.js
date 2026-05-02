@@ -1,6 +1,7 @@
 /**
  * Chat Routes
  * API endpoints for AI chat functionality
+ * Privacy-first: Only schema metadata is sent to AI, never raw data
  */
 
 import { randomUUID } from 'node:crypto';
@@ -44,6 +45,14 @@ export function registerChatRoutes(server) {
           throw new AppError('Query cannot be empty', 400, 'VALIDATION_ERROR');
         }
         
+        // Extract user preferences (privacy-first - these are settings, not data)
+        const preferences = {
+          chartCount: body.chartCount || "auto",
+          chartTypes: body.chartTypes || ["bar", "line", "pie"],
+          showTrends: body.showTrends !== false,
+          showCorrelations: body.showCorrelations !== false,
+        };
+        
         // Get dataset
         const dataset = getDatasetById(datasetId);
         if (!dataset) {
@@ -52,20 +61,22 @@ export function registerChatRoutes(server) {
         
         logger.info('Processing chat query', { 
           datasetId, 
-          query: query.substring(0, 50) 
+          query: query.substring(0, 50),
+          preferences,
         });
         
         console.log('\n================================================');
-        console.log('📥 API RECEIVED USER QUERY:');
+        console.log('📥 API RECEIVED USER QUERY (Privacy-First):');
         console.log(`   Dataset ID: ${datasetId}`);
         console.log(`   Query: "${query}"`);
+        console.log(`   Preferences: ${JSON.stringify(preferences)}`);
         console.log('================================================\n');
         
         // Get existing chat messages
         const existingMessages = getChatMessages(datasetId);
         
-        // Process with AI (schema-first approach)
-        const analysis = await createSchemaFirstChatResponse(dataset, query);
+        // Process with AI using schema-first approach (no raw data sent)
+        const analysis = await createSchemaFirstChatResponse(dataset, query, preferences);
         
         const now = new Date().toISOString();
         const userMessage = {
@@ -88,7 +99,10 @@ export function registerChatRoutes(server) {
           confidence: analysis.confidence,
           intent: analysis.intent,
           reason: analysis.reason,
-          metadata: analysis.metadata,
+          metadata: {
+            ...analysis.metadata,
+            privacyMode: "schema-only",
+          },
         };
         
         // Save messages
@@ -97,11 +111,13 @@ export function registerChatRoutes(server) {
 logger.info('Chat response generated', {
           datasetId,
           usedAI: analysis.usedAI,
+          model: analysis.model,
           confidence: analysis.confidence,
         });
 
         console.log('\n================================================');
         console.log('📤 API SENDING RESPONSE BACK:');
+        console.log(`   Privacy Mode: Schema-Only (no raw data)`);
         console.log(`   Used AI: ${analysis.usedAI ? 'Yes 🤖' : 'No (Local)'}`);
         console.log(`   Model: ${analysis.model || 'Local Analysis Engine'}`);
         console.log(`   Confidence: ${(analysis.confidence || 0) * 100}%`);
@@ -137,7 +153,7 @@ logger.info('Chat response generated', {
     }
   });
   
-  logger.info('Chat routes registered');
+  logger.info('Chat routes registered (privacy-first mode)');
 }
 
 async function readJsonBody(request) {
