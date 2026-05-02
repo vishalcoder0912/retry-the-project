@@ -31,6 +31,70 @@ import { buildSchemaPacket, formatSchemaForPrompt } from "./schema-packet-builde
 // Re-export for backward compatibility
 export { normalizeColumns, generateDemoDataset, buildDatasetSchema };
 
+function buildGuidedDatasetResponse(schema, chart) {
+  const dataTypeLabel = schema?.dataTypeLabel || "Data";
+  const primaryMetric = schema?.primaryMetric || "values";
+  const primaryDimension = schema?.primaryDimension || "category";
+
+  return {
+    content: `This is your ${dataTypeLabel} dataset. You can ask me about trends, comparisons, or insights. For example, you could ask "Show me the top 5 ${primaryDimension} by ${primaryMetric}" or "What are the main patterns in this data?"`,
+    insights: [
+      `Primary metric: ${primaryMetric}`,
+      `Primary dimension: ${primaryDimension}`,
+      chart ? `Recommended chart: ${chart.chartType || "bar"}` : null,
+    ].filter(Boolean),
+  };
+}
+
+/**
+ * Create schema-first chat response using Ollama neural-chat:7b
+ * Enforces privacy by only sending schema metadata to AI
+ */
+export const createSchemaFirstChatResponse = async (dataset, query, preferences = {}) => {
+  const chartCount = preferences.chartCount || "auto";
+  const chartTypes = preferences.chartTypes || ["bar", "line", "pie"];
+  const showTrends = preferences.showTrends !== false;
+  const showCorrelations = preferences.showCorrelations !== false;
+
+  const configured = await isOllamaConfigured();
+  
+  if (!configured) {
+    console.log("[schema-first] Ollama not available, using local analytics");
+    return createChatResponse(dataset, query);
+  }
+
+  try {
+    console.log("[schema-first] Calling Ollama with schema-only approach");
+    const result = await callOllamaAI(dataset, query, preferences);
+    
+    if (!result.success) {
+      console.log("[schema-first] Ollama failed, falling back to local");
+      return createChatResponse(dataset, query);
+    }
+
+    return {
+      content: result.insights || result.content || "Analysis complete",
+      sql: result.sql,
+      chart: result.charts || result.chart_type,
+      insights: result.insights,
+      schema: result.charts,
+      intent: result.intent,
+      confidence: result.confidence || 0.8,
+      reason: result.reasoning,
+      model: result.model || "neural-chat:7b",
+      usedAI: true,
+      metadata: {
+        columnsUsed: result.columns_used,
+        chartTypes: result.charts?.map(c => c.type),
+        preferences: { chartCount, chartTypes, showTrends, showCorrelations },
+      },
+    };
+  } catch (error) {
+    console.log("[schema-first] Error:", error.message);
+    return createChatResponse(dataset, query);
+  }
+};
+
 /**
  * Validate and fix AI-generated SQL to use correct values from dataset
  */

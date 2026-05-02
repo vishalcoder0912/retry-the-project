@@ -215,12 +215,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [applyApiState]);
 
-  const sendChatQuery = useCallback(async (query: string) => {
+  const sendChatQuery = useCallback(async (query: string, preferences?: {
+    chartCount?: string;
+    chartTypes?: string[];
+    showTrends?: boolean;
+    showCorrelations?: boolean;
+  }) => {
     if (!dataset) return;
 
     setIsProcessing(true);
     try {
-      const response = await api.sendChatQuery(dataset.id, query);
+      const response = await api.sendChatQuery(dataset.id, query, preferences);
       setChatMessages(prev => [
         ...prev,
         normalizeChatMessage(response.userMessage),
