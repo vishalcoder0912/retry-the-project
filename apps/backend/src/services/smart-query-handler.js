@@ -372,8 +372,8 @@ export function handleSmartQuery(dataset, query) {
     const enhancedSchema = buildEnhancedSchema(dataset.columns, dataset.rows);
     
     const schema = {
-      ...basicSchema,
       ...enhancedSchema,
+      ...basicSchema,
       columns: dataset.columns,
     };
     

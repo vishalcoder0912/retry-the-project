@@ -1,12 +1,12 @@
 /**
- * Ollama AI Service - Replace Gemini with Ollama + Mistral
- * Uses local Mistral model for data analytics with schema-only approach
+ * Ollama AI Service - Using neural-chat:7b
+ * Privacy-first: Only schema metadata sent to AI
  */
 
 import { extractSchemaForAI, buildSchemaOnlyPrompt, validateSchemaOnlyContext } from '../utils/schema-extractor.js';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "neural-chat:7b";
 const API_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS) || 60000;
 
 /**
