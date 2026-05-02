@@ -31,6 +31,21 @@ import { buildSchemaPacket, formatSchemaForPrompt } from "./schema-packet-builde
 // Re-export for backward compatibility
 export { normalizeColumns, generateDemoDataset, buildDatasetSchema };
 
+function buildGuidedDatasetResponse(schema, chart) {
+  const dataTypeLabel = schema?.dataTypeLabel || "Data";
+  const primaryMetric = schema?.primaryMetric || "values";
+  const primaryDimension = schema?.primaryDimension || "category";
+
+  return {
+    content: `This is your ${dataTypeLabel} dataset. You can ask me about trends, comparisons, or insights. For example, you could ask "Show me the top 5 ${primaryDimension} by ${primaryMetric}" or "What are the main patterns in this data?"`,
+    insights: [
+      `Primary metric: ${primaryMetric}`,
+      `Primary dimension: ${primaryDimension}`,
+      chart ? `Recommended chart: ${chart.chartType || "bar"}` : null,
+    ].filter(Boolean),
+  };
+}
+
 /**
  * Create schema-first chat response using Ollama neural-chat:7b
  * Enforces privacy by only sending schema metadata to AI
