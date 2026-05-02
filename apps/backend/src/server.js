@@ -696,3 +696,27 @@ const server = createServer(async (request, response) => {
 server.listen(port, () => {
   console.log(`InsightFlow API listening on http://127.0.0.1:${port}`);
 });
+
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Error: Port ${port} is already in use`);
+    process.exit(1);
+  }
+  console.error('Server error:', error);
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
