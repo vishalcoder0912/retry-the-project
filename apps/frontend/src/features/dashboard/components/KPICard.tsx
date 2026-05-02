@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, DollarSign, Package, Percent, Star, Table2, Columns3, BarChart3, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, DollarSign, Package, Percent, Star, Table2, Columns3, BarChart3, ArrowUpRight, ArrowDownRight, Shield, Globe, Code, AlertTriangle, Siren } from 'lucide-react';
 import { KPI } from '@/features/data/model/dataStore';
 import { cn } from '@/shared/lib/utils';
 
@@ -39,7 +39,7 @@ const KPICard = ({ kpi, index }: KPICardProps) => {
   const Icon = iconMap[kpi.icon] || DollarSign;
   const trend = kpi.trend ?? 'stable';
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;
-  const statusClass = kpi.status ? statusColors[kpi.status] : 'border-border bg-card text-muted-foreground';
+  const isPositive = (kpi.change ?? 0) >= 0;
   const sparklineValues = kpi.sparkline ?? [];
   const maxValue = sparklineValues.length > 0 ? Math.max(...sparklineValues) : 0;
   const minValue = sparklineValues.length > 0 ? Math.min(...sparklineValues) : 0;
@@ -86,7 +86,7 @@ const KPICard = ({ kpi, index }: KPICardProps) => {
       </div>
       
       <div className="mt-4">
-        <p className="text-sm font-medium text-muted-foreground">{kpi.label}</p>
+        <p className="text-sm font-medium text-muted-foreground">{kpi.title}</p>
         <p className="mt-1 text-2xl font-semibold text-foreground">{kpi.value}</p>
       </div>
     </motion.div>

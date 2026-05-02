@@ -110,7 +110,7 @@ const AnalyticsPage = () => {
       `Columns: ${analyticsDataset.columns.length}`,
       '',
       'KPIs',
-      ...kpis.map((kpi) => `- ${kpi.label}: ${kpi.value}`),
+      ...kpis.map((kpi) => `- ${kpi.title}: ${kpi.value}`),
       '',
       'Charts',
       ...charts.map((chart) => `- ${chart.title}`),
@@ -175,8 +175,8 @@ const AnalyticsPage = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Regions</SelectItem>
-              {regionOptions.map((option) => (
-                <SelectItem key={option} value={option}>
+              {regionOptions.map((option, idx) => (
+                <SelectItem key={`${option}-${idx}`} value={option}>
                   {option}
                 </SelectItem>
               ))}
@@ -306,10 +306,10 @@ const AnalyticsPage = () => {
                   Data integrity removed {analyticsHealth?.integrity.removedEmptyRows ?? 0} empty rows and {analyticsHealth?.integrity.invalidNumericValues ?? 0} invalid values.
                 </p>
               </div>
-              {insights.map((insight) => (
-                <div key={insight} className="flex gap-4">
+              {(analysis?.insights ?? []).map((insight) => (
+                <div key={insight.title} className="flex gap-4">
                   <CheckCircle2 className="mt-1 h-5 w-5 text-success" />
-                  <p>{insight}</p>
+                  <p>{insight.message}</p>
                 </div>
               ))}
             </div>

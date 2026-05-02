@@ -96,7 +96,7 @@ const UploadPage = () => {
     } finally {
       setIsUploading(false);
     }
-  }, [uploadFile, localMode, importLocal]);
+  }, [uploadFile]);
 
   const handleMultipleFiles = useCallback(async (files: FileList) => {
     const fileArray = Array.from(files);
