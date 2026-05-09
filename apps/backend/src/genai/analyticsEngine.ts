@@ -1,5 +1,4 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import OpenAI from "openai";
 import axios from "axios";
 
 interface Dataset {
@@ -55,16 +54,12 @@ interface AIInsight {
 
 enum AIProvider {
   GEMINI = "gemini",
-  OPENAI = "openai",
-  ANTHROPIC = "anthropic",
   OLLAMA = "ollama",
   NONE = "none",
 }
 
 class AIClient {
   private genAI: GoogleGenerativeAI | null = null;
-  private openai: OpenAI | null = null;
-  private anthropic: any = null;
   private ollamaUrl: string = "http://localhost:11434";
   private ollamaModel: string = "llama3.2";
   private ollamaAvailable: boolean = false;
@@ -77,8 +72,6 @@ class AIClient {
 
   private initializeProviders() {
     const googleKey = process.env.GOOGLE_API_KEY || "";
-    const openaiKey = process.env.OPENAI_API_KEY || "";
-    const anthropicKey = process.env.ANTHROPIC_API_KEY || "";
 
     this.fallbackChain = [];
 
@@ -101,31 +94,6 @@ class AIClient {
       console.warn("⚠️ GOOGLE_API_KEY not found");
     }
 
-    if (openaiKey) {
-      try {
-        this.openai = new OpenAI({ apiKey: openaiKey });
-        this.fallbackChain.push(AIProvider.OPENAI);
-        console.log("✅ OpenAI initialized");
-      } catch (e) {
-        console.warn("⚠️ Failed to initialize OpenAI:", e);
-      }
-    } else {
-      console.warn("⚠️ OPENAI_API_KEY not found");
-    }
-
-    if (anthropicKey) {
-      try {
-        const Anthropic = require("@anthropic-ai/sdk");
-        this.anthropic = new Anthropic({ apiKey: anthropicKey });
-        this.fallbackChain.push(AIProvider.ANTHROPIC);
-        console.log("✅ Anthropic Claude initialized");
-      } catch (e) {
-        console.warn("⚠️ Failed to initialize Anthropic:", e);
-      }
-    } else {
-      console.warn("⚠️ ANTHROPIC_API_KEY not found");
-    }
-
     if (this.fallbackChain.length === 0) {
       console.error("❌ No AI provider available! Set at least one API key.");
     } else {
@@ -146,12 +114,6 @@ class AIClient {
         switch (provider) {
           case AIProvider.GEMINI:
             result = await this.generateWithGemini(prompt);
-            break;
-          case AIProvider.OPENAI:
-            result = await this.generateWithOpenAI(prompt, systemPrompt);
-            break;
-          case AIProvider.ANTHROPIC:
-            result = await this.generateWithAnthropic(prompt, systemPrompt);
             break;
           case AIProvider.OLLAMA:
             result = await this.generateWithOllama(prompt, systemPrompt);
@@ -179,44 +141,6 @@ class AIClient {
     const model = this.genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
     const result = await model.generateContent(prompt);
     return result.response.text();
-  }
-
-  private async generateWithOpenAI(
-    prompt: string,
-    systemPrompt?: string
-  ): Promise<string> {
-    if (!this.openai) throw new Error("OpenAI not initialized");
-
-    const messages: any[] = [];
-    if (systemPrompt) {
-      messages.push({ role: "system", content: systemPrompt });
-    }
-    messages.push({ role: "user", content: prompt });
-
-    const response = await this.openai.chat.completions.create({
-      model: "gpt-4o",
-      messages,
-      temperature: 0.7,
-      max_tokens: 4000,
-    });
-
-    return response.choices[0]?.message?.content || "";
-  }
-
-  private async generateWithAnthropic(
-    prompt: string,
-    systemPrompt?: string
-  ): Promise<string> {
-    if (!this.anthropic) throw new Error("Anthropic not initialized");
-
-    const response = await this.anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 4000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    return response.content[0]?.text || "";
   }
 
   private async generateWithOllama(
