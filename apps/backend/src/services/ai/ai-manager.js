@@ -3,8 +3,8 @@ import { OllamaProvider } from './providers/ollama-provider.js';
 import { GeminiProvider } from './providers/gemini-provider.js';
 import { OpenAIProvider } from './providers/openai-provider.js';
 import { AnthropicProvider } from './providers/anthropic-provider.js';
-import { AIProviderError } from '../../../middleware/error-handler.js';
-import config from '../../../config/environment.js';
+import { AIProviderError } from '../../middleware/error-handler.js';
+import config from '../../config/environment.js';
 
 class AIManager {
   constructor() {
