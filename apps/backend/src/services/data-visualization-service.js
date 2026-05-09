@@ -31,7 +31,7 @@ function generateHistogram(dataset, column) {
 
   if (values.length === 0) return null;
 
-  const binCount = Math.ceil(Math.sqrt(values.length));
+  const binCount = Math.min(10, Math.ceil(Math.sqrt(values.length)));
   const min = Math.min(...values);
   const max = Math.max(...values);
   const binWidth = (max - min) / binCount;
@@ -42,14 +42,26 @@ function generateHistogram(dataset, column) {
     bins[Math.min(binIdx, binCount - 1)]++;
   });
 
+  const formatNumber = (num) => {
+    if (num >= 1000000) return `$${(num / 1000000).toFixed(1)}M`;
+    if (num >= 1000) return `$${(num / 1000).toFixed(0)}K`;
+    return num.toFixed(0);
+  };
+
   return {
     type: "histogram",
-    title: `Distribution of ${column.name}`,
+    title: `${column.name} Distribution`,
     column: column.name,
-    data: bins.map((count, i) => ({
-      range: `${(min + i * binWidth).toFixed(2)}-${(min + (i + 1) * binWidth).toFixed(2)}`,
-      count,
-    })),
+    data: bins.map((count, i) => {
+      const rangeStart = min + i * binWidth;
+      const rangeEnd = min + (i + 1) * binWidth;
+      return {
+        range: `${formatNumber(rangeStart)}-${formatNumber(rangeEnd)}`,
+        rangeStart,
+        rangeEnd,
+        count,
+      };
+    }),
   };
 }
 

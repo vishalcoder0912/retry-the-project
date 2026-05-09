@@ -1,123 +1,157 @@
 import { useEffect,useMemo } from "react";
-import type { Dataset,KPI } from "@/features/data/model/dataStore";
+import type { Dataset,KPI,DataColumn } from "@/features/data/model/dataStore";
 import { buildAnalyticsDashboard } from "@/features/data/model/analyticsEngine";
 
-type SnapshotMetricKey =
-  | "dataQuality"
-  | "avgSalary"
-  | "correlation"
-  | "educationImpact";
+interface ColumnInfo {
+  name:string;
+  type:"number"|"string"|"date";
+  role:"metric"|"dimension";
+  isNumeric:boolean;
+  isCategorical:boolean;
+  isDate:boolean;
+  uniqueCount:number;
+  sampleValues:string[];
+}
 
-interface KPISnapshot {
-  datasetId:string;
-  timestamp:number;
-  metrics:Record<SnapshotMetricKey,number | null>;
+interface DatasetSchema {
+  columns:ColumnInfo[];
+  numericColumns:ColumnInfo[];
+  categoricalColumns:ColumnInfo[];
+  dateColumns:ColumnInfo[];
+  primaryMetric:ColumnInfo | null;
+  primaryDimension:ColumnInfo | null;
 }
 
 const STORAGE_PREFIX = "insightflow-kpi-snapshot";
-const TREND_EPSILON = 0.5;
-const EDUCATION_ORDER = ["High School","Diploma","Associate","Bachelor","Master","MBA","PhD"];
 
 const roundTo = (value:number,decimals:number=2)=>{
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
 };
 
-const formatCurrencyCompact = (value:number)=>new Intl.NumberFormat("en-US",{
-  style:"currency",
-  currency:"USD",
-  notation:"compact",
-  maximumFractionDigits:1,
-}).format(value);
-
-const normalizeEducationRank = (value:string)=>{
-  const lower = value.toLowerCase();
-  if (lower.includes("phd") || lower.includes("doctor")) return 6;
-  if (lower.includes("mba")) return 5;
-  if (lower.includes("master")) return 4;
-  if (lower.includes("bachelor")) return 3;
-  if (lower.includes("associate")) return 2;
-  if (lower.includes("diploma")) return 1;
-  return 0;
-};
-
-const readSnapshot = (datasetId:string)=>{
-  if (typeof window === "undefined") return null;
-  const raw = window.sessionStorage.getItem(`${STORAGE_PREFIX}:${datasetId}`);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as KPISnapshot;
-  } catch {
-    return null;
+const formatValue = (value:number,columnType:string):string=>{
+  if (columnType === "currency" || columnType.includes("salary") || columnType.includes("price") || columnType.includes("cost") || columnType.includes("amount") || columnType.includes("revenue") || columnType.includes("profit")) {
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
+    return `$${value.toFixed(0)}`;
   }
+  if (columnType.includes("percent") || columnType.includes("rate") || columnType.includes("score")) {
+    return `${value.toFixed(1)}%`;
+  }
+  if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  if (Math.abs(value) < 1 && value !== 0) return value.toFixed(3);
+  return value.toLocaleString();
 };
 
-const writeSnapshot = (snapshot:KPISnapshot)=>{
-  if (typeof window === "undefined") return;
-  window.sessionStorage.setItem(`${STORAGE_PREFIX}:${snapshot.datasetId}`,JSON.stringify(snapshot));
+const detectColumnType = (column:DataColumn):{type:string;role:"metric"|"dimension"}=>{
+  const name = column.name.toLowerCase();
+  const type = column.type || "string";
+  
+  if (["number","numeric","integer","decimal","float"].includes(type)) {
+    if (name.includes("salary") || name.includes("price") || name.includes("cost") || name.includes("amount") || name.includes("revenue") || name.includes("profit") || name.includes("income") || name.includes("budget")) {
+      return { type:"currency",role:"metric" };
+    }
+    if (name.includes("percent") || name.includes("rate") || name.includes("score") || name.includes("rating") || name.includes("probability")) {
+      return { type:"percent",role:"metric" };
+    }
+    if (name.includes("count") || name.includes("quantity") || name.includes("total") || name.includes("number") || name.includes("id")) {
+      return { type:"count",role:"metric" };
+    }
+    if (name.includes("age") || name.includes("year") || name.includes("experience") || name.includes("tenure") || name.includes("seniority")) {
+      return { type:"years",role:"metric" };
+    }
+    return { type:"numeric",role:"metric" };
+  }
+  
+  if (name.includes("country") || name.includes("region") || name.includes("city") || name.includes("location")) {
+    return { type:"category",role:"dimension" };
+  }
+  if (name.includes("education") || name.includes("degree") || name.includes("qualification")) {
+    return { type:"category",role:"dimension" };
+  }
+  if (name.includes("job") || name.includes("title") || name.includes("role") || name.includes("position")) {
+    return { type:"category",role:"dimension" };
+  }
+  if (name.includes("company") || name.includes("organization") || name.includes("employer")) {
+    return { type:"category",role:"dimension" };
+  }
+  if (name.includes("industry") || name.includes("sector") || name.includes("field")) {
+    return { type:"category",role:"dimension" };
+  }
+  if (name.includes("language") || name.includes("framework") || name.includes("skill") || name.includes("tech") || name.includes("technology")) {
+    return { type:"category",role:"dimension" };
+  }
+  if (name.includes("gender") || name.includes("sex")) {
+    return { type:"category",role:"dimension" };
+  }
+  
+  return { type:"string",role:"dimension" };
 };
 
-const computeChange = (current:number | null,previous:number | null)=>{
-  if (current == null || previous == null || previous === 0) return undefined;
-  return roundTo(((current - previous) / previous) * 100,2);
+const analyzeDatasetSchema = (dataset:Dataset):DatasetSchema=>{
+  const columns:ColumnInfo[] = [];
+  const numericColumns:ColumnInfo[] = [];
+  const categoricalColumns:ColumnInfo[] = [];
+  const dateColumns:ColumnInfo[] = [];
+  
+  const sampleRow = dataset.rows[0] || {};
+  
+  for (const col of dataset.columns) {
+    const colType = detectColumnType(col);
+    const values = dataset.rows.map(r => r[col.name]).filter(v => v != null && v !== "");
+    const uniqueValues = new Set(values);
+    
+    const isNumeric = ["number","numeric","integer","decimal","float"].includes(col.type || "") || 
+      (col.type === "string" && values.length > 0 && values.filter(v => !isNaN(Number(v))).length / values.length > 0.7);
+    const isDate = col.type === "date" || /date|time|timestamp|created|updated/.test(col.name.toLowerCase());
+    const isCategorical = !isNumeric && uniqueValues.size < 50;
+    
+    const columnInfo:ColumnInfo = {
+      name:col.name,
+      type:isNumeric ? "number" : isDate ? "date" : "string",
+      role:colType.role,
+      isNumeric,
+      isCategorical,
+      isDate,
+      uniqueCount:uniqueValues.size,
+      sampleValues:Array.from(uniqueValues).slice(0,5).map(String),
+    };
+    
+    columns.push(columnInfo);
+    if (isNumeric) numericColumns.push(columnInfo);
+    if (isCategorical) categoricalColumns.push(columnInfo);
+    if (isDate) dateColumns.push(columnInfo);
+  }
+  
+  const primaryMetric = numericColumns.find(c => c.role === "metric") || numericColumns[0] || null;
+  const primaryDimension = categoricalColumns.find(c => c.role === "dimension") || categoricalColumns[0] || null;
+  
+  return { columns,numericColumns,categoricalColumns,dateColumns,primaryMetric,primaryDimension };
 };
 
-const deriveTrend = (change:number | undefined):"up"|"down"|"stable"=>{
-  if (change == null || Math.abs(change) <= TREND_EPSILON) return "stable";
-  return change > 0 ? "up" : "down";
+const calculateCorrelation = (x:number[],y:number[])=>{
+  if (x.length < 2 || y.length < 2) return null;
+  const n = Math.min(x.length,y.length);
+  const xMean = x.slice(0,n).reduce((a,b)=>a+b,0)/n;
+  const yMean = y.slice(0,n).reduce((a,b)=>a+b,0)/n;
+  
+  let numerator = 0,xVar = 0,yVar = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = x[i] - xMean;
+    const dy = y[i] - yMean;
+    numerator += dx * dy;
+    xVar += dx * dx;
+    yVar += dy * dy;
+  }
+  
+  const denom = Math.sqrt(xVar * yVar);
+  return denom === 0 ? null : roundTo(numerator / denom,2);
 };
 
-const buildSparkline = (previous:number | null,current:number | null,fallback:number[])=>{
-  const values = [previous,current].filter((value):value is number=>value != null);
-  if (values.length >= 2) return values;
-  return fallback.length > 1 ? fallback : (current != null ? [current,current,current] : [0,0,0]);
-};
-
-const correlationCoefficient = (pairs:Array<{ x:number; y:number }>)=>{
-  if (pairs.length < 2) return null;
-  const xValues = pairs.map((pair)=>pair.x);
-  const yValues = pairs.map((pair)=>pair.y);
-  const xMean = xValues.reduce((sum,value)=>sum + value,0) / xValues.length;
-  const yMean = yValues.reduce((sum,value)=>sum + value,0) / yValues.length;
-
-  let numerator = 0;
-  let xVariance = 0;
-  let yVariance = 0;
-
-  pairs.forEach(({ x,y })=>{
-    const xDelta = x - xMean;
-    const yDelta = y - yMean;
-    numerator += xDelta * yDelta;
-    xVariance += xDelta ** 2;
-    yVariance += yDelta ** 2;
-  });
-
-  const denominator = Math.sqrt(xVariance * yVariance);
-  if (!denominator) return null;
-  return roundTo(numerator / denominator,2);
-};
-
-const correlationInsight = (value:number | null)=>{
-  if (value == null) return "Correlation is unavailable because the dataset lacks enough valid salary and experience pairs.";
-  if (value >= 0.7) return "Strong positive correlation between experience and salary.";
-  if (value >= 0.4) return "Moderate positive correlation suggests salary generally rises with experience.";
-  if (value > 0) return "Weak positive correlation indicates other factors besides experience drive salary outcomes.";
-  if (value <= -0.4) return "Negative correlation suggests the salary pattern may be distorted by role mix or sparse observations.";
-  return "No meaningful linear relationship was detected between experience and salary.";
-};
-
-const educationLabelSort = (entries:Array<Record<string,string|number>>,key:string)=>{
-  return [...entries].sort((left,right)=>{
-    const leftLabel = String(left[key]);
-    const rightLabel = String(right[key]);
-    const leftRank = normalizeEducationRank(leftLabel);
-    const rightRank = normalizeEducationRank(rightLabel);
-    if (leftRank !== rightRank) return leftRank - rightRank;
-    const leftIndex = EDUCATION_ORDER.indexOf(leftLabel);
-    const rightIndex = EDUCATION_ORDER.indexOf(rightLabel);
-    if (leftIndex >= 0 && rightIndex >= 0) return leftIndex - rightIndex;
-    return leftLabel.localeCompare(rightLabel);
-  });
+const buildSparkline = (values:number[])=>{
+  if (values.length >= 2) return values.slice(0,8);
+  return values.length > 0 ? [...values,...Array(8 - values.length).fill(values[0])] : [0,0,0,0,0,0,0,0];
 };
 
 const buildKPI = ({
@@ -140,7 +174,7 @@ const buildKPI = ({
   title,
   value,
   change,
-  trend:deriveTrend(change),
+  trend:change != null ? (change > 0 ? "up" : change < 0 ? "down" : "stable") : undefined,
   status,
   insight,
   icon,
@@ -149,148 +183,155 @@ const buildKPI = ({
 
 export const useKPIEngine = (data:Dataset | null)=>{
   const analyticsBundle = useMemo(()=>data ? buildAnalyticsDashboard(data) : null,[data]);
-  const previousSnapshot = useMemo(()=>data ? readSnapshot(data.id) : null,[data]);
+
+  const schema = useMemo(()=>data ? analyzeDatasetSchema(data) : null,[data]);
 
   const kpis = useMemo(()=>{
-    if (!data || !analyticsBundle) return [] as KPI[];
+    if (!data || !analyticsBundle || !schema) return [] as KPI[];
 
-    const salaryByCountry = analyticsBundle.structuredData.salaryByCountry;
-    const experienceSalaryScatter = analyticsBundle.structuredData.experienceSalaryScatter;
-    const languageData = analyticsBundle.structuredData.languages;
-    const educationData = analyticsBundle.structuredData.salaryByEducation;
-    const dataQualityValue = analyticsBundle.health.metrics.integrityScore;
-    const avgSalaryValue = salaryByCountry.length > 0
-      ? roundTo(salaryByCountry.reduce((sum,entry)=>sum + Number(entry.salary_usd ?? 0),0) / salaryByCountry.length,2)
-      : null;
-    const correlationValue = correlationCoefficient(
-      experienceSalaryScatter.map((entry)=>({
-        x:Number(entry.experience ?? 0),
-        y:Number(entry.salary_usd ?? 0),
-      })),
-    );
-    const topCountry = salaryByCountry[0] ?? null;
-    const topLanguage = languageData[0] ?? null;
-    const orderedEducation = educationLabelSort(educationData,"education");
-    const lowestEducation = orderedEducation[0] ?? null;
-    const highestEducation = orderedEducation[orderedEducation.length - 1] ?? null;
-    const educationImpactValue = lowestEducation && highestEducation && Number(lowestEducation.salary_usd ?? 0) > 0
-      ? roundTo(((Number(highestEducation.salary_usd ?? 0) - Number(lowestEducation.salary_usd ?? 0)) / Number(lowestEducation.salary_usd)) * 100,2)
-      : null;
+    const kpiList:KPI[] = [];
+    const { numericColumns,categoricalColumns,primaryMetric,primaryDimension } = schema;
+    const rows = data.rows;
+    const totalRows = rows.length;
+    const validRows = rows.filter(r => Object.values(r).some(v => v != null && v !== "")).length;
+    const qualityScore = totalRows > 0 ? roundTo((validRows / totalRows) * 100,1) : 0;
 
-    const snapshotMetrics:Record<SnapshotMetricKey,number | null> = {
-      dataQuality:dataQualityValue,
-      avgSalary:avgSalaryValue,
-      correlation:correlationValue,
-      educationImpact:educationImpactValue,
-    };
+    kpiList.push(buildKPI({
+      title:"Total Records",
+      value:totalRows.toLocaleString(),
+      status:totalRows > 0 ? "good" : "critical",
+      insight:`Dataset contains ${totalRows.toLocaleString()} rows across ${schema.columns.length} columns.`,
+      icon:"database",
+      sparkline:buildSparkline([totalRows]),
+    }));
 
-    const dataQualityChange = computeChange(snapshotMetrics.dataQuality,previousSnapshot?.metrics.dataQuality ?? null);
-    const avgSalaryChange = computeChange(snapshotMetrics.avgSalary,previousSnapshot?.metrics.avgSalary ?? null);
-    const correlationChange = computeChange(snapshotMetrics.correlation,previousSnapshot?.metrics.correlation ?? null);
-    const educationImpactChange = computeChange(snapshotMetrics.educationImpact,previousSnapshot?.metrics.educationImpact ?? null);
+    kpiList.push(buildKPI({
+      title:"Data Quality",
+      value:`${qualityScore.toFixed(1)}%`,
+      status:qualityScore >= 90 ? "good" : qualityScore >= 70 ? "warning" : "critical",
+      insight:qualityScore >= 90 ? "High data integrity with minimal missing values." : "Some missing values detected but data remains usable.",
+      icon:"shield",
+      sparkline:buildSparkline([qualityScore,qualityScore + 5]),
+    }));
 
-    return [
-      buildKPI({
-        title:"Data Quality",
-        value:`${dataQualityValue.toFixed(2)}%`,
-        change:dataQualityChange,
-        status:dataQualityValue >= 90 ? "good" : dataQualityValue >= 75 ? "warning" : "critical",
-        insight:dataQualityValue >= 90
-          ? "High data integrity with minimal missing values."
-          : dataQualityValue >= 75
-          ? "Quality is usable but missing values or exclusions still affect downstream analysis."
-          : "Data quality is weak and can materially distort analysis outputs.",
-        icon:"shield",
-        sparkline:buildSparkline(previousSnapshot?.metrics.dataQuality ?? null,dataQualityValue,[analyticsBundle.validationSummary.totalRows,analyticsBundle.validationSummary.validRows]),
-      }),
-      buildKPI({
-        title:"Avg Salary",
-        value:avgSalaryValue != null ? formatCurrencyCompact(avgSalaryValue) : "N/A",
-        change:avgSalaryChange,
-        status:avgSalaryValue != null && avgSalaryValue >= 100000 ? "good" : avgSalaryValue != null && avgSalaryValue >= 60000 ? "warning" : "critical",
-        insight:avgSalaryValue != null
-          ? avgSalaryChange != null
-            ? `Average salary is ${formatCurrencyCompact(avgSalaryValue)} with a ${Math.abs(avgSalaryChange).toFixed(2)}% ${avgSalaryChange >= 0 ? "increase" : "decline"} versus the previous snapshot.`
-            : `Average salary currently sits at ${formatCurrencyCompact(avgSalaryValue)} across valid salary records.`
-          : "Average salary is unavailable because the dataset lacks valid salary values.",
-        icon:"dollar",
-        sparkline:buildSparkline(previousSnapshot?.metrics.avgSalary ?? null,avgSalaryValue,salaryByCountry.slice(0,5).map((entry)=>Number(entry.salary_usd ?? 0))),
-      }),
-      buildKPI({
-        title:"Experience-Salary Correlation",
-        value:correlationValue != null ? correlationValue.toFixed(2) : "N/A",
-        change:correlationChange,
-        status:correlationValue != null && correlationValue >= 0.6 ? "good" : correlationValue != null && correlationValue >= 0.3 ? "warning" : "critical",
-        insight:correlationInsight(correlationValue),
-        icon:"chart",
-        sparkline:buildSparkline(previousSnapshot?.metrics.correlation ?? null,correlationValue,experienceSalaryScatter.slice(0,8).map((entry)=>Number(entry.salary_usd ?? 0))),
-      }),
-      buildKPI({
-        title:"Top Country",
-        value:topCountry ? String(topCountry.country ?? "N/A") : "N/A",
-        status:topCountry && Number(topCountry.normalizedValue ?? 0) >= 10000 ? "good" : topCountry ? "warning" : "critical",
-        insight:topCountry
-          ? `${String(topCountry.country)} leads average salary at ${formatCurrencyCompact(Number(topCountry.salary_usd ?? 0))}${Number(topCountry.sampleSize ?? 0) < 3 ? ", though the sample size is limited." : "."}`
-          : "No country-level salary comparison is available.",
-        icon:"columns",
-        sparkline:salaryByCountry.slice(0,6).map((entry)=>Number(entry.salary_usd ?? 0)),
-      }),
-      buildKPI({
-        title:"Most Popular Language",
-        value:topLanguage ? String(topLanguage.languages ?? "N/A") : "N/A",
-        status:topLanguage && Number(topLanguage.percentage ?? 0) >= 30 ? "good" : topLanguage && Number(topLanguage.percentage ?? 0) >= 15 ? "warning" : "critical",
-        insight:topLanguage
-          ? `${String(topLanguage.languages)} dominates usage with ${Number(topLanguage.percentage ?? 0).toFixed(1)}% of all parsed language mentions.`
-          : "No language field was detected for popularity analysis.",
-        icon:"package",
-        sparkline:languageData.slice(0,6).map((entry)=>Number(entry.count ?? 0)),
-      }),
-      buildKPI({
-        title:"Education Impact",
-        value:educationImpactValue != null ? `${educationImpactValue.toFixed(2)}%` : "N/A",
-        change:educationImpactChange,
-        status:educationImpactValue != null && educationImpactValue >= 40 ? "good" : educationImpactValue != null && educationImpactValue >= 15 ? "warning" : "critical",
-        insight:educationImpactValue != null && lowestEducation && highestEducation
-          ? `Salary rises ${educationImpactValue.toFixed(2)}% from ${String(lowestEducation.education)} to ${String(highestEducation.education)}.`
-          : "Education impact is unavailable because education and salary coverage is incomplete.",
-        icon:"percent",
-        sparkline:orderedEducation.map((entry)=>Number(entry.salary_usd ?? 0)),
-      }),
-    ];
-  },[analyticsBundle,data,previousSnapshot]);
+    if (primaryMetric) {
+      const metricValues = rows.map(r => Number(r[primaryMetric.name])).filter(v => !isNaN(v));
+      if (metricValues.length > 0) {
+        const sum = metricValues.reduce((a,b)=>a+b,0);
+        const avg = sum / metricValues.length;
+        const min = Math.min(...metricValues);
+        const max = Math.max(...metricValues);
+        
+        const colType = detectColumnType({ name:primaryMetric.name,type:primaryMetric.type as any,sample:[] }).type;
+        
+        kpiList.push(buildKPI({
+          title:`Avg ${primaryMetric.name}`,
+          value:formatValue(avg,colType),
+          status:"good",
+          insight:`Average ${primaryMetric.name} is ${formatValue(avg,colType)} across ${metricValues.toLocaleString()} records. Range: ${formatValue(min,colType)} - ${formatValue(max,colType)}`,
+          icon:"trending-up",
+          sparkline:buildSparkline(metricValues.slice(0,20)),
+        }));
+      }
+    }
 
-  useEffect(()=>{
-    if (!data || !analyticsBundle) return;
+    if (primaryDimension && categoricalColumns.length > 0) {
+      const topCategory = categoricalColumns[0];
+      if (topCategory) {
+        const categoryCounts:Record<string,number> = {};
+        rows.forEach(r => {
+          const val = String(r[topCategory.name] || "Unknown");
+          categoryCounts[val] = (categoryCounts[val] || 0) + 1;
+        });
+        const sorted = Object.entries(categoryCounts).sort((a,b)=>b[1] - a[1]);
+        const topValue = sorted[0]?.[0] || "N/A";
+        const topCount = sorted[0]?.[1] || 0;
+        const topPercent = roundTo((topCount / totalRows) * 100,1);
+        
+        kpiList.push(buildKPI({
+          title:`Top ${topCategory.name}`,
+          value:topValue,
+          status:topPercent >= 30 ? "good" : topPercent >= 15 ? "warning" : "critical",
+          insight:`${topValue} is the most common ${topCategory.name} with ${topCount.toLocaleString()} records (${topPercent}%).`,
+          icon:"pie-chart",
+          sparkline:buildSparkline(sorted.slice(0,5).map(([_,count])=>count)),
+        }));
+      }
+    }
 
-    const salaryByCountry = analyticsBundle.structuredData.salaryByCountry;
-    const experienceSalaryScatter = analyticsBundle.structuredData.experienceSalaryScatter;
-    const educationData = educationLabelSort(analyticsBundle.structuredData.salaryByEducation,"education");
-    const lowestEducation = educationData[0] ?? null;
-    const highestEducation = educationData[educationData.length - 1] ?? null;
-    const avgSalary = salaryByCountry.length > 0
-      ? roundTo(salaryByCountry.reduce((sum,entry)=>sum + Number(entry.salary_usd ?? 0),0) / salaryByCountry.length,2)
-      : null;
-    const correlation = correlationCoefficient(
-      experienceSalaryScatter.map((entry)=>({
-        x:Number(entry.experience ?? 0),
-        y:Number(entry.salary_usd ?? 0),
-      })),
-    );
-    const educationImpact = lowestEducation && highestEducation && Number(lowestEducation.salary_usd ?? 0) > 0
-      ? roundTo(((Number(highestEducation.salary_usd ?? 0) - Number(lowestEducation.salary_usd ?? 0)) / Number(lowestEducation.salary_usd)) * 100,2)
-      : null;
+    if (numericColumns.length >= 2) {
+      const num1 = numericColumns[0];
+      const num2 = numericColumns[1];
+      if (num1 && num2) {
+        const pairs = rows.slice(0,500).map(r => ({
+          x:Number(r[num1.name]),
+          y:Number(r[num2.name]),
+        })).filter(p => !isNaN(p.x) && !isNaN(p.y));
+        
+        if (pairs.length >= 10) {
+          const correlation = calculateCorrelation(
+            pairs.map(p=>p.x),
+            pairs.map(p=>p.y)
+          );
+          
+          if (correlation !== null) {
+            kpiList.push(buildKPI({
+              title:`${num1.name} vs ${num2.name}`,
+              value:correlation >= 0 ? `+${correlation.toFixed(2)}` : correlation.toFixed(2),
+              status:Math.abs(correlation) >= 0.6 ? "good" : Math.abs(correlation) >= 0.3 ? "warning" : "critical",
+              insight:Math.abs(correlation) >= 0.6 
+                ? `Strong correlation between ${num1.name} and ${num2.name}.`
+                : Math.abs(correlation) >= 0.3
+                ? `Moderate correlation detected between these variables.`
+                : `Weak or no significant correlation between ${num1.name} and ${num2.name}.`,
+              icon:"git-branch",
+              sparkline:buildSparkline(pairs.slice(0,8).map(p=>p.y)),
+            }));
+          }
+        }
+      }
+    }
 
-    writeSnapshot({
-      datasetId:data.id,
-      timestamp:Date.now(),
-      metrics:{
-        dataQuality:analyticsBundle.health.metrics.integrityScore,
-        avgSalary,
-        correlation,
-        educationImpact,
-      },
-    });
-  },[analyticsBundle,data]);
+    if (categoricalColumns.length >= 2) {
+      const cat1 = categoricalColumns[0];
+      const cat2 = categoricalColumns[1];
+      if (cat1 && cat2) {
+        const crossTab:Record<string,Record<string,number>> = {};
+        rows.forEach(r => {
+          const v1 = String(r[cat1.name] || "Unknown");
+          const v2 = String(r[cat2.name] || "Unknown");
+          if (!crossTab[v1]) crossTab[v1] = {};
+          crossTab[v1][v2] = (crossTab[v1][v2] || 0) + 1;
+        });
+        
+        const uniquePairs = Object.keys(crossTab).length;
+        kpiList.push(buildKPI({
+          title:`${cat1.name} by ${cat2.name}`,
+          value:`${uniquePairs} groups`,
+          status:uniquePairs > 10 ? "good" : uniquePairs > 3 ? "warning" : "critical",
+          insight:`Found ${uniquePairs} unique combinations of ${cat1.name} and ${cat2.name}.`,
+          icon:"layout",
+          sparkline:buildSparkline(Object.keys(crossTab).map(k => Object.keys(crossTab[k]).length)),
+        }));
+      }
+    }
+
+    const dateCol = schema.dateColumns[0];
+    if (dateCol) {
+      const dateValues = rows.map(r => r[dateCol.name]).filter(v => v != null);
+      const uniqueDates = new Set(dateValues).size;
+      kpiList.push(buildKPI({
+        title:`${dateCol.name} Range`,
+        value:`${uniqueDates} unique`,
+        status:"good",
+        insight:`Dataset spans ${uniqueDates} unique ${dateCol.name} values.`,
+        icon:"calendar",
+        sparkline:buildSparkline([uniqueDates]),
+      }));
+}
+
+return kpiList;
+  },[data,analyticsBundle,schema]);
 
   return useMemo(()=>({
     kpis,

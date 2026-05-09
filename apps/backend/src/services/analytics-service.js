@@ -47,7 +47,7 @@ function buildGuidedDatasetResponse(schema, chart) {
 }
 
 /**
- * Create schema-first chat response using Ollama neural-chat:7b
+ * Create schema-first chat response using Ollama llama3.2:latest
  * Enforces privacy by only sending schema metadata to AI
  */
 export const createSchemaFirstChatResponse = async (dataset, query, preferences = {}) => {
@@ -81,7 +81,7 @@ export const createSchemaFirstChatResponse = async (dataset, query, preferences 
       intent: result.intent,
       confidence: result.confidence || 0.8,
       reason: result.reasoning,
-      model: result.model || "neural-chat:7b",
+      model: result.model || "llama3.2:latest",
       usedAI: true,
       metadata: {
         columnsUsed: result.columns_used,
@@ -504,6 +504,41 @@ export const createChatResponse = async (dataset, query) => {
     };
   }
 
+  // First try HR-specific query handler
+  const hrPlan = handleHRDatasetQuery(dataset, query);
+  if (hrPlan) {
+    console.log('[analytics] Using HR dataset query handler');
+    const chart = materializePlan(analyticsDataset, hrPlan);
+    
+    let content = '';
+    if (hrPlan.intent === 'aggregation') {
+      content = `Aggregating ${hrPlan.metric?.name} by ${hrPlan.dimension?.name} using ${hrPlan.aggregation}`;
+    } else if (hrPlan.intent === 'correlation') {
+      content = `Showing correlation between ${hrPlan.dimension?.name} and ${hrPlan.metric?.name}`;
+    } else if (hrPlan.intent === 'ranking') {
+      content = `Top rankings by ${hrPlan.metric?.name}`;
+    } else if (hrPlan.intent === 'distribution') {
+      content = `Distribution of ${hrPlan.metric?.name} by ${hrPlan.dimension?.name}`;
+    } else if (hrPlan.intent === 'count') {
+      content = `Count by ${hrPlan.dimension?.name}`;
+    } else if (hrPlan.intent === 'comparison') {
+      content = `Comparing ${hrPlan.metric?.name} across ${hrPlan.dimension?.name}`;
+    }
+    
+    return {
+      content,
+      chart,
+      insights: [
+        `Analysis type: ${hrPlan.intent}`,
+        `Chart type: ${hrPlan.chartType}`,
+        `Aggregation: ${hrPlan.aggregation || 'count'}`,
+      ],
+      schema: buildDatasetSchema(analyticsDataset),
+      aiProvider: 'hr-handler',
+      intent: hrPlan.intent,
+    };
+  }
+
   // Use smart query handler for better responses
   try {
     console.log('[analytics] Calling smart query handler for:', query);
@@ -645,19 +680,161 @@ export const createChatResponse = async (dataset, query) => {
 };
 
 /**
+ * Build enhanced schema for HR/salary datasets
+ */
+const buildHRDatasetSchema = (dataset) => {
+  const columns = (dataset.columns || []).map(col => {
+    const name = col.name || '';
+    const type = col.type || 'string';
+    
+    let role = 'dimension';
+    
+    if (type === 'number' || type === 'integer') {
+      const lowerName = name.toLowerCase();
+      if (lowerName.includes('salary') || 
+          lowerName.includes('experience') ||
+          lowerName.includes('revenue') ||
+          lowerName.includes('amount') ||
+          lowerName.includes('count') ||
+          lowerName.includes('bonus') ||
+          lowerName.includes('pay') ||
+          lowerName.includes('cost') ||
+          lowerName.includes('age')) {
+        role = 'metric';
+      } else if (lowerName.includes('id') || 
+                 lowerName.includes('row') || 
+                 lowerName.includes('index') ||
+                 lowerName.includes('_id')) {
+        role = 'excluded';
+      }
+    }
+    
+    return {
+      name: col.name,
+      type: type,
+      role: role,
+    };
+  });
+
+  return {
+    columns,
+    primaryMetric: columns.find(col => col.role === 'metric'),
+    primaryDimension: columns.find(col => col.role === 'dimension'),
+    secondaryMetric: columns.filter(col => col.role === 'metric')[1],
+    secondaryDimension: columns.filter(col => col.role === 'dimension')[1],
+  };
+};
+
+/**
+ * Handle smart queries for HR data
+ */
+const handleHRDatasetQuery = (dataset, query) => {
+  const schema = buildHRDatasetSchema(dataset);
+  const q = query.toLowerCase();
+  const metrics = schema.columns.filter(c => c.role === 'metric');
+  const dimensions = schema.columns.filter(c => c.role === 'dimension');
+  
+  const primaryMetric = schema.primaryMetric || metrics[0];
+  const primaryDim = schema.primaryDimension || dimensions[0];
+  const secondaryDim = schema.secondaryDimension || dimensions[1];
+  
+  // Salary by category
+  if (q.includes('salary') && primaryMetric && primaryDim) {
+    const targetDim = dimensions.find(d => q.includes(d.name.toLowerCase())) || primaryDim;
+    return {
+      mode: 'metricByDimension',
+      metric: primaryMetric,
+      dimension: targetDim,
+      aggregation: q.includes('average') || q.includes('avg') ? 'average' : 'sum',
+      chartType: q.includes('pie') ? 'pie' : 'bar',
+      intent: 'aggregation',
+    };
+  }
+  
+  // Experience vs salary
+  if (q.includes('experience') && (q.includes('salary') || q.includes('vs'))) {
+    const expCol = schema.columns.find(c => c.name.toLowerCase().includes('experience'));
+    if (expCol && primaryMetric) {
+      return {
+        mode: 'metricByDimension',
+        metric: primaryMetric,
+        dimension: expCol,
+        aggregation: 'average',
+        chartType: 'scatter',
+        intent: 'correlation',
+      };
+    }
+  }
+  
+  // Top/bottom
+  if (q.includes('top') || q.includes('highest') || q.includes('bottom') || q.includes('lowest')) {
+    if (primaryMetric && primaryDim) {
+      return {
+        mode: 'metricByDimension',
+        metric: primaryMetric,
+        dimension: primaryDim,
+        aggregation: 'sum',
+        chartType: 'bar',
+        intent: 'ranking',
+      };
+    }
+  }
+  
+  // Distribution
+  if (q.includes('distribution') || q.includes('breakdown') || q.includes('proportion')) {
+    if (primaryMetric && secondaryDim) {
+      return {
+        mode: 'metricByDimension',
+        metric: primaryMetric,
+        dimension: secondaryDim,
+        aggregation: 'sum',
+        chartType: 'pie',
+        intent: 'distribution',
+      };
+    }
+  }
+  
+  // Count by category
+  if (q.includes('count') || q.includes('how many')) {
+    if (primaryDim) {
+      return {
+        mode: 'countByDimension',
+        dimension: primaryDim,
+        chartType: 'bar',
+        intent: 'count',
+      };
+    }
+  }
+  
+  // Compare
+  if (q.includes('compare') || q.includes('vs') || q.includes('versus')) {
+    if (primaryMetric && primaryDim) {
+      return {
+        mode: 'metricByDimension',
+        metric: primaryMetric,
+        dimension: primaryDim,
+        aggregation: 'average',
+        chartType: 'bar',
+        intent: 'comparison',
+      };
+    }
+  }
+  
+  return null;
+};
+
+/**
  * Build analysis plan from AI response
  */
 const buildPlanFromAIResponse = (analyticsDataset, aiResponse) => {
   const { intent, columns_used, chart_type } = aiResponse;
   
-  // Find dimension and metric from columns_used
   const dimensions = analyticsDataset.columns.filter(col => col.role === 'dimension');
   const metrics = analyticsDataset.columns.filter(col => col.role === 'metric');
   
   let dimension = dimensions.find(col => columns_used.includes(col.name)) || dimensions[0];
   let metric = metrics.find(col => columns_used.includes(col.name)) || metrics[0];
   
-  // Determine mode based on intent
   let mode = 'summary';
   let aggregation = 'sum';
   
