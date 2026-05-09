@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle2, Download, Sparkles, Loader2, MessageSquare, BarChart3, TrendingUp, PieChart, Activity } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, Sparkles, Loader2, MessageSquare, TrendingUp, PieChart } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
 import { Dataset, generateAnalyticsHealthSummary, generateDemoCharts, generateDemoKPIs, ChartConfig } from '@/features/data/model/dataStore';
 import { api, CorrelationResponse } from '@/features/data/api/dataApi';
@@ -27,10 +27,16 @@ const AnalyticsPage = () => {
 
   const handleChartGenerated = useCallback((chart: ChartConfig) => {
     setAiGeneratedCharts(prev => {
-      const exists = prev.some(c => c.title === chart.title);
+      const exists = prev.some(c => c.title === chart.title && c.xKey === chart.xKey && c.yKey === chart.yKey);
       if (exists) return prev;
       return [...prev, chart];
     });
+  }, []);
+
+  const handleChartModified = useCallback((chart: ChartConfig) => {
+    setAiGeneratedCharts(prev => prev.map(c => 
+      c.title === chart.title ? chart : c
+    ));
   }, []);
 
   useEffect(() => {
@@ -89,7 +95,15 @@ const AnalyticsPage = () => {
       : analyticsDataset ? generateDemoCharts(analyticsDataset) : [];
     
     if (aiGeneratedCharts.length > 0) {
-      return [...baseCharts, ...aiGeneratedCharts];
+      const combined = [...baseCharts, ...aiGeneratedCharts];
+      // Deduplicate by title, xKey, and yKey
+      const seen = new Set<string>();
+      return combined.filter(chart => {
+        const key = `${chart.title}|${chart.xKey}|${chart.yKey}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
     return baseCharts;
   }, [analyticsDataset, analysis, aiGeneratedCharts]);
@@ -110,7 +124,7 @@ const AnalyticsPage = () => {
       `Columns: ${analyticsDataset.columns.length}`,
       '',
       'KPIs',
-      ...kpis.map((kpi) => `- ${kpi.label}: ${kpi.value}`),
+      ...kpis.map((kpi) => `- ${kpi.title}: ${kpi.value}`),
       '',
       'Charts',
       ...charts.map((chart) => `- ${chart.title}`),
@@ -175,8 +189,8 @@ const AnalyticsPage = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Regions</SelectItem>
-              {regionOptions.map((option) => (
-                <SelectItem key={option} value={option}>
+              {regionOptions.map((option, idx) => (
+                <SelectItem key={`${option}-${idx}`} value={option}>
                   {option}
                 </SelectItem>
               ))}
@@ -209,7 +223,7 @@ const AnalyticsPage = () => {
             isOpen={showSidebar} 
             onClose={() => setShowSidebar(false)}
             onChartGenerated={handleChartGenerated}
-            currentCharts={aiGeneratedCharts}
+            onChartModified={handleChartModified}
           />
         )}
       </AnimatePresence>
@@ -261,8 +275,8 @@ const AnalyticsPage = () => {
               color: 'text-blue-600',
               bg: 'bg-blue-50',
             },
-          ].map((item) => (
-            <div key={item.label} className="rounded-xl border border-border/50 bg-card p-5 shadow-sm">
+          ].map((item, idx) => (
+            <div key={`health-card-${idx}`} className="rounded-xl border border-border/50 bg-card p-5 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${item.bg}`}>
                   <item.icon className={`h-5 w-5 ${item.color}`} />
@@ -306,10 +320,10 @@ const AnalyticsPage = () => {
                   Data integrity removed {analyticsHealth?.integrity.removedEmptyRows ?? 0} empty rows and {analyticsHealth?.integrity.invalidNumericValues ?? 0} invalid values.
                 </p>
               </div>
-              {insights.map((insight) => (
-                <div key={insight} className="flex gap-4">
+              {(analysis?.insights ?? []).map((insight) => (
+                <div key={insight.title} className="flex gap-4">
                   <CheckCircle2 className="mt-1 h-5 w-5 text-success" />
-                  <p>{insight}</p>
+                  <p>{insight.message}</p>
                 </div>
               ))}
             </div>

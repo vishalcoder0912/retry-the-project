@@ -47,9 +47,11 @@ interface ChatResponse {
 }
 
 const apiBaseUrl = (() => {
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+  // Use empty string to leverage Vite proxy in development
+  // In production, set VITE_API_BASE_URL to the backend URL
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || "";
   if (!import.meta.env.VITE_API_BASE_URL) {
-    console.warn('VITE_API_BASE_URL not set, using default:', baseUrl);
+    console.log('Using Vite proxy for API requests');
   }
   return baseUrl.replace(/\/$/, "");
 })();
@@ -128,10 +130,15 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ column, value }),
     }),
-  sendChatQuery: (datasetId: string, query: string) =>
+  sendChatQuery: (datasetId: string, query: string, preferences?: {
+    chartCount?: string;
+    chartTypes?: string[];
+    showTrends?: boolean;
+    showCorrelations?: boolean;
+  }) =>
     request<ChatResponse>(`/api/datasets/${datasetId}/chat`, {
       method: "POST",
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query, ...preferences }),
     }),
   getAICorrelations: (datasetId: string) =>
     request<CorrelationResponse>(`/api/datasets/${datasetId}/ai-correlations`, {

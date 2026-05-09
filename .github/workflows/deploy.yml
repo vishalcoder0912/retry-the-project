@@ -2,13 +2,13 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, gen-ai-working]
   workflow_dispatch:
 
 jobs:
   deploy-frontend:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/gen-ai-working'
 
     steps:
       - name: Checkout code
@@ -36,7 +36,7 @@ jobs:
 
   deploy-backend:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/gen-ai-working'
 
     steps:
       - name: Checkout code
