@@ -3,6 +3,49 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Get configured providers dynamically based on API keys
+function getConfiguredProviders() {
+  const providers = [];
+  
+  // Check Ollama (always available if enabled)
+  if (process.env.OLLAMA_ENABLED !== 'false') {
+    providers.push('ollama');
+  }
+  
+  // Check Gemini API key
+  if (process.env.GOOGLE_API_KEY) {
+    providers.push('gemini');
+  }
+  
+  // Check OpenAI API key
+  if (process.env.OPENAI_API_KEY) {
+    providers.push('openai');
+  }
+  
+  // Check Anthropic API key
+  if (process.env.ANTHROPIC_API_KEY) {
+    providers.push('anthropic');
+  }
+  
+  return providers;
+}
+
+// Get dynamic provider priority based on configured API keys
+function getDynamicProviderPriority() {
+  const envPriority = process.env.AI_PROVIDER_PRIORITY || 'ollama,gemini,openai,anthropic';
+  const configured = getConfiguredProviders();
+  
+  // If custom priority is set, respect it but filter out unavailable providers
+  if (process.env.AI_PROVIDER_PRIORITY) {
+    return envPriority.split(',')
+      .map(p => p.trim())
+      .filter(p => configured.includes(p));
+  }
+  
+  // Default priority: Ollama first (local), then cloud providers
+  return configured.length > 0 ? configured : ['ollama'];
+}
+
 export const config = {
   // Server Configuration
   server: {
@@ -53,12 +96,13 @@ export const config = {
 
   // AI Global Settings
   ai: {
-    providerPriority: (process.env.AI_PROVIDER_PRIORITY || 'ollama,gemini,openai,anthropic').split(',').map(p => p.trim()),
+    providerPriority: getDynamicProviderPriority(),
     fallbackEnabled: process.env.ENABLE_AI_FALLBACK !== 'false',
     localOnlyMode: process.env.LOCAL_AI_ONLY === 'true',
     timeout: parseInt(process.env.AI_TIMEOUT_MS || '120000', 10),
     maxTokens: parseInt(process.env.AI_MAX_TOKENS || '4096', 10),
-    temperature: parseFloat(process.env.AI_TEMPERATURE || '0.7')
+    temperature: parseFloat(process.env.AI_TEMPERATURE || '0.7'),
+    configuredProviders: getConfiguredProviders()
   },
 
   // Database Configuration
@@ -147,12 +191,16 @@ export function printConfigSummary() {
   console.log(`   Status: ${config.anthropic.enabled ? '✅ ENABLED' : '❌ DISABLED (No API key)'}`);
 
   console.log('\n⚙️  GLOBAL SETTINGS');
-  console.log(`   Provider Priority: ${config.ai.providerPriority.join(' → ')}`);
   console.log(`   Fallback Enabled: ${config.ai.fallbackEnabled}`);
   console.log(`   Local Only Mode: ${config.ai.localOnlyMode}`);
 
   const available = getAvailableProviders();
-  console.log(`\n✅ Available Providers: ${available.join(', ') || 'NONE'}`);
+  console.log(`\n✅ Configured Providers: ${available.join(', ') || 'NONE'}`);
+  console.log(`\n🎯 Dynamic Priority (auto-arranged):`);
+  config.ai.providerPriority.forEach((p, i) => {
+    const status = i === 0 ? '(Primary)' : `(Fallback ${i})`;
+    console.log(`   ${i + 1}. ${p.toUpperCase()} ${status}`);
+  });
   console.log('\n' + '='.repeat(40) + '\n');
 }
 
