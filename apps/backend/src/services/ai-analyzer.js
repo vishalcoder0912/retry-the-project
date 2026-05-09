@@ -5,29 +5,36 @@ import { buildEnhancedSchema, detectDataType } from './schema-detector.js';
 class AIAnalyzer {
   constructor() {
     this.aiProvider = null;
-    this.initializeProvider();
+    this.initPromise = this.initializeProvider();
   }
 
   async initializeProvider() {
-    const ollamaAvailable = await ollamaService.isAvailable();
-    if (ollamaAvailable) {
-      this.aiProvider = 'ollama';
-      console.log('AI Analyzer: Using Ollama');
-      return;
-    }
+    try {
+      const ollamaAvailable = await ollamaService.isAvailable();
+      if (ollamaAvailable) {
+        this.aiProvider = 'ollama';
+        console.log('AI Analyzer: Using Ollama');
+        return;
+      }
 
-    const geminiAvailable = await geminiService.isAvailable();
-    if (geminiAvailable) {
-      this.aiProvider = 'gemini';
-      console.log('AI Analyzer: Using Gemini');
-      return;
-    }
+      const geminiAvailable = await geminiService.isAvailable();
+      if (geminiAvailable) {
+        this.aiProvider = 'gemini';
+        console.log('AI Analyzer: Using Gemini');
+        return;
+      }
 
-    this.aiProvider = null;
-    console.log('AI Analyzer: Using rule-based analysis only');
+      this.aiProvider = null;
+      console.log('AI Analyzer: Using rule-based analysis only');
+    } catch (error) {
+      console.error('AI Provider initialization error:', error);
+      this.aiProvider = null;
+    }
   }
 
   async analyzeDataset(columns, rows, existingSchema = null) {
+    await this.initPromise;
+    
     const schema = existingSchema || buildEnhancedSchema(columns, rows);
     
     const analysisResult = {

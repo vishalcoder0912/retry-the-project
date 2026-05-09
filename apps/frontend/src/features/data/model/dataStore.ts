@@ -145,8 +145,10 @@ const pickSecondaryMetric = (columns: DataColumn[], primaryMetric?: DataColumn) 
   return remaining[0];
 };
 
-const getNumericColumns = (data: Dataset) => data.columns.filter((column) => column.type === "number");
-const getDimensionColumns = (data: Dataset) => data.columns.filter((column) => column.type !== "number");
+const getNumericColumns = (data: Dataset) => 
+  data.columns.filter((column) => column.type === "number" && !column.name.toLowerCase().includes('row') && !column.name.toLowerCase().includes('id'));
+const getDimensionColumns = (data: Dataset) => 
+  data.columns.filter((column) => column.type !== "number" || column.name.toLowerCase().includes('experience'));
 
 const logAverageValidation = ({
   metricName,
@@ -534,14 +536,14 @@ export const generateDemoKPIs = (data: Dataset): KPI[] => {
   const secondaryMetric = pickSecondaryMetric(numericColumns, primaryMetric);
   const rowCount = data.rowCount || data.rows.length;
   const kpis: KPI[] = [
-    { label: "Rows", value: rowCount.toLocaleString(), icon: "rows" },
-    { label: "Columns", value: data.columns.length.toLocaleString(), icon: "columns" },
+    { title: "Rows", value: rowCount.toLocaleString(), icon: "rows" },
+    { title: "Columns", value: data.columns.length.toLocaleString(), icon: "columns" },
   ];
 
   if (primaryMetric) {
     const total = sumColumn(analyticsDataset.rows, primaryMetric.name);
     kpis.push({
-      label: `Total ${humanize(primaryMetric.name)}`,
+      title: `Total ${humanize(primaryMetric.name)}`,
       value: formatMetricValue(primaryMetric.name, total),
       icon: iconForMetric(primaryMetric.name),
     });
@@ -550,7 +552,7 @@ export const generateDemoKPIs = (data: Dataset): KPI[] => {
   if (secondaryMetric) {
     const average = averageColumn(analyticsDataset.rows, secondaryMetric.name);
     kpis.push({
-      label: `Avg ${humanize(secondaryMetric.name)}`,
+      title: `Avg ${humanize(secondaryMetric.name)}`,
       value: formatMetricValue(secondaryMetric.name, average),
       icon: iconForMetric(secondaryMetric.name),
     });
@@ -562,7 +564,7 @@ export const generateDemoKPIs = (data: Dataset): KPI[] => {
     ).size;
 
     kpis.push({
-      label: `Distinct ${humanize(dimensionColumns[0].name)}`,
+      title: `Distinct ${humanize(dimensionColumns[0].name)}`,
       value: distinctCount.toLocaleString(),
       icon: "chart",
     });
@@ -669,31 +671,38 @@ export const generateDemoCharts = (data: Dataset): ChartConfig[] => {
   }
 
   if (primaryMetric && secondaryMetric) {
-    const scatterData = analyticsDataset.rows
-      .map((row) => {
-        const x = toNumber(row[secondaryMetric.name]);
-        const y = toNumber(row[primaryMetric.name]);
-        const label = primaryDimension ? toLabel(row[primaryDimension.name]) : null;
+    // Skip scatter chart if it's salary vs experience (handled by analytics engine)
+    const isSalaryVsExperience = 
+      (normalizeText(primaryMetric.name).includes('salary') && normalizeText(secondaryMetric.name).includes('experience')) ||
+      (normalizeText(primaryMetric.name).includes('experience') && normalizeText(secondaryMetric.name).includes('salary'));
+    
+    if (!isSalaryVsExperience) {
+      const scatterData = analyticsDataset.rows
+        .map((row) => {
+          const x = toNumber(row[secondaryMetric.name]);
+          const y = toNumber(row[primaryMetric.name]);
+          const label = primaryDimension ? toLabel(row[primaryDimension.name]) : null;
 
-        if (x == null || y == null) return null;
+          if (x == null || y == null) return null;
 
-        return {
-          [secondaryMetric.name]: x,
-          [primaryMetric.name]: y,
-          label: label ?? "Value",
-        };
-      })
-      .filter((entry): entry is ChartDatum & { label: string } => entry !== null)
-      .slice(0, 250);
+          return {
+            [secondaryMetric.name]: x,
+            [primaryMetric.name]: y,
+            label: label ?? "Value",
+          };
+        })
+        .filter((entry): entry is ChartDatum & { label: string } => entry !== null)
+        .slice(0, 250);
 
-    if (scatterData.length > 0) {
-      charts.push({
-        type: "scatter",
-        title: `${humanize(primaryMetric.name)} vs ${humanize(secondaryMetric.name)}`,
-        xKey: secondaryMetric.name,
-        yKey: primaryMetric.name,
-        data: scatterData,
-      });
+      if (scatterData.length > 0) {
+        charts.push({
+          type: "scatter",
+          title: `${humanize(primaryMetric.name)} vs ${humanize(secondaryMetric.name)}`,
+          xKey: secondaryMetric.name,
+          yKey: primaryMetric.name,
+          data: scatterData,
+        });
+      }
     }
   }
 

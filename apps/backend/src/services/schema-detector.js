@@ -1005,6 +1005,10 @@ export function classifyColumns(rows) {
   const unusable = [];
 
   Object.keys(columnStats).forEach(key => {
+    if (key.startsWith('__') || key.toLowerCase() === 'rowid' || key.toLowerCase() === 'id') {
+      unusable.push(key);
+      return;
+    }
     const stats = columnStats[key];
     if (stats.isConstant || stats.missingRatio > 0.8) {
       unusable.push(key);
@@ -1166,10 +1170,11 @@ export function smartAutoChartGenerationForSingle(rows, columnClassification = n
   distributionCharts.slice(0, 2).forEach(c => addChart(c));
 
   const relationshipCharts = [];
-  if (salaryCol && experienceCol) {
-    const chart = generateScatterChart(rows, experienceCol, salaryCol, 'Relationship', 'salary_exp_scatter');
-    if (chart && experienceCol !== salaryCol) relationshipCharts.push(chart);
-  }
+  // Skip salary vs experience scatter chart - handled by analytics engine
+  // if (salaryCol && experienceCol) {
+  //   const chart = generateScatterChart(rows, experienceCol, salaryCol, 'Relationship', 'salary_exp_scatter');
+  //   if (chart && experienceCol !== salaryCol) relationshipCharts.push(chart);
+  // }
   if (salaryCol && ageCol && ageCol !== salaryCol && ageCol !== experienceCol) {
     const chart = generateScatterChart(rows, ageCol, salaryCol, 'Relationship', 'salary_age_scatter');
     if (chart) relationshipCharts.push(chart);
@@ -1370,8 +1375,16 @@ function generateHistogramChart(rows, column, category, id) {
   const binCount = Math.min(10, Math.ceil(Math.sqrt(values.length)));
   const binSize = (max - min) / binCount || 1;
 
+  const formatBinLabel = (val) => {
+    if (val >= 1000000) return `$${(val / 1000000).toFixed(1)}M`;
+    if (val >= 1000) return `$${(val / 1000).toFixed(0)}K`;
+    return Math.round(val).toLocaleString();
+  };
+
   const bins = Array(binCount).fill(0).map((_, i) => ({
-    range: `${Math.round(min + i * binSize)}-${Math.round(min + (i + 1) * binSize)}`,
+    range: `${formatBinLabel(min + i * binSize)}-${formatBinLabel(min + (i + 1) * binSize)}`,
+    rangeStart: min + i * binSize,
+    rangeEnd: min + (i + 1) * binSize,
     count: 0
   }));
 
@@ -1403,24 +1416,28 @@ function cleanForOutliers(values, maxPercentile = 99) {
 
 function generateScatterChart(rows, xColumn, yColumn, category, id) {
   if (xColumn === yColumn) return null;
-  
+
   const rawData = rows
     .map(row => ({
       x: Number(row[xColumn]),
       y: Number(row[yColumn])
     }))
     .filter(point => !isNaN(point.x) && !isNaN(point.y) && point.x !== null && point.y !== null);
-  
+
   if (rawData.length < 2) return null;
-  
+
   const xVals = rawData.map(d => d.x);
   const yVals = rawData.map(d => d.y);
   const cleanX = cleanForOutliers(xVals);
   const cleanY = cleanForOutliers(yVals);
-  
+
   const data = rawData
     .filter(point => cleanX.includes(point.x) && cleanY.includes(point.y))
-    .slice(0, 500);
+    .slice(0, 500)
+    .map(point => ({
+      [xColumn]: point.x,
+      [yColumn]: point.y
+    }));
 
   if (data.length < 2) return null;
 
