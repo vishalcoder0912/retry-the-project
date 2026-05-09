@@ -4,22 +4,27 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node src/server.js",
-    "dev:watch": "node --watch src/server.js",
-    "start": "node src/server.js",
+    "dev": "node src/index.js",
+    "dev:watch": "node --watch src/index.js",
+    "start": "node src/index.js",
     "kill-port": "node kill-port.js",
     "test": "vitest",
     "test:run": "vitest run"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "@anthropic-ai/sdk": "^0.24.3",
     "@google/generative-ai": "^0.24.1",
     "@insightflow/shared-analytics": "../packages/shared-analytics",
     "axios": "^1.15.1",
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
+    "ml-cart": "^2.1.1",
+    "ml-kmeans": "^7.0.0",
+    "ml-linear-regression": "^1.0.3",
+    "ml-pca": "^4.1.1",
+    "ml-random-forest": "^2.1.0",
     "node-cron": "^3.0.3",
-    "openai": "^4.77.0",
+    "openai": "^4.28.4",
     "pdfkit": "^0.15.2"
   }
 }
