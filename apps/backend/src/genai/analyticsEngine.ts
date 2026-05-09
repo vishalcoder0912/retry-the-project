@@ -75,28 +75,35 @@ class AIClient {
 
     this.fallbackChain = [];
 
-    // Initialize Ollama (always available if URL is provided)
+    // Initialize Ollama (local AI - PRIMARY)
     this.ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
     this.ollamaModel = process.env.OLLAMA_MODEL || "llama3.2";
     
-    // Test Ollama connection - async but don't block
-    this.testOllamaConnection().catch(() => {});
+    // Test Ollama connection and add to chain
+    this.testOllamaConnection().then(() => {
+      if (this.ollamaAvailable && !this.fallbackChain.includes(AIProvider.OLLAMA)) {
+        this.fallbackChain.unshift(AIProvider.OLLAMA); // Add as PRIMARY
+        this.activeProvider = AIProvider.OLLAMA;
+        console.log("🔄 Primary AI Provider: OLLAMA (Local)");
+      }
+    }).catch(() => {});
 
+    // Initialize Gemini (cloud - FALLBACK)
     if (googleKey) {
       try {
         this.genAI = new GoogleGenerativeAI(googleKey);
-        this.fallbackChain.push(AIProvider.GEMINI);
-        console.log("✅ Google Gemini AI initialized");
+        this.fallbackChain.push(AIProvider.GEMINI); // Add as fallback
+        console.log("✅ Google Gemini AI initialized (Fallback)");
       } catch (e) {
         console.warn("⚠️ Failed to initialize Gemini:", e);
       }
     } else {
-      console.warn("⚠️ GOOGLE_API_KEY not found");
+      console.warn("⚠️ GOOGLE_API_KEY not found - Using Local AI only");
     }
 
     if (this.fallbackChain.length === 0) {
-      console.error("❌ No AI provider available! Set at least one API key.");
-    } else {
+      console.error("❌ No AI provider available! Please start Ollama or set GOOGLE_API_KEY.");
+    } else if (this.activeProvider === AIProvider.NONE && this.fallbackChain.length > 0) {
       this.activeProvider = this.fallbackChain[0];
       console.log(`🔄 Primary AI Provider: ${this.activeProvider}`);
     }
@@ -183,12 +190,14 @@ class AIClient {
 
   private async testOllamaConnection() {
     try {
-      // Test Ollama connection
-      await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 5000 });
-      this.fallbackChain.push(AIProvider.OLLAMA);
-      console.log("✅ Ollama initialized");
+      const response = await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 5000 });
+      if (response.status === 200) {
+        this.ollamaAvailable = true;
+        console.log(`✅ Ollama initialized with model: ${this.ollamaModel}`);
+      }
     } catch (e) {
-      console.warn("⚠️ Ollama not available at", this.ollamaUrl);
+      this.ollamaAvailable = false;
+      console.warn(`⚠️ Ollama not available at ${this.ollamaUrl} - Using Gemini only`);
     }
   }
 }
