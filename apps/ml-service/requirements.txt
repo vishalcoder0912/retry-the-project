@@ -1,5 +1,15 @@
-flask
-flask-cors
-numpy
-pandas
-gunicorn
+# Core dependencies
+flask>=2.3.0
+flask-cors>=4.0.0
+numpy>=1.24.0
+pandas>=2.0.0
+gunicorn>=21.0.0
+
+# AutoGluon for automated ML (optional but recommended)
+# Install with: pip install autogluon.tabular
+autogluon.tabular>=1.0.0
+
+# Additional ML libraries (optional)
+# lightgbm>=4.0.0
+# xgboost>=2.0.0
+# catboost>=1.2.0
