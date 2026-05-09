@@ -5,6 +5,7 @@ import { handleAnalyticsRoutes } from './analytics.js';
 import { handleAIRoutes } from './ai.js';
 import { handleHealthRoutes } from './health.js';
 import { handleExportRoutes } from './export.js';
+import { handleMLRoutes } from './machine-learning.js';
 import { sendError, sendSuccess } from '../utils/response-utils.js';
 import { HTTP_STATUS } from '../config/constants.js';
 
@@ -39,6 +40,11 @@ export async function setupRoutes(request, response) {
 
     // Export routes
     if (await handleExportRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // ML/AutoML routes
+    if (await handleMLRoutes(request, response, pathname)) {
       return;
     }
 
