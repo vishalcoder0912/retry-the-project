@@ -116,7 +116,7 @@ function handleStatisticsQuery(dataset, analyticsDataset, schema, query) {
   
   if (lowerQuery.includes('count') || lowerQuery.includes('how many')) {
     if (dimension) {
-      const grouped = countRowsByDimension(analyticsDataset, dimension);
+      const grouped = countRowsByDimension(analyticsDataset.rows, dimension);
       const total = Object.values(grouped).reduce((a, b) => a + b, 0);
       const breakdown = Object.entries(grouped)
         .sort((a, b) => b[1] - a[1])
@@ -161,7 +161,7 @@ function handleComparisonQuery(dataset, analyticsDataset, schema, query, intent)
     };
   }
   
-  const grouped = groupMetricByDimension(analyticsDataset, dimension, metric, 'sum');
+  const grouped = groupMetricByDimension(analyticsDataset.rows, dimension, metric, 'sum');
   const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1]);
   
   const isHighest = intent === 'HIGHEST';
@@ -221,7 +221,7 @@ function handleTrendQuery(dataset, analyticsDataset, schema, query) {
     };
   }
   
-  const grouped = groupMetricByDimension(analyticsDataset, { name: timeDim.name, role: 'dimension' }, metric, 'sum');
+  const grouped = groupMetricByDimension(analyticsDataset.rows, { name: timeDim.name, role: 'dimension' }, metric, 'sum');
   const sorted = Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));
   
   const firstValue = sorted[0]?.[1] || 0;
@@ -253,7 +253,7 @@ function handleBreakdownQuery(dataset, analyticsDataset, schema, query) {
     return handleComparisonQuery(dataset, analyticsDataset, schema, query, 'BREAKDOWN');
   }
   
-  const grouped = groupMetricByDimension(analyticsDataset, dimension, metric, 'sum');
+  const grouped = groupMetricByDimension(analyticsDataset.rows, dimension, metric, 'sum');
   const total = Object.values(grouped).reduce((a, b) => a + b, 0);
   const breakdown = Object.entries(grouped)
     .sort((a, b) => b[1] - a[1])
@@ -372,8 +372,8 @@ export function handleSmartQuery(dataset, query) {
     const enhancedSchema = buildEnhancedSchema(dataset.columns, dataset.rows);
     
     const schema = {
-      ...basicSchema,
       ...enhancedSchema,
+      ...basicSchema,
       columns: dataset.columns,
     };
     
@@ -423,6 +423,9 @@ export function handleSmartQuery(dataset, query) {
     
   } catch (error) {
     console.error('[smart-query] Error:', error.message, error.stack);
+    console.error('[smart-query] Dataset keys:', dataset ? Object.keys(dataset) : 'null');
+    console.error('[smart-query] Columns sample:', dataset?.columns?.slice(0, 2));
+    console.error('[smart-query] Rows sample:', dataset?.rows?.slice(0, 1));
     return {
       content: `I encountered an issue processing your query. This dataset has ${dataset?.rowCount || 0} rows. How can I help you analyze it?`,
       sql: null,
