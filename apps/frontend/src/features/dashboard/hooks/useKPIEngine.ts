@@ -1,4 +1,4 @@
-import { useEffect,useMemo } from "react";
+import { useMemo } from "react";
 import type { Dataset,KPI,DataColumn } from "@/features/data/model/dataStore";
 import { buildAnalyticsDashboard } from "@/features/data/model/analyticsEngine";
 
@@ -22,7 +22,7 @@ interface DatasetSchema {
   primaryDimension:ColumnInfo | null;
 }
 
-const STORAGE_PREFIX = "insightflow-kpi-snapshot";
+const _STORAGE_PREFIX = "insightflow-kpi-snapshot";
 
 const roundTo = (value:number,decimals:number=2)=>{
   const factor = 10 ** decimals;
@@ -95,7 +95,7 @@ const analyzeDatasetSchema = (dataset:Dataset):DatasetSchema=>{
   const categoricalColumns:ColumnInfo[] = [];
   const dateColumns:ColumnInfo[] = [];
   
-  const sampleRow = dataset.rows[0] || {};
+  const _sampleRow = dataset.rows[0] || {};
   
   for (const col of dataset.columns) {
     const colType = detectColumnType(col);
@@ -193,28 +193,67 @@ export const useKPIEngine = (data:Dataset | null)=>{
     const { numericColumns,categoricalColumns,primaryMetric,primaryDimension } = schema;
     const rows = data.rows;
     const totalRows = rows.length;
-    const validRows = rows.filter(r => Object.values(r).some(v => v != null && v !== "")).length;
-    const qualityScore = totalRows > 0 ? roundTo((validRows / totalRows) * 100,1) : 0;
-
-    kpiList.push(buildKPI({
-      title:"Total Records",
-      value:totalRows.toLocaleString(),
-      status:totalRows > 0 ? "good" : "critical",
-      insight:`Dataset contains ${totalRows.toLocaleString()} rows across ${schema.columns.length} columns.`,
-      icon:"database",
-      sparkline:buildSparkline([totalRows]),
-    }));
+    const qualityScore = analyticsBundle.validationSummary 
+      ? roundTo((analyticsBundle.validationSummary.validRows / totalRows) * 100,2)
+      : 100;
 
     kpiList.push(buildKPI({
       title:"Data Quality",
-      value:`${qualityScore.toFixed(1)}%`,
-      status:qualityScore >= 90 ? "good" : qualityScore >= 70 ? "warning" : "critical",
+      value:`${qualityScore.toFixed(2)}%`,
+      status:qualityScore >= 90 ? "good" : qualityScore >= 80 ? "warning" : "critical",
       insight:qualityScore >= 90 ? "High data integrity with minimal missing values." : "Some missing values detected but data remains usable.",
       icon:"shield",
       sparkline:buildSparkline([qualityScore,qualityScore + 5]),
+      change:0,
     }));
 
-    if (primaryMetric) {
+    const salaryCol = schema.numericColumns.find(c => c.name.toLowerCase().includes("salary"));
+    if (salaryCol) {
+      const salaryValues = rows.map(r => Number(r[salaryCol.name])).filter(v => !isNaN(v) && v > 0 && v < 10000000);
+      if (salaryValues.length > 0) {
+        const avgSalary = salaryValues.reduce((a,b)=>a+b,0) / salaryValues.length;
+        kpiList.push(buildKPI({
+          title:"Avg Salary",
+          value:formatValue(avgSalary,"currency"),
+          status:"good",
+          insight:`Average salary is ${formatValue(avgSalary,"currency")} across ${salaryValues.toLocaleString()} valid records.`,
+          icon:"trending-up",
+          sparkline:buildSparkline(salaryValues.slice(0,20)),
+        }));
+      }
+    }
+
+    const experienceCol = schema.numericColumns.find(c => c.name.toLowerCase().includes("experience"));
+    if (salaryCol && experienceCol) {
+      const pairs = rows.slice(0,500).map(r => ({
+        x:Number(r[experienceCol.name]),
+        y:Number(r[salaryCol.name]),
+      })).filter(p => !isNaN(p.x) && !isNaN(p.y) && p.y > 0 && p.y < 10000000);
+      
+      if (pairs.length >= 10) {
+        const correlation = calculateCorrelation(
+          pairs.map(p=>p.x),
+          pairs.map(p=>p.y)
+        );
+        
+        if (correlation !== null) {
+          kpiList.push(buildKPI({
+            title:"Experience-Salary Correlation",
+            value:correlation >= 0 ? `+${correlation.toFixed(2)}` : correlation.toFixed(2),
+            status:Math.abs(correlation) >= 0.6 ? "good" : Math.abs(correlation) >= 0.3 ? "warning" : "critical",
+            insight:Math.abs(correlation) >= 0.6 
+              ? "Strong positive correlation between experience and salary."
+              : Math.abs(correlation) >= 0.3
+              ? "Moderate correlation between experience and salary."
+              : "Weak correlation between experience and salary.",
+            icon:"git-branch",
+            sparkline:buildSparkline(pairs.slice(0,8).map(p=>p.y)),
+          }));
+        }
+      }
+    }
+
+    if (primaryMetric && !primaryMetric.name.toLowerCase().includes("salary")) {
       const metricValues = rows.map(r => Number(r[primaryMetric.name])).filter(v => !isNaN(v));
       if (metricValues.length > 0) {
         const sum = metricValues.reduce((a,b)=>a+b,0);
@@ -222,7 +261,7 @@ export const useKPIEngine = (data:Dataset | null)=>{
         const min = Math.min(...metricValues);
         const max = Math.max(...metricValues);
         
-        const colType = detectColumnType({ name:primaryMetric.name,type:primaryMetric.type as any,sample:[] }).type;
+        const colType = detectColumnType({ name:primaryMetric.name,type:primaryMetric.type as DataColumn["type"],sample:[] }).type;
         
         kpiList.push(buildKPI({
           title:`Avg ${primaryMetric.name}`,
@@ -235,7 +274,89 @@ export const useKPIEngine = (data:Dataset | null)=>{
       }
     }
 
-    if (primaryDimension && categoricalColumns.length > 0) {
+    const countryCol = categoricalColumns.find(c => c.name.toLowerCase() === "country");
+    if (countryCol) {
+      const countryCounts:Record<string,number> = {};
+      rows.forEach(r => {
+        const val = String(r.country || "Unknown");
+        countryCounts[val] = (countryCounts[val] || 0) + 1;
+      });
+      const sorted = Object.entries(countryCounts).sort((a,b)=>b[1] - a[1]);
+      const topValue = sorted[0]?.[0] || "N/A";
+      const topCount = sorted[0]?.[1] || 0;
+      const topPercent = roundTo((topCount / totalRows) * 100,1);
+      
+      kpiList.push(buildKPI({
+        title:"Top Country",
+        value:topValue,
+        status:topPercent >= 30 ? "good" : topPercent >= 15 ? "warning" : "critical",
+        insight:`${topValue} is the most common country with ${topCount.toLocaleString()} records (${topPercent}%).`,
+        icon:"pie-chart",
+        sparkline:buildSparkline(sorted.slice(0,5).map(([_,count])=>count)),
+      }));
+    }
+
+    const languagesCol = categoricalColumns.find(c => c.name.toLowerCase().includes("language"));
+    if (languagesCol) {
+      const langCounts:Record<string,number> = {};
+      rows.forEach(r => {
+        const val = String(r[languagesCol.name] || "");
+        if (val) {
+          val.split(",").forEach(lang => {
+            const trimmed = lang.trim();
+            if (trimmed) langCounts[trimmed] = (langCounts[trimmed] || 0) + 1;
+          });
+        }
+      });
+      const sorted = Object.entries(langCounts).sort((a,b)=>b[1] - a[1]);
+      const topLang = sorted[0]?.[0] || "N/A";
+      const topCount = sorted[0]?.[1] || 0;
+      
+      kpiList.push(buildKPI({
+        title:"Most Popular Language",
+        value:topLang,
+        status:topCount >= 3 ? "good" : topCount >= 2 ? "warning" : "critical",
+        insight:`${topLang} is the most used language with ${topCount} occurrences.`,
+        icon:"code",
+        sparkline:buildSparkline(sorted.slice(0,5).map(([_,count])=>count)),
+      }));
+    }
+
+    const educationCol = categoricalColumns.find(c => c.name.toLowerCase().includes("education"));
+    if (educationCol && salaryCol) {
+      const eduSalaryMap:Record<string,number[]> = {};
+      rows.forEach(r => {
+        const edu = String(r[educationCol.name] || "Unknown");
+        const sal = Number(r[salaryCol.name]);
+        if (!isNaN(sal) && sal > 0 && sal < 10000000) {
+          if (!eduSalaryMap[edu]) eduSalaryMap[edu] = [];
+          eduSalaryMap[edu].push(sal);
+        }
+      });
+      
+      const eduAverages = Object.entries(eduSalaryMap).map(([edu, salaries]) => ({
+        edu,
+        avg: salaries.reduce((a,b)=>a+b,0) / salaries.length,
+        count: salaries.length,
+      })).sort((a,b)=>b.avg - a.avg);
+      
+      if (eduAverages.length >= 2) {
+        const topEdu = eduAverages[0];
+        const bottomEdu = eduAverages[eduAverages.length - 1];
+        const diff = roundTo(((topEdu.avg - bottomEdu.avg) / bottomEdu.avg) * 100,1);
+        
+        kpiList.push(buildKPI({
+          title:"Education Impact",
+          value:`${diff > 0 ? "+" : ""}${diff}%`,
+          status:diff >= 20 ? "good" : diff >= 10 ? "warning" : "critical",
+          insight:`${topEdu.edu} earns ${diff > 0 ? "more" : "less"} than ${bottomEdu.edu} (${formatValue(topEdu.avg,"currency")} vs ${formatValue(bottomEdu.avg,"currency")}).`,
+          icon:"graduation-cap",
+          sparkline:buildSparkline(eduAverages.map(e=>e.avg)),
+        }));
+      }
+    }
+
+    if (primaryDimension && categoricalColumns.length > 0 && !countryCol) {
       const topCategory = categoricalColumns[0];
       if (topCategory) {
         const categoryCounts:Record<string,number> = {};
@@ -255,63 +376,6 @@ export const useKPIEngine = (data:Dataset | null)=>{
           insight:`${topValue} is the most common ${topCategory.name} with ${topCount.toLocaleString()} records (${topPercent}%).`,
           icon:"pie-chart",
           sparkline:buildSparkline(sorted.slice(0,5).map(([_,count])=>count)),
-        }));
-      }
-    }
-
-    if (numericColumns.length >= 2) {
-      const num1 = numericColumns[0];
-      const num2 = numericColumns[1];
-      if (num1 && num2) {
-        const pairs = rows.slice(0,500).map(r => ({
-          x:Number(r[num1.name]),
-          y:Number(r[num2.name]),
-        })).filter(p => !isNaN(p.x) && !isNaN(p.y));
-        
-        if (pairs.length >= 10) {
-          const correlation = calculateCorrelation(
-            pairs.map(p=>p.x),
-            pairs.map(p=>p.y)
-          );
-          
-          if (correlation !== null) {
-            kpiList.push(buildKPI({
-              title:`${num1.name} vs ${num2.name}`,
-              value:correlation >= 0 ? `+${correlation.toFixed(2)}` : correlation.toFixed(2),
-              status:Math.abs(correlation) >= 0.6 ? "good" : Math.abs(correlation) >= 0.3 ? "warning" : "critical",
-              insight:Math.abs(correlation) >= 0.6 
-                ? `Strong correlation between ${num1.name} and ${num2.name}.`
-                : Math.abs(correlation) >= 0.3
-                ? `Moderate correlation detected between these variables.`
-                : `Weak or no significant correlation between ${num1.name} and ${num2.name}.`,
-              icon:"git-branch",
-              sparkline:buildSparkline(pairs.slice(0,8).map(p=>p.y)),
-            }));
-          }
-        }
-      }
-    }
-
-    if (categoricalColumns.length >= 2) {
-      const cat1 = categoricalColumns[0];
-      const cat2 = categoricalColumns[1];
-      if (cat1 && cat2) {
-        const crossTab:Record<string,Record<string,number>> = {};
-        rows.forEach(r => {
-          const v1 = String(r[cat1.name] || "Unknown");
-          const v2 = String(r[cat2.name] || "Unknown");
-          if (!crossTab[v1]) crossTab[v1] = {};
-          crossTab[v1][v2] = (crossTab[v1][v2] || 0) + 1;
-        });
-        
-        const uniquePairs = Object.keys(crossTab).length;
-        kpiList.push(buildKPI({
-          title:`${cat1.name} by ${cat2.name}`,
-          value:`${uniquePairs} groups`,
-          status:uniquePairs > 10 ? "good" : uniquePairs > 3 ? "warning" : "critical",
-          insight:`Found ${uniquePairs} unique combinations of ${cat1.name} and ${cat2.name}.`,
-          icon:"layout",
-          sparkline:buildSparkline(Object.keys(crossTab).map(k => Object.keys(crossTab[k]).length)),
         }));
       }
     }
