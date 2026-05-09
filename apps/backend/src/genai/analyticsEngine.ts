@@ -65,8 +65,9 @@ class AIClient {
   private genAI: GoogleGenerativeAI | null = null;
   private openai: OpenAI | null = null;
   private anthropic: any = null;
-  private ollamaUrl: string | null = null;
-  private ollamaModel: string = "llama3.1";
+  private ollamaUrl: string = "http://localhost:11434";
+  private ollamaModel: string = "llama3.2";
+  private ollamaAvailable: boolean = false;
   private activeProvider: AIProvider = AIProvider.NONE;
   private fallbackChain: AIProvider[] = [];
 
@@ -82,11 +83,11 @@ class AIClient {
     this.fallbackChain = [];
 
     // Initialize Ollama (always available if URL is provided)
-    this.ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
+    this.ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
     this.ollamaModel = process.env.OLLAMA_MODEL || "llama3.2";
     
-    // Test Ollama connection asynchronously
-    this.testOllamaConnection();
+    // Test Ollama connection - async but don't block
+    this.testOllamaConnection().catch(() => {});
 
     if (googleKey) {
       try {
