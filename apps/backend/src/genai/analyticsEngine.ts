@@ -71,10 +71,10 @@ class AIClient {
   private fallbackChain: AIProvider[] = [];
 
   constructor() {
-    this.model = getAIClient();
+    this.initializeProviders();
   }
 
-  private async initializeProviders() {
+  private initializeProviders() {
     const googleKey = process.env.GOOGLE_API_KEY || "";
     const openaiKey = process.env.OPENAI_API_KEY || "";
     const anthropicKey = process.env.ANTHROPIC_API_KEY || "";
@@ -83,16 +83,10 @@ class AIClient {
 
     // Initialize Ollama (always available if URL is provided)
     this.ollamaUrl = process.env.OLLAMA_URL || "http://localhost:11434";
-    this.ollamaModel = process.env.OLLAMA_MODEL || "llama3.1";
+    this.ollamaModel = process.env.OLLAMA_MODEL || "llama3.2";
     
-    try {
-      // Test Ollama connection
-      await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 5000 });
-      this.fallbackChain.push(AIProvider.OLLAMA);
-      console.log("✅ Ollama initialized");
-    } catch (e) {
-      console.warn("⚠️ Ollama not available at", this.ollamaUrl);
-    }
+    // Test Ollama connection asynchronously
+    this.testOllamaConnection();
 
     if (googleKey) {
       try {
@@ -260,6 +254,17 @@ class AIClient {
 
   isAvailable(): boolean {
     return this.activeProvider !== AIProvider.NONE;
+  }
+
+  private async testOllamaConnection() {
+    try {
+      // Test Ollama connection
+      await axios.get(`${this.ollamaUrl}/api/tags`, { timeout: 5000 });
+      this.fallbackChain.push(AIProvider.OLLAMA);
+      console.log("✅ Ollama initialized");
+    } catch (e) {
+      console.warn("⚠️ Ollama not available at", this.ollamaUrl);
+    }
   }
 }
 
@@ -669,6 +674,7 @@ Respond in JSON format:
           insight: `Average ${key.replace("_avg", "")} is ${value.toFixed(2)}`,
           data_points: { [key]: value },
           business_value: "Statistical summary",
+          business_impact: "Provides baseline metrics for analysis",
         });
       }
       if (insights.length >= 5) break;
