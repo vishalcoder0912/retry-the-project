@@ -9,7 +9,12 @@ const MLPage = () => {
   const [problemType, setProblemType] = useState('regression');
   const [loading, setLoading] = useState(false);
   const [trainProgress, setTrainProgress] = useState(0);
-  const [model, setModel] = useState<{ accuracy: number; features: Record<string, number> } | null>(null);
+  const [model, setModel] = useState<{ 
+    accuracy: number; 
+    type: string;
+    features: string[];
+    featureImportances: Record<string, number>;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [predictions, setPredictions] = useState<number | number[] | null>(null);
   const [predictionInput, setPredictionInput] = useState<Record<string, number>>({});
@@ -18,6 +23,11 @@ const MLPage = () => {
   const numericColumns = dataset?.columns?.filter((c) => c.type === 'number') || [];
 
   const handleTrain = async () => {
+    if (!dataset || !targetColumn) {
+      setError('Please select a dataset and target column');
+      return;
+    }
+
     setError(null);
     setLoading(true);
     setTrainProgress(20);
@@ -34,10 +44,12 @@ const MLPage = () => {
       }, 500);
 
       const response = await axios.post(
-        `/api/datasets/${dataset?.id}/ml/train`,
+        '/api/ml/train',
         {
-          targetColumn,
-          problemType,
+          dataset_id: dataset.id,
+          rows: dataset.rows,
+          target_column: targetColumn,
+          problem_type: problemType,
         }
       );
 
@@ -47,6 +59,7 @@ const MLPage = () => {
       if (response.data.success) {
         setModel(response.data.model);
         console.log('[ML] ✅ Model trained successfully');
+        console.log('[ML] Model details:', response.data.model);
       } else {
         setError(response.data.error || 'Training failed');
       }
@@ -61,22 +74,25 @@ const MLPage = () => {
   };
 
   const handlePredict = async () => {
-    if (Object.keys(predictionInput).length === 0) {
-      setError('Please fill in at least one field');
+    if (!dataset || Object.keys(predictionInput).length === 0) {
+      setError('Please train a model and fill in at least one field');
       return;
     }
 
     try {
       const response = await axios.post(
-        `/api/datasets/${dataset?.id}/ml/predict`,
-        { inputData: predictionInput }
+        '/api/ml/predict',
+        { 
+          dataset_id: dataset.id, 
+          input_data: predictionInput 
+        }
       );
 
       if (response.data.success) {
-        setPredictions(response.data.predictions);
-        console.log('[ML] ✅ Predictions made');
+        setPredictions(response.data.prediction);
+        console.log('[ML] ✅ Predictions made:', response.data.prediction);
       } else {
-        setError('Prediction failed');
+        setError(response.data.error || 'Prediction failed');
       }
     } catch (err) {
       const error = err as { response?: { data?: { error?: string } } };
@@ -193,10 +209,10 @@ const MLPage = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h2 className="text-2xl font-bold mb-4">📊 Feature Importance</h2>
             
-            {Object.keys(model.features || {}).length > 0 ? (
+            {model.featureImportances && Object.keys(model.featureImportances).length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={
-                  Object.entries(model.features).map(([name, value]: [string, number]) => ({
+                  Object.entries(model.featureImportances).map(([name, value]: [string, number]) => ({
                     feature: name,
                     importance: typeof value === 'number' ? value : 0,
                   }))
