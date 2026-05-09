@@ -13,10 +13,31 @@ export default defineConfig({
   server: {
     host: "::",
     port: 8080,
+    // Enable CORS for development
+    cors: true,
     proxy: {
+      // Main API proxy
       "/api": {
         target: "http://127.0.0.1:3001",
         changeOrigin: true,
+        secure: false,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Request to the Target:', req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
+      // ML Service proxy
+      "/api/ml": {
+        target: "http://127.0.0.1:5000",
+        changeOrigin: true,
+        secure: false,
       },
     },
   },

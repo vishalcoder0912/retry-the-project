@@ -6,6 +6,7 @@ import { handleAIRoutes } from './ai.js';
 import { handleHealthRoutes } from './health.js';
 import { handleExportRoutes } from './export.js';
 import { handleMLRoutes } from './machine-learning.js';
+import { handleStateRoutes } from './state.js';
 import { sendError, sendSuccess } from '../utils/response-utils.js';
 import { HTTP_STATUS } from '../config/constants.js';
 
@@ -13,6 +14,11 @@ export async function setupRoutes(request, response) {
   const { method, pathname } = request;
 
   try {
+    // State routes (for frontend state management)
+    if (await handleStateRoutes(request, response, pathname)) {
+      return;
+    }
+
     // Health check routes (highest priority)
     if (await handleHealthRoutes(request, response, pathname)) {
       return;
