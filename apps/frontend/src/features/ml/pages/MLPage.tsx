@@ -9,7 +9,12 @@ const MLPage = () => {
   const [problemType, setProblemType] = useState('regression');
   const [loading, setLoading] = useState(false);
   const [trainProgress, setTrainProgress] = useState(0);
-  const [model, setModel] = useState<{ accuracy: number; features: Record<string, number> } | null>(null);
+  const [model, setModel] = useState<{ 
+    accuracy: number; 
+    type: string;
+    features: string[];
+    featureImportances: Record<string, number>;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [predictions, setPredictions] = useState<number | number[] | null>(null);
   const [predictionInput, setPredictionInput] = useState<Record<string, number>>({});
