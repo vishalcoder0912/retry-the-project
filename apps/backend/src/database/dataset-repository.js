@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -6,11 +6,16 @@ import { DatabaseSync } from "node:sqlite";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dataDir = path.join(__dirname, "..", "..", "data");
+
+const dataDir = process.env.DATA_DIR || path.join(__dirname, "..", "..", "data");
 
 mkdirSync(dataDir, { recursive: true });
 
 const databasePath = path.join(dataDir, "insightflow.sqlite");
+
+if (!existsSync(databasePath)) {
+  console.log(`[DB] Creating database at: ${databasePath}`);
+}
 const db = new DatabaseSync(databasePath);
 
 db.exec(`

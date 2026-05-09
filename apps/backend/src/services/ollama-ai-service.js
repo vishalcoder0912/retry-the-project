@@ -1,12 +1,12 @@
 /**
- * Ollama AI Service - Replace Gemini with Ollama + Mistral
- * Uses local Mistral model for data analytics with schema-only approach
+ * Ollama AI Service - Using llama3.2:latest
+ * Privacy-first: Only schema metadata sent to AI
  */
 
 import { extractSchemaForAI, buildSchemaOnlyPrompt, validateSchemaOnlyContext } from '../utils/schema-extractor.js';
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2:latest";
 const API_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS) || 60000;
 
 /**
@@ -27,44 +27,89 @@ export async function isOllamaConfigured() {
 }
 
 /**
- * Call Ollama AI with Mistral model using schema-only approach
+ * Enhanced system prompt for better AI responses on HR/ salary datasets
  */
-export async function callOllamaAI(dataset, query) {
+const SYSTEM_PROMPT = `You are an expert data analytics AI assistant specializing in HR and salary data analysis.
+
+When analyzing datasets, follow these rules STRICTLY:
+
+1. IDENTIFY COLUMN TYPES:
+   - Metrics (numeric columns for aggregation): salary_usd, experience, revenue, count, amount, etc.
+   - Dimensions (categorical columns for grouping): country, education, company_size, job_title, gender, department, etc.
+   - NEVER use row_id, index, or id columns as metrics or dimensions
+
+2. CHART TYPE SELECTION:
+   - For comparing categories: use "bar" chart
+   - For trends over time: use "line" or "area" chart
+   - For showing proportions: use "pie" chart
+   - For correlation between numeric values: use "scatter" chart
+
+3. RESPONSE FORMAT (ALWAYS valid JSON):
+{
+  "intent": "aggregation|filter|comparison|distribution|correlation|count|trend|breakdown",
+  "columns_used": ["metric_column", "dimension_column"],
+  "sql": "SELECT dimension_column, AGG(metric_column) FROM dataset_rows GROUP BY dimension_column",
+  "insight": "2-3 sentence explanation of what this query will show",
+  "chart_type": "bar|line|pie|scatter|area|histogram",
+  "confidence": 0.0-1.0,
+  "reasoning": "Why this chart/approach is appropriate for this data"
+}
+
+4. COMMON PATTERNS FOR HR DATA:
+   - Salary by country → bar chart, group by country, aggregate salary_usd with AVG or SUM
+   - Experience vs Salary → scatter chart, show correlation
+   - Education distribution → pie or bar chart, count by education
+   - Company size breakdown → pie chart, count by company_size
+   - Top salaries → bar chart, order by salary_usd DESC
+
+5. VALIDATION RULES:
+   - Only suggest columns that exist in the schema
+   - Always verify the column name matches exactly (case-sensitive)
+   - For numeric columns like "salary_usd", use AGG functions (SUM, AVG, MIN, MAX)
+   - For string columns like "country", use GROUP BY
+
+CRITICAL: Response must be valid JSON only. No markdown, no explanation outside JSON.`;
+
+/**
+ * Call Ollama AI with schema-only approach for better accuracy
+ */
+export async function callOllamaAI(dataset, query, preferences = {}) {
   const configured = await isOllamaConfigured();
   if (!configured) {
     throw new Error("Ollama service not available. Please start Ollama with: ollama serve");
   }
 
   try {
-    console.log(`[ollama] Calling ${OLLAMA_MODEL} for query:`, query);
+    console.log(`[ollama] Analyzing query with ${OLLAMA_MODEL}:`, query);
 
-    // Build schema-only context (no raw data)
-    const schemaInfo = extractSchemaForAI(dataset, buildDatasetSchema(dataset));
+    // Build enhanced schema with better column classification
+    const schemaEnhanced = buildEnhancedSchema(dataset);
+    const schemaInfo = extractSchemaForAI(dataset, schemaEnhanced);
     
-    // Create prompt for Mistral with schema-only information
-    const systemPrompt = `You are a data analytics expert. Analyze the provided dataset schema and user queries.
-    
-When analyzing, respond ONLY with valid JSON in this exact format:
-{
-  "intent": "aggregation|filter|comparison|distribution|correlation|count|trend|unclear",
-  "columns_used": ["column_name"],
-  "sql": "SELECT ... FROM dataset_rows WHERE ...",
-  "insight": "1-2 sentence explanation",
-  "chart_type": "bar|line|pie|histogram|scatter|table",
-  "confidence": 0.0,
-  "reasoning": "explain your analysis"
-}
-
-Be concise and accurate. Always validate that columns exist in the schema.
-IMPORTANT: You only have access to schema information, not actual data values.`;
+    // Format the schema prompt
+    const schemaPrompt = formatDatasetSchema(schemaEnhanced);
 
     const userPrompt = `
-DATASET SCHEMA:
-${formatSchemaForPrompt(schemaInfo)}
+Analyze this HR/salary dataset and respond with JSON:
+
+DATASET INFO:
+- Name: ${dataset.name}
+- Rows: ${dataset.rowCount || dataset.rows?.length || 0}
+
+${schemaPrompt}
 
 USER QUERY: "${query}"
 
-Respond with valid JSON only, no additional text.`;
+Required columns in response:
+- intent: What the user wants (aggregation, comparison, distribution, count, trend, breakdown)
+- columns_used: Array of column names from the schema above
+- sql: Valid SQL query using the column names exactly as shown
+- insight: Brief explanation of what the result shows
+- chart_type: bar, line, pie, scatter, or area
+- confidence: Your confidence score (0-1)
+- reasoning: Why you chose this approach
+
+Return ONLY valid JSON, no other text.`;
 
     // Call Ollama API
     const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
@@ -74,10 +119,11 @@ Respond with valid JSON only, no additional text.`;
       },
       body: JSON.stringify({
         model: OLLAMA_MODEL,
-        prompt: `${systemPrompt}\n\n${userPrompt}`,
+        prompt: `${SYSTEM_PROMPT}\n\n${userPrompt}`,
         stream: false,
-        temperature: 0.2,
-        num_predict: 500,
+        temperature: 0.1,
+        num_predict: 600,
+        repeat_penalty: 1.1,
       }),
       signal: AbortSignal.timeout(API_TIMEOUT),
     });
@@ -87,31 +133,40 @@ Respond with valid JSON only, no additional text.`;
     }
 
     const data = await response.json();
-    const responseText = data.response;
+    const responseText = data.response?.trim() || '';
 
-    // Extract JSON from response
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("No valid JSON in Ollama response");
-    }
-
-    const aiResponse = JSON.parse(jsonMatch[0]);
-
-    // Validate response
-    const validation = validateAIResponse(aiResponse);
-    if (!validation.valid) {
-      console.warn("[ollama] Response validation failed:", validation.errors);
+    // Extract and parse JSON
+    let aiResponse;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        aiResponse = JSON.parse(jsonMatch[0]);
+      } else {
+        throw new Error("No JSON found in response");
+      }
+    } catch (parseError) {
+      console.warn("[ollama] JSON parse failed, using fallback:", parseError.message);
+      // Fallback to local processing
       return {
-        success: false,
-        error: "Invalid response format",
-        usedAI: false,
-        shouldFallback: true,
+        success: true,
+        intent: "analysis",
+        columns_used: [],
+        sql: null,
+        insight: responseText.substring(0, 200) || "Analysis complete",
+        chart_type: "bar",
+        confidence: 0.5,
+        reasoning: "Used fallback due to JSON parse error",
+        usedAI: true,
+        model: OLLAMA_MODEL,
       };
     }
 
+    // Validate and normalize response
+    const validated = validateAndNormalizeResponse(aiResponse, schemaEnhanced);
+
     return {
       success: true,
-      ...aiResponse,
+      ...validated,
       usedAI: true,
       model: OLLAMA_MODEL,
     };
@@ -127,84 +182,145 @@ Respond with valid JSON only, no additional text.`;
 }
 
 /**
- * Build dataset schema (no raw data) - using existing shared analytics
+ * Build enhanced schema with better column classification
  */
-function buildDatasetSchema(dataset) {
-  // Import the shared analytics function to build schema
-  const columns = (dataset.columns || []).map(col => ({
-    name: col.name,
-    type: col.type || 'string',
-    role: col.role || 'dimension',
-    sampleValues: col.sample || [],
-  }));
+function buildEnhancedSchema(dataset) {
+  const columns = (dataset.columns || []).map(col => {
+    const name = col.name || '';
+    const type = col.type || 'string';
+    
+    // Classify column role based on name patterns
+    let role = 'dimension';
+    const lowerName = name.toLowerCase();
+    
+    // Check if it's a metric (numeric column that's meaningful for aggregation)
+    if (type === 'number' || type === 'integer') {
+      if (lowerName.includes('salary') || 
+          lowerName.includes('experience') ||
+          lowerName.includes('revenue') ||
+          lowerName.includes('amount') ||
+          lowerName.includes('count') ||
+          lowerName.includes('bonus') ||
+          lowerName.includes('pay')) {
+        role = 'metric';
+      } else if (lowerName.includes('id') || lowerName.includes('row') || lowerName.includes('index')) {
+        role = 'excluded'; // Don't use for charts
+      }
+    }
+    
+    return {
+      name: col.name,
+      type: type,
+      role: role,
+      sample: col.sample || [],
+    };
+  });
 
   return {
     datasetName: dataset.name,
-    rowCount: dataset.rowCount || 0,
+    rowCount: dataset.rowCount || dataset.rows?.length || 0,
     columnCount: columns.length,
-    columns,
+    columns: columns,
     primaryDimension: columns.find(col => col.role === 'dimension'),
     primaryMetric: columns.find(col => col.role === 'metric'),
   };
 }
 
 /**
- * Format schema for prompt
+ * Format dataset schema for prompt
  */
-function formatSchemaForPrompt(schemaInfo) {
-  const { dataset, schema, dataSummary } = schemaInfo;
+function formatDatasetSchema(schema) {
+  const lines = ['COLUMN SCHEMA:'];
   
-  return `
-Dataset: ${dataset.name}
-Rows: ${dataset.rowCount}
-Columns: ${dataset.columnCount}
-
-Data Summary:
-- Numeric columns: ${dataSummary.numericColumns}
-- Text columns: ${dataSummary.textColumns}
-- Date columns: ${dataSummary.dateColumns}
-
-COLUMNS:
-${schema.columns
-  .map(col => {
-    let info = `- ${col.name} (${col.type}, ${col.role})`;
-    if (col.sampleValues && col.sampleValues.length > 0) {
-      const samples = col.sampleValues.slice(0, 3).join(', ');
-      info += ` - Sample values: ${samples}`;
-    }
-    return info;
-  })
-  .join("\n")}
-
-Primary Dimension: ${schema.primaryDimension?.name || 'none'}
-Primary Metric: ${schema.primaryMetric?.name || 'none'}
-`;
+  // Group by type
+  const metrics = schema.columns.filter(c => c.role === 'metric');
+  const dimensions = schema.columns.filter(c => c.role === 'dimension');
+  const excluded = schema.columns.filter(c => c.role === 'excluded');
+  
+  if (metrics.length > 0) {
+    lines.push('\nMETRIC COLUMNS (for aggregation - SUM, AVG, COUNT):');
+    metrics.forEach(col => {
+      lines.push(`  - ${col.name} (${col.type})`);
+    });
+  }
+  
+  if (dimensions.length > 0) {
+    lines.push('\nDIMENSION COLUMNS (for grouping - GROUP BY):');
+    dimensions.forEach(col => {
+      lines.push(`  - ${col.name} (${col.type})`);
+    });
+  }
+  
+  if (excluded.length > 0) {
+    lines.push('\nEXCLUDED (do not use in charts):');
+    excluded.forEach(col => {
+      lines.push(`  - ${col.name}`);
+    });
+  }
+  
+  return lines.join('\n');
 }
 
 /**
- * Validate AI response
+ * Validate and normalize AI response
  */
-function validateAIResponse(response) {
-  const required = ["intent", "columns_used", "sql", "insight", "chart_type", "confidence"];
-  const errors = [];
-
-  for (const field of required) {
-    if (!(field in response)) {
-      errors.push(`Missing: ${field}`);
-    }
+function validateAndNormalizeResponse(response, schema) {
+  const validIntents = ['aggregation', 'filter', 'comparison', 'distribution', 'correlation', 'count', 'trend', 'breakdown', 'analysis'];
+  const validChartTypes = ['bar', 'line', 'pie', 'scatter', 'area', 'histogram'];
+  
+  // Get actual column names from schema
+  const validColumns = schema.columns
+    .filter(c => c.role !== 'excluded')
+    .map(c => c.name);
+  
+  // Normalize intent
+  let intent = response.intent || 'analysis';
+  if (!validIntents.includes(intent.toLowerCase())) {
+    intent = 'analysis';
   }
-
-  if (typeof response.confidence !== "number" || response.confidence < 0 || response.confidence > 1) {
-    errors.push("Invalid confidence");
+  
+  // Normalize chart type
+  let chartType = (response.chart_type || 'bar').toLowerCase();
+  if (!validChartTypes.includes(chartType)) {
+    chartType = 'bar';
   }
-
-  if (!Array.isArray(response.columns_used)) {
-    errors.push("columns_used must be an array");
+  
+  // Validate and filter columns_used
+  let columnsUsed = response.columns_used || [];
+  if (!Array.isArray(columnsUsed)) {
+    columnsUsed = [];
   }
-
+  columnsUsed = columnsUsed.filter(col => validColumns.includes(col));
+  
+  // Ensure we have at least some columns
+  if (columnsUsed.length === 0 && validColumns.length > 0) {
+    // Try to infer from the query
+    const schemaLower = schema.columns.map(c => c.name.toLowerCase());
+    const queryLower = (response.insight || '').toLowerCase();
+    
+    // Find columns mentioned in insight
+    validColumns.forEach(col => {
+      if (queryLower.includes(col.toLowerCase())) {
+        columnsUsed.push(col);
+      }
+    });
+  }
+  
+  // Normalize confidence
+  let confidence = parseFloat(response.confidence) || 0.5;
+  if (confidence < 0 || confidence > 1) {
+    confidence = 0.5;
+  }
+  
   return {
-    valid: errors.length === 0,
-    errors,
+    intent: intent,
+    columns_used: columnsUsed,
+    sql: response.sql || null,
+    insight: response.insight || 'Analysis complete',
+    chart_type: chartType,
+    confidence: confidence,
+    reasoning: response.reasoning || '',
+    fallbackUsed: false,
   };
 }
 
@@ -322,4 +438,3 @@ class OllamaAIService {
 }
 
 export const ollamaAIService = new OllamaAIService();
-export { buildDatasetSchema, formatSchemaForPrompt, validateAIResponse };

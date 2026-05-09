@@ -44,7 +44,7 @@ ALWAYS respond with ONLY valid JSON (no markdown, no explanations):
 }`;
 
 export const OLLAMA_CONFIG = {
-  model: "neural-chat:7b",
+  model: "llama3.2:latest",
   temperature: 0.2,
   topP: 0.9,
   topK: 40,

@@ -13,6 +13,7 @@ import {
 import {
   buildDatasetSchema,
   createChatResponse,
+  createSchemaFirstChatResponse,
   generateCorrelationAnalysis,
   generateDemoDataset,
   normalizeColumns,
@@ -486,7 +487,16 @@ const server = createServer(async (request, response) => {
         return;
       }
 
-      const analysis = await createChatResponse(dataset, query);
+      console.log(`[chat] Query: "${query}"`);
+
+      const preferences = {
+        chartCount: body.chartCount || "auto",
+        chartTypes: body.chartTypes || ["bar", "line", "pie"],
+        showTrends: body.showTrends !== false,
+        showCorrelations: body.showCorrelations !== false,
+      };
+
+      const analysis = await createSchemaFirstChatResponse(dataset, query, preferences);
       const now = new Date().toISOString();
       const userMessage = {
         id: randomUUID(),
@@ -502,6 +512,12 @@ const server = createServer(async (request, response) => {
         chart: analysis.chart,
         insights: analysis.insights,
         timestamp: now,
+        usedAI: analysis.usedAI,
+        model: analysis.model,
+        confidence: analysis.confidence,
+        intent: analysis.intent,
+        reason: analysis.reason,
+        metadata: analysis.metadata,
       };
 
       saveChatMessages(datasetId, [userMessage, assistantMessage]);
@@ -695,4 +711,28 @@ const server = createServer(async (request, response) => {
 
 server.listen(port, () => {
   console.log(`InsightFlow API listening on http://127.0.0.1:${port}`);
+});
+
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Error: Port ${port} is already in use`);
+    process.exit(1);
+  }
+  console.error('Server error:', error);
+});
+
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });

@@ -584,8 +584,10 @@ export const aggregateEducationDistribution = (rows:DatasetRow[],column:DataColu
 export const buildScatterDataset = (rows:DatasetRow[],xColumn:DataColumn,yColumn:DataColumn,labelColumn?:DataColumn|null)=>{
   return rows
     .map((row)=>{
-      const x = typeof row[xColumn.name] === "number" ? Number(row[xColumn.name]) : null;
-      const y = typeof row[yColumn.name] === "number" ? Number(row[yColumn.name]) : null;
+      const xRaw = row[xColumn.name];
+      const yRaw = row[yColumn.name];
+      const x = xRaw != null && !isNaN(Number(xRaw)) ? Number(xRaw) : null;
+      const y = yRaw != null && !isNaN(Number(yRaw)) ? Number(yRaw) : null;
       if (x == null || y == null) return null;
       return {
         [xColumn.name]:x,
@@ -593,7 +595,7 @@ export const buildScatterDataset = (rows:DatasetRow[],xColumn:DataColumn,yColumn
         label:labelColumn ? normalizeDimensionLabel(labelColumn.name,row[labelColumn.name]) ?? "Observation" : "Observation",
       };
     })
-    .filter((entry):entry is Record<string,string|number>=>entry !== null)
+    .filter((entry): entry is { [key: string]: string | number; label: string } => entry !== null)
     .slice(0,500);
 };
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useData } from '@/features/data/context/useData';
 import KPICard from '@/features/dashboard/components/KPICard';
 import AnalyticsChart from '@/features/dashboard/components/AnalyticsChart';
@@ -20,13 +20,26 @@ const DashboardPage = () => {
   const [showSidebar, setShowSidebar] = useState(false);
   const [aiGeneratedCharts, setAiGeneratedCharts] = useState<ChartConfig[]>([]);
 
-  const handleChartGenerated = (chart: ChartConfig) => {
+  const handleChartGenerated = useCallback((chart: ChartConfig) => {
     setAiGeneratedCharts(prev => {
-      const exists = prev.some(c => c.title === chart.title);
+      const exists = prev.some(c => c.title === chart.title && c.xKey === chart.xKey && c.yKey === chart.yKey);
       if (exists) return prev;
       return [...prev, chart];
     });
-  };
+  }, []);
+
+  const handleChartModified = useCallback((chart: ChartConfig) => {
+    setAiGeneratedCharts(prev => prev.map(c => 
+      c.title === chart.title ? chart : c
+    ));
+  }, []);
+
+  const handleFilterChange = useCallback((newFilters: Record<string, string>) => {
+    setFilters(prev => ({
+      ...prev,
+      columns: newFilters
+    }));
+  }, []);
 
   const dateColumnName = useMemo(
     () => dataset?.columns.find((column) => column.type === 'date')?.name,
@@ -81,17 +94,17 @@ const DashboardPage = () => {
         if (insight.type === 'summary' && insight.metrics) {
           const metrics = insight.metrics as Record<string, unknown>;
           if (metrics.totalRecords !== undefined) {
-            aiKPIs.push({ label: 'Total Records', value: String(metrics.totalRecords), icon: 'rows' });
+            aiKPIs.push({ title: 'Total Records', value: String(metrics.totalRecords), icon: 'rows' });
           }
           if (metrics.totalValue !== undefined) {
-            aiKPIs.push({ label: `Total ${metrics.primaryMetric || 'Value'}`, value: String(metrics.totalValue), icon: 'chart' });
+            aiKPIs.push({ title: `Total ${metrics.primaryMetric || 'Value'}`, value: String(metrics.totalValue), icon: 'chart' });
           }
           if (metrics.averageValue !== undefined) {
-            aiKPIs.push({ label: `Avg ${metrics.primaryMetric || 'Value'}`, value: String(metrics.averageValue), icon: 'chart' });
+            aiKPIs.push({ title: `Avg ${metrics.primaryMetric || 'Value'}`, value: String(metrics.averageValue), icon: 'chart' });
           }
         }
         if (insight.type === 'top_performer' && insight.category) {
-          aiKPIs.push({ label: `Top Performer`, value: String(insight.category), icon: 'star' });
+          aiKPIs.push({ title: `Top Performer`, value: String(insight.category), icon: 'star' });
         }
       });
       if (aiKPIs.length > 0) return aiKPIs;
@@ -106,7 +119,15 @@ const DashboardPage = () => {
       : generateDemoCharts(filteredDataset);
     
     if (aiGeneratedCharts.length > 0) {
-      return [...baseCharts, ...aiGeneratedCharts];
+      const combined = [...baseCharts, ...aiGeneratedCharts];
+      // Deduplicate by title, xKey, and yKey
+      const seen = new Set<string>();
+      return combined.filter(chart => {
+        const key = `${chart.title}|${chart.xKey}|${chart.yKey}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
     }
     return baseCharts;
   }, [filteredDataset, analysis, aiGeneratedCharts]);
@@ -200,7 +221,7 @@ const DashboardPage = () => {
         <h3 className="text-lg font-semibold text-foreground">Key Metrics</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {kpis.map((kpi, index) => (
-            <KPICard key={kpi.label} kpi={kpi} index={index} />
+            <KPICard key={kpi.title} kpi={kpi} index={index} />
           ))}
         </div>
       </div>
@@ -225,7 +246,8 @@ const DashboardPage = () => {
             isOpen={showSidebar} 
             onClose={() => setShowSidebar(false)}
             onChartGenerated={handleChartGenerated}
-            currentCharts={aiGeneratedCharts}
+            onChartModified={handleChartModified}
+            onFilterChange={handleFilterChange}
           />
         )}
       </AnimatePresence>

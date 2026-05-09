@@ -3,46 +3,65 @@
  * Ensures only schema information (not actual data) is sent to AI services
  */
 
+/**
+ * Extract schema information for AI analysis
+ */
 export const extractSchemaForAI = (dataset, schema) => {
+  // Classify columns properly
+  const columns = (schema.columns || []).map(col => {
+    const name = col.name || '';
+    const type = col.type || 'string';
+    
+    let role = col.role || 'dimension';
+    
+    // Better classification for common column patterns
+    if (type === 'number' || type === 'integer') {
+      const lowerName = name.toLowerCase();
+      if (lowerName.includes('salary') || 
+          lowerName.includes('experience') ||
+          lowerName.includes('revenue') ||
+          lowerName.includes('amount') ||
+          lowerName.includes('count') ||
+          lowerName.includes('bonus') ||
+          lowerName.includes('pay') ||
+          lowerName.includes('cost') ||
+          lowerName.includes('age')) {
+        role = 'metric';
+      } else if (lowerName.includes('id') || 
+                 lowerName.includes('row') || 
+                 lowerName.includes('index') ||
+                 lowerName.includes('_id')) {
+        role = 'excluded';
+      }
+    }
+    
+    return {
+      name: col.name,
+      type: col.type,
+      role: role,
+      sampleValues: col.sample ? Array.isArray(col.sample) ? col.sample.slice(0, 3) : [col.sample] : []
+    };
+  });
+
   return {
     dataset: {
       name: dataset.name,
-      rowCount: dataset.rowCount,
-      columnCount: schema.columns.length,
-      // Only include metadata, not actual data
+      rowCount: dataset.rowCount || dataset.rows?.length || 0,
+      columnCount: columns.length,
     },
     schema: {
-      columns: schema.columns.map(col => ({
-        name: col.name,
-        type: col.type,
-        role: col.role,
-        // Include sample values if available, but limit to 3-5 generic examples
-        sampleValues: col.sample ? Array.isArray(col.sample) ? col.sample.slice(0, 3) : [col.sample] : []
-      })),
-      primaryDimension: schema.primaryDimension ? {
-        name: schema.primaryDimension.name,
-        type: schema.primaryDimension.type
-      } : null,
-      secondaryDimension: schema.secondaryDimension ? {
-        name: schema.secondaryDimension.name,
-        type: schema.secondaryDimension.type
-      } : null,
-      primaryMetric: schema.primaryMetric ? {
-        name: schema.primaryMetric.name,
-        type: schema.primaryMetric.type
-      } : null,
-      secondaryMetric: schema.secondaryMetric ? {
-        name: schema.secondaryMetric.name,
-        type: schema.secondaryMetric.type
-      } : null,
+      columns: columns,
+      primaryDimension: columns.find(col => col.role === 'dimension'),
+      secondaryDimension: columns.filter(col => col.role === 'dimension')[1] || null,
+      primaryMetric: columns.find(col => col.role === 'metric'),
+      secondaryMetric: columns.filter(col => col.role === 'metric')[1] || null,
     },
-    // Explicitly exclude actual data rows
     dataSummary: {
-      totalRows: dataset.rowCount,
-      totalColumns: schema.columns.length,
-      numericColumns: schema.columns.filter(col => col.type === 'number').length,
-      textColumns: schema.columns.filter(col => col.type === 'string').length,
-      dateColumns: schema.columns.filter(col => col.type === 'date').length,
+      totalRows: dataset.rowCount || dataset.rows?.length || 0,
+      totalColumns: columns.length,
+      metrics: columns.filter(col => col.role === 'metric').map(c => c.name),
+      dimensions: columns.filter(col => col.role === 'dimension').map(c => c.name),
+      excluded: columns.filter(col => col.role === 'excluded').map(c => c.name),
     }
   };
 };
@@ -67,35 +86,63 @@ export const sanitizeQueryContext = (context) => {
   return sanitized;
 };
 
+/**
+ * Build schema-only prompt with better guidance for HR data
+ */
 export const buildSchemaOnlyPrompt = (query, schemaInfo) => {
   const { dataset, schema, dataSummary } = schemaInfo;
   
-  let prompt = `You are analyzing a dataset based on its schema only. You do NOT have access to actual data values.
+  const metrics = dataSummary.metrics || [];
+  const dimensions = dataSummary.dimensions || [];
+  const excluded = dataSummary.excluded || [];
+  
+  let prompt = `You are analyzing a dataset using SCHEMA-ONLY information. You do NOT have access to actual data values.
 
 Dataset Information:
 - Name: ${dataset.name}
-- Total Rows: ${dataset.rowCount}
-- Total Columns: ${dataset.columnCount}
+- Total Rows: ${dataset.rowCount || 0}
+- Total Columns: ${dataset.columnCount || 0}
 
-Schema Structure:
-${schema.columns.map(col => `- ${col.name} (${col.type}, ${col.role})`).join('\n')}
+SCHEMA CLASSIFICATION:
+`;
+  
+  if (metrics.length > 0) {
+    prompt += `\nMETRIC COLUMNS (use for aggregation - SUM, AVG, COUNT, MIN, MAX):
+${metrics.map(m => `  - ${m}`).join('\n')}`;
+  }
+  
+  if (dimensions.length > 0) {
+    prompt += `\nDIMENSION COLUMNS (use for grouping - GROUP BY):
+${dimensions.map(d => `  - ${d}`).join('\n')}`;
+  }
+  
+  if (excluded.length > 0) {
+    prompt += `\nEXCLUDED COLUMNS (do NOT use in charts or queries):
+${excluded.map(e => `  - ${e}`).join('\n')}`;
+  }
 
-Data Summary:
-- Numeric columns: ${dataSummary.numericColumns}
-- Text columns: ${dataSummary.textColumns}
-- Date columns: ${dataSummary.dateColumns}
+  prompt += `
 
-Available Analysis Types:
-- Trend analysis over time
-- Comparisons between categories
-- Distribution analysis
-- Correlation between numeric variables
+COMMON ANALYSIS PATTERNS:
+- "Salary by country" → SELECT country, AVG(salary_usd) FROM data GROUP BY country
+- "Top experience levels" → SELECT country, MAX(experience) FROM data GROUP BY country
+- "Education distribution" → SELECT education, COUNT(*) FROM data GROUP BY education
 
-Important: You can only suggest queries and analysis based on the schema structure. You cannot reference specific data values since you don't have access to the actual data.
+CHART TYPE GUIDANCE:
+- bar: comparing values across categories (salary by country)
+- line: trends over time or sequence (if time/date column exists)
+- pie: proportions of a whole (education breakdown)
+- scatter: correlation between two numeric values (experience vs salary)
+
+IMPORTANT RULES:
+1. NEVER use excluded columns (id, row_id, index) in queries or charts
+2. Only reference columns that exist in the schema above
+3. Numeric columns are for metrics, string columns are for dimensions
+4. Always match column names exactly (case-sensitive)
 
 User Query: ${query}
 
-Provide a helpful response based on the schema structure and suggest appropriate SQL queries or analysis approaches.`;
+Provide a helpful response with appropriate SQL query and chart suggestion.`;
 
   return prompt;
 };
