@@ -18,6 +18,11 @@
     "axios": "^1.15.1",
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
+    "ml-cart": "^2.1.1",
+    "ml-kmeans": "^7.0.0",
+    "ml-linear-regression": "^1.0.3",
+    "ml-pca": "^4.1.1",
+    "ml-random-forest": "^2.1.0",
     "node-cron": "^3.0.3",
     "openai": "^4.28.4",
     "pdfkit": "^0.15.2"
