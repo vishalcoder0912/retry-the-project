@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useData } from '@/features/data/context/useData';
 import axios from 'axios';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 const MLPage = () => {
   const { dataset } = useData();
@@ -9,13 +9,13 @@ const MLPage = () => {
   const [problemType, setProblemType] = useState('regression');
   const [loading, setLoading] = useState(false);
   const [trainProgress, setTrainProgress] = useState(0);
-  const [model, setModel] = useState<any>(null);
+  const [model, setModel] = useState<{ accuracy: number; features: Record<string, number> } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [predictions, setPredictions] = useState<any>(null);
-  const [predictionInput, setPredictionInput] = useState<any>({});
+  const [predictions, setPredictions] = useState<number | number[] | null>(null);
+  const [predictionInput, setPredictionInput] = useState<Record<string, number>>({});
 
   // Get numeric columns for target selection
-  const numericColumns = dataset?.columns?.filter((c: any) => c.type === 'number') || [];
+  const numericColumns = dataset?.columns?.filter((c) => c.type === 'number') || [];
 
   const handleTrain = async () => {
     setError(null);
@@ -50,9 +50,10 @@ const MLPage = () => {
       } else {
         setError(response.data.error || 'Training failed');
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('[ML] Training error:', err);
-      setError(err.response?.data?.error || err.message || 'Training failed');
+      const error = err as { response?: { data?: { error?: string } }; message?: string };
+      setError(error.response?.data?.error || error.message || 'Training failed');
     } finally {
       setLoading(false);
       setTimeout(() => setTrainProgress(0), 1000);
@@ -77,8 +78,9 @@ const MLPage = () => {
       } else {
         setError('Prediction failed');
       }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Prediction failed');
+    } catch (err) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || 'Prediction failed');
     }
   };
 
@@ -115,7 +117,7 @@ const MLPage = () => {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
             >
               <option value="">-- Select a column --</option>
-              {numericColumns.map((col: any) => (
+{numericColumns.map((col) => (
                 <option key={col.name} value={col.name}>
                   {col.name}
                 </option>
@@ -194,7 +196,7 @@ const MLPage = () => {
             {Object.keys(model.features || {}).length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={
-                  Object.entries(model.features).map(([name, value]: any) => ({
+                  Object.entries(model.features).map(([name, value]: [string, number]) => ({
                     feature: name,
                     importance: typeof value === 'number' ? value : 0,
                   }))
@@ -219,7 +221,7 @@ const MLPage = () => {
           <h2 className="text-2xl font-bold mb-4">🔮 Make Predictions</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {numericColumns.map((col: any) => (
+            {numericColumns.map((col) => (
               col.name !== targetColumn && (
                 <div key={col.name}>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
