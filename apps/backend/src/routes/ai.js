@@ -215,7 +215,87 @@ export async function handleAIRoutes(request, response, pathname) {
     }
   }
 
+  // GET /api/cascade/status - Get cascade status
+  if (pathname === '/api/cascade/status' && method === 'GET') {
+    try {
+      const health = await aiManager.health();
+      const cascade = {
+        active: true,
+        providers: Object.entries(health.providers).map(([name, provider]) => ({
+          name,
+          available: provider.available,
+          priority: provider.priority || 0
+        })).sort((a, b) => a.priority - b.priority),
+        currentProvider: health.activeProvider || 'ollama',
+        fallbackChain: ['ollama', 'gemini', 'openai', 'anthropic'],
+        stats: aiManager.getStats()
+      };
+      
+      sendSuccess(response, { cascade }, 'Cascade status retrieved');
+      return true;
+    } catch (error) {
+      console.error('Cascade status error:', error);
+      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to get cascade status', ERROR_CODES.AI_ERROR);
+      return true;
+    }
+  }
+
+  // POST /api/qr-upload/generate - Generate QR upload session
+  if (pathname === '/api/qr-upload/generate' && method === 'POST') {
+    try {
+      const sessionId = generateSessionId();
+      const uploadToken = generateToken();
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes
+      
+      // In production, store in database
+      const uploadUrl = `http://localhost:3001/api/qr-upload/${sessionId}/upload?token=${uploadToken}`;
+      
+      sendSuccess(response, {
+        sessionId,
+        uploadToken,
+        expiresAt,
+        uploadUrl
+      }, 'QR session generated');
+      return true;
+    } catch (error) {
+      console.error('QR generate error:', error);
+      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to generate QR session', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      return true;
+    }
+  }
+
+  // GET /api/qr-upload/:sessionId/status - Get QR session status
+  if (pathname.match(/^\/api\/qr-upload\/[^/]+\/status$/) && method === 'GET') {
+    try {
+      const parts = pathname.split('/');
+      const sessionId = parts[3];
+      const token = request.searchParams?.get('token') || new URL(request.url, `http://${request.headers.host}`).searchParams.get('token');
+      
+      // In production, check database for session status
+      const status = {
+        sessionId,
+        status: 'waiting', // waiting, uploaded, expired
+        fileInfo: null
+      };
+      
+      sendSuccess(response, status, 'Session status retrieved');
+      return true;
+    } catch (error) {
+      console.error('QR status error:', error);
+      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to get session status', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      return true;
+    }
+  }
+
   return false;
+}
+
+function generateSessionId() {
+  return 'qr-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+}
+
+function generateToken() {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
 /**
