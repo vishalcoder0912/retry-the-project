@@ -3,7 +3,7 @@ import { extractSchemaForAI, buildSchemaOnlyPrompt, validateSchemaOnlyContext } 
 
 class GeminiService {
   constructor() {
-    this.apiKey = process.env.GEMINI_API_KEY;
+    this.apiKey = process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim() || '';
     this.timeout = parseInt(process.env.AI_TIMEOUT_MS) || 30000;
     this.maxTokens = parseInt(process.env.AI_MAX_TOKENS) || 2048;
     this.temperature = parseFloat(process.env.AI_TEMPERATURE) || 0.7;

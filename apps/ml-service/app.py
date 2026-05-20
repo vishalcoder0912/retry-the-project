@@ -12,8 +12,16 @@ Enhanced with:
 - Evaluation metrics and diagnostics
 """
 
+import sys
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 try:
     from autogluon.tabular import TabularPredictor
     from autogluon.core.metrics import make_scorer
@@ -21,7 +29,7 @@ try:
 except Exception as e:
     AUTOGLUON_AVAILABLE = False
     TabularPredictor = None
-    print(f"⚠️  AutoGluon not available: {e}")
+    print(f"AutoGluon not available: {e}")
 
 import json
 import os

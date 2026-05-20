@@ -5,21 +5,13 @@
  *          3. Local Fallback (Schema-based)
  */
 
-import { callOllamaAI, isOllamaConfigured } from "./ollama-ai-service.js";
-import { createLocalFallbackChatResponse, classifyChatQuery, validateAndFixSQL } from "./analytics-service.js";
+import { isOllamaConfigured } from "./ollama-ai-service.js";
+import { createChatResponse, classifyChatQuery } from "./analytics-service.js";
 import { getCachedQuery, cacheQuery } from "./query-cache.js";
+import { aiManager } from "./ai/ai-manager.js";
 
-function isMeaningfulAiResult(aiResponse, queryType) {
-  if (!aiResponse?.success) {
-    return false;
-  }
-
-  if (queryType !== "analysis") {
-    return false;
-  }
-
-  return Boolean(aiResponse.intent && aiResponse.insight && aiResponse.sql);
-}
+const hasGeminiApiKey = () =>
+  Boolean(process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim());
 
 export async function performAICascadeAnalysis(dataset, query) {
   console.log("\n[cascade] ====================================");
@@ -92,25 +84,38 @@ async function tryOllamaAnalysis(dataset, query, queryType) {
       return { success: false, error: "Ollama not available" };
     }
 
-    const aiResponse = await callOllamaAI(dataset, query);
-    if (!isMeaningfulAiResult(aiResponse, queryType)) {
-      return { success: false, error: aiResponse.error || "AI response did not match the user query" };
-    }
+    const schemaSummary = (dataset.columns || [])
+      .slice(0, 12)
+      .map((column) => `${column.name} (${column.type || "unknown"})`)
+      .join(", ");
+    const prompt = `Answer in 2 short sentences as a dashboard data analyst.
+Dataset: ${dataset.name}. Rows: ${dataset.rowCount || dataset.rows?.length || 0}. Columns: ${schemaSummary}.
+Question: ${query}`;
 
-    const validatedSQL = validateAndFixSQL(dataset, aiResponse.sql);
+    const aiResponse = await aiManager.generateResponse(prompt, {
+      preferredProvider: "ollama",
+      preferredModel: process.env.OLLAMA_MODEL || "llama3.2",
+      maxTokens: 40,
+      temperature: 0.2,
+      timeout: 10000,
+      disableFallback: true,
+    });
+
+    if (!aiResponse.success || !aiResponse.content) {
+      return { success: false, error: aiResponse.error || "Ollama did not return content" };
+    }
 
     return {
       success: true,
-      content: aiResponse.insight,
-      sql: validatedSQL,
+      content: aiResponse.content,
+      sql: null,
       chart: null,
       insights: [
-        `Analysis type: ${aiResponse.intent}`,
-        `Confidence: ${((aiResponse.confidence ?? 0) * 100).toFixed(0)}%`,
-        aiResponse.reasoning,
+        `Provider: ${aiResponse.provider || "ollama"}`,
+        `Model: ${aiResponse.model || "Ollama"}`,
       ].filter(Boolean),
-      intent: aiResponse.intent,
-      confidence: aiResponse.confidence,
+      intent: queryType,
+      confidence: 0.8,
       usedAI: true,
       model: aiResponse.model || "Ollama",
     };
@@ -121,8 +126,8 @@ async function tryOllamaAnalysis(dataset, query, queryType) {
 
 async function tryGeminiAnalysis(dataset, query) {
   try {
-    if (!process.env.GEMINI_API_KEY) {
-      return { success: false, error: "GEMINI_API_KEY not configured" };
+    if (!hasGeminiApiKey()) {
+      return { success: false, error: "Gemini API key not configured" };
     }
 
     const { generateSQLFromSchema } = await import("./schema-ai-service.js");
@@ -151,7 +156,7 @@ async function tryGeminiAnalysis(dataset, query) {
 
 async function tryLocalFallback(dataset, query) {
   try {
-    const response = createLocalFallbackChatResponse(dataset, query);
+    const response = await createChatResponse(dataset, query);
     return {
       success: true,
       content: response.content,
@@ -174,7 +179,7 @@ export async function getCascadeStatus() {
     timestamp: new Date().toISOString(),
     levels: {
       ollama: { name: "Ollama", available: false },
-      gemini: { name: "Google Gemini", available: !!process.env.GEMINI_API_KEY },
+      gemini: { name: "Google Gemini", available: hasGeminiApiKey() },
       local: { name: "Local Fallback", available: true },
     },
   };

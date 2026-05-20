@@ -1,7 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+const readGeminiApiKey = () =>
+  process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim() || '';
+
 // Initialize Gemini AI client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const genAI = new GoogleGenerativeAI(readGeminiApiKey());
 let hasLoggedMissingGeminiConfig = false;
 
 /**
@@ -174,19 +177,19 @@ const buildFallbackSchemaResponse = (schemaPacket, query, reason) => {
 export const generateSQLFromSchema = async (schemaPacket, query, options = {}) => {
   const { allowFallback = true } = options;
 
-  if (!process.env.GEMINI_API_KEY) {
+  if (!readGeminiApiKey()) {
     if (!allowFallback) {
-      throw new Error('GEMINI_API_KEY not configured');
+      throw new Error('Gemini API key not configured');
     }
 
     if (!hasLoggedMissingGeminiConfig) {
-      console.warn('[schema-ai] GEMINI_API_KEY not configured, returning fallback response');
+      console.warn('[schema-ai] Gemini API key not configured, returning fallback response');
       hasLoggedMissingGeminiConfig = true;
     }
     return buildFallbackSchemaResponse(
       schemaPacket,
       query,
-      'Gemini API not configured. Returning a schema-based fallback response.'
+      'Gemini API key not configured. Returning a schema-based fallback response.'
     );
   }
 

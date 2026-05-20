@@ -53,6 +53,13 @@ export interface DatasetAnalysis {
   dataType: string;
   dataTypeLabel: string;
   chartRecommendations: ChartConfig[];
+  kpis?: KPI[];
+  memory?: {
+    usedPreviousPattern: boolean;
+    similarity: number;
+    domain: string;
+    columnSignature: string;
+  };
   insights: Array<{
     type: string;
     title: string;

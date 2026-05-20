@@ -12,7 +12,8 @@ import {
 
 let lastGeminiConfigState = null;
 
-const readGeminiApiKey = () => process.env.GEMINI_API_KEY?.trim() || "";
+const readGeminiApiKey = () =>
+  process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim() || "";
 
 /**
  * Check if Gemini is configured
@@ -33,7 +34,7 @@ export function isGeminiConfigured() {
  */
 export async function callGeminiAI(dataset, query) {
   if (!isGeminiConfigured()) {
-    throw new Error("GEMINI_API_KEY not configured");
+    throw new Error("Gemini API key not configured");
   }
 
   try {

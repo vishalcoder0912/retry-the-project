@@ -6,13 +6,13 @@ import DashboardFilters, { FilterState } from '@/features/dashboard/components/D
 import DataQualityPanel from '@/features/dashboard/components/DataQualityPanel';
 import AnalyticsSidebar from '@/features/dashboard/components/AnalyticsSidebar';
 import { generateDemoKPIs, generateDemoCharts, ChartConfig, KPI, analyzeDataQuality } from '@/features/data/model/dataStore';
-import { Download, Sparkles, Layers, MessageSquare } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, Layers, MessageSquare } from 'lucide-react';
 import { exportDatasetCSV } from '@/features/data/utils/exportUtils';
 import { AnimatePresence, motion } from 'framer-motion';
 import StatusPanel from '@/shared/layout/StatusPanel';
 
 const DashboardPage = () => {
-  const { dataset, analysis, isHydrating, apiError, loadDemo, retryHydrate } = useData();
+  const { dataset, analysis, isHydrating, apiError, loadDemo, resetAppState, retryHydrate } = useData();
   const [filters, setFilters] = useState<FilterState>({
     dateRange: {},
     columns: {},
@@ -22,16 +22,25 @@ const DashboardPage = () => {
 
   const handleChartGenerated = useCallback((chart: ChartConfig) => {
     setAiGeneratedCharts(prev => {
-      const exists = prev.some(c => c.title === chart.title && c.xKey === chart.xKey && c.yKey === chart.yKey);
+      const exists = prev.some(c => c.title === chart.title && c.xKey === chart.xKey && c.yKey === chart.yKey && c.type === chart.type);
       if (exists) return prev;
       return [...prev, chart];
     });
   }, []);
 
   const handleChartModified = useCallback((chart: ChartConfig) => {
-    setAiGeneratedCharts(prev => prev.map(c => 
-      c.title === chart.title ? chart : c
-    ));
+    setAiGeneratedCharts(prev => {
+      if (prev.length === 0) return [chart];
+      return [...prev.slice(0, -1), chart];
+    });
+  }, []);
+
+  const handleChartDeleted = useCallback(() => {
+    setAiGeneratedCharts(prev => prev.slice(0, -1));
+  }, []);
+
+  const handleClearGeneratedCharts = useCallback(() => {
+    setAiGeneratedCharts([]);
   }, []);
 
   const handleFilterChange = useCallback((newFilters: Record<string, string>) => {
@@ -42,7 +51,7 @@ const DashboardPage = () => {
   }, []);
 
   const dateColumnName = useMemo(
-    () => dataset?.columns.find((column) => column.type === 'date')?.name,
+    () => (Array.isArray(dataset?.columns) ? dataset.columns : []).find((column) => column.type === 'date')?.name,
     [dataset],
   );
 
@@ -55,7 +64,8 @@ const DashboardPage = () => {
   const filteredDataset = useMemo(() => {
     if (!dataset) return null;
 
-    const filtered = dataset.rows.filter((row) => {
+    const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
+    const filtered = rows.filter((row) => {
       for (const [col, value] of Object.entries(filters.columns)) {
         if (value && String(row[col]) !== value) return false;
       }
@@ -208,6 +218,15 @@ const DashboardPage = () => {
             <Download className="h-4 w-4" />
             Export
           </button>
+          <button
+            onClick={() => {
+              void resetAppState();
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border/50 hover:border-primary/30 hover:bg-muted/50 transition-all text-sm font-medium text-muted-foreground"
+          >
+            <RotateCcw className="h-4 w-4" />
+            Reset
+          </button>
         </div>
       </div>
 
@@ -245,8 +264,11 @@ const DashboardPage = () => {
           <AnalyticsSidebar 
             isOpen={showSidebar} 
             onClose={() => setShowSidebar(false)}
-            onChartGenerated={handleChartGenerated}
-            onChartModified={handleChartModified}
+            dataset={filteredDataset}
+            charts={charts}
+            onAddChart={handleChartGenerated}
+            onReplaceLatestChart={handleChartModified}
+            onRemoveLatestChart={handleChartDeleted}
             onFilterChange={handleFilterChange}
           />
         )}

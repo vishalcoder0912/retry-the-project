@@ -1,45 +1,66 @@
-import { Outlet, useLocation } from 'react-router-dom';
-import AppSidebar from '@/shared/layout/AppSidebar';
-import { useData } from '@/features/data/context/useData';
+import { useState } from "react";
+import { Outlet } from "react-router-dom";
+import { Menu, X } from "lucide-react";
+import AppSidebar from "@/shared/layout/AppSidebar";
+import { useData } from "@/features/data/context/useData";
 
-const pageMeta: Record<string, { title: string; subtitle: string }> = {
-  '/': { title: 'Dashboard', subtitle: 'Overview & Insights' },
-  '/data': { title: 'Data Table', subtitle: 'View & Manage Data' },
-  '/upload': { title: 'Upload', subtitle: 'Import Your Data' },
-  '/analytics': { title: 'Analytics', subtitle: 'Deep Dive Analysis' },
-  '/chat': { title: 'AI Chat', subtitle: 'Natural Language Interface' },
-};
-
-const AppLayout = () => {
-  const location = useLocation();
+export default function AppLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { dataset } = useData();
-  const meta = pageMeta[location.pathname] ?? pageMeta['/'];
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppSidebar />
-      <main className="pl-64 min-h-screen">
-        <div className="border-b border-border/50 px-8 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground mb-1">
-                <span className="font-medium text-foreground">{dataset?.name || 'No Dataset'}</span>
-                {dataset && (
-                  <>
-                    <span className="text-border">•</span>
-                    <span>{dataset.rowCount.toLocaleString()} rows</span>
-                  </>
-                )}
-              </div>
-              <h1 className="text-2xl font-semibold text-foreground">{meta.title}</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">{meta.subtitle}</p>
+    <div className="min-h-screen bg-[#050d18] text-white">
+      <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.18),transparent_34%),radial-gradient(circle_at_top_right,rgba(37,99,235,0.14),transparent_28%),linear-gradient(180deg,#040b16_0%,#07111f_100%)]" />
+
+      <div className="hidden xl:fixed xl:inset-y-0 xl:left-0 xl:z-40 xl:block">
+        <AppSidebar />
+      </div>
+
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b border-slate-800/70 bg-[#081121]/90 px-4 py-3 backdrop-blur xl:hidden">
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2 text-slate-100"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+
+        <div className="text-center">
+          <p className="text-sm font-semibold text-white">{dataset?.name || "InsightFlow"}</p>
+          <p className="text-xs text-slate-400">
+            {dataset ? `${dataset.rowCount.toLocaleString()} rows` : "Analytics Platform"}
+          </p>
+        </div>
+
+        <div className="h-9 w-9" />
+      </div>
+
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 xl:hidden">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="absolute inset-0 bg-black/60"
+            aria-label="Close sidebar"
+          />
+          <div className="relative h-full w-[18rem]">
+            <div className="absolute right-3 top-3 z-10">
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2 text-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
+            <AppSidebar onNavigate={() => setSidebarOpen(false)} />
           </div>
         </div>
+      )}
+
+      <main className="min-h-screen xl:pl-72">
         <Outlet />
       </main>
     </div>
   );
-};
-
-export default AppLayout;
+}
