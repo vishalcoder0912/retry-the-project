@@ -1,7 +1,14 @@
 // Analytics-related routes with AI integration
 import { sendSuccess, sendError } from '../utils/response-utils.js';
 import { HTTP_STATUS, ERROR_CODES } from '../config/constants.js';
-import { getState, updateAnalysis } from './state.js';
+import { updateAnalysis } from './state.js';
+import { getDatasetById } from '../database/dataset-repository.js';
+import { buildSchemaPacketAsync } from '../services/schema-packet-builder.js';
+
+function getRouteDataset(pathname) {
+  const datasetId = pathname.split('/')[3];
+  return getDatasetById(datasetId);
+}
 
 export async function handleAnalyticsRoutes(request, response, pathname) {
   const { method } = request;
@@ -9,9 +16,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
   // GET /api/datasets/:id/ai-correlations - AI-powered correlations
   if (pathname.match(/^\/api\/datasets\/[^/]+\/ai-correlations$/) && method === 'GET') {
     try {
-      const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getRouteDataset(pathname);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
@@ -37,9 +42,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
   // GET /api/datasets/:id/ai/profile - AI profile analysis
   if (pathname.match(/^\/api\/datasets\/[^/]+\/ai\/profile$/) && method === 'GET') {
     try {
-      const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getRouteDataset(pathname);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
@@ -60,9 +63,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
   // GET /api/datasets/:id/ai/anomalies - AI anomaly detection
   if (pathname.match(/^\/api\/datasets\/[^/]+\/ai\/anomalies$/) && method === 'GET') {
     try {
-      const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getRouteDataset(pathname);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
@@ -83,9 +84,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
   // GET /api/datasets/:id/ai/relationships - AI relationship analysis
   if (pathname.match(/^\/api\/datasets\/[^/]+\/ai\/relationships$/) && method === 'GET') {
     try {
-      const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getRouteDataset(pathname);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
@@ -106,9 +105,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
   // GET /api/datasets/:id/ai/cleaning - AI cleaning suggestions
   if (pathname.match(/^\/api\/datasets\/[^/]+\/ai\/cleaning$/) && method === 'GET') {
     try {
-      const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getRouteDataset(pathname);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
@@ -129,9 +126,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
   // GET /api/datasets/:id/analyze - Analyze dataset
   if (pathname.match(/^\/api\/datasets\/[^/]+\/analyze$/) && method === 'GET') {
     try {
-      const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getRouteDataset(pathname);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
@@ -153,26 +148,20 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
   // GET /api/datasets/:id/schema - Get dataset schema
   if (pathname.match(/^\/api\/datasets\/[^/]+\/schema$/) && method === 'GET') {
     try {
-      const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getRouteDataset(pathname);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
         return true;
       }
-      
-      sendSuccess(response, {
-        columns: dataset.columns,
-        types: dataset.columns.reduce((acc, c) => {
-          acc[c.name] = c.type || c.inferredType || 'unknown';
-          return acc;
-        }, {})
-      }, 'Schema retrieved');
+
+      const schema = await buildSchemaPacketAsync(dataset);
+
+      sendSuccess(response, { schema }, 'Schema generated');
       return true;
     } catch (error) {
-      console.error('Dataset schema error:', error);
-      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to get dataset schema', ERROR_CODES.DATABASE_ERROR);
+      console.error('[SCHEMA] Error:', error);
+      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, error.message || 'Failed to generate schema', ERROR_CODES.AI_ERROR);
       return true;
     }
   }
@@ -180,9 +169,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
   // GET /api/datasets/:id/auto-charts - Generate auto charts
   if (pathname.match(/^\/api\/datasets\/[^/]+\/auto-charts$/) && method === 'GET') {
     try {
-      const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getRouteDataset(pathname);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);

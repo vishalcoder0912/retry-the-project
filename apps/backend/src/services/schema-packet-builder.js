@@ -337,6 +337,38 @@ export function formatSchemaForPrompt(schemaPacket) {
   return text;
 }
 
+export function getDataQualityScore(schemaPacket) {
+  if (!schemaPacket || !Array.isArray(schemaPacket.columns) || schemaPacket.columns.length === 0) {
+    return 0;
+  }
+
+  const rowCount = Math.max(Number(schemaPacket.sampledRowCount || schemaPacket.rowCount || 0), 0);
+  const columnCount = schemaPacket.columns.length;
+  const totalCells = rowCount * columnCount;
+
+  if (totalCells === 0) {
+    return 0;
+  }
+
+  let problemCells = 0;
+  let invalidColumns = 0;
+
+  for (const column of schemaPacket.columns) {
+    if (!column?.isValid) {
+      invalidColumns += 1;
+    }
+
+    problemCells += Number(column?.nullCount || 0);
+    problemCells += Number(column?.invalidCount || 0);
+  }
+
+  const completenessScore = 100 - ((problemCells / totalCells) * 100);
+  const validityPenalty = (invalidColumns / columnCount) * 25;
+  const score = completenessScore - validityPenalty;
+
+  return Math.max(0, Math.min(100, Number(score.toFixed(1))));
+}
+
 /**
  * Validate columns exist in schema
  */

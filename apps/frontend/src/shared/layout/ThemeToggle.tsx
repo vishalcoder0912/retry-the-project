@@ -9,11 +9,24 @@ const ThemeToggle = () => {
     <button
       type="button"
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="flex items-center justify-between w-full rounded-lg border border-border/50 px-3 py-2 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground"
+      className="flex w-full items-center justify-between rounded-2xl border border-slate-700/60 bg-slate-950/70 px-3 py-2 text-sm font-medium text-slate-200 transition-all hover:bg-slate-900"
       aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
     >
-      <span>{isDark ? "Light" : "Dark"}</span>
-      {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      <span className="flex items-center gap-2">
+        {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+        {isDark ? "Dark" : "Light"}
+      </span>
+      <span
+        className={`relative h-6 w-11 rounded-full transition ${
+          isDark ? "bg-violet-600" : "bg-slate-600"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+            isDark ? "left-[22px]" : "left-0.5"
+          }`}
+        />
+      </span>
     </button>
   );
 };

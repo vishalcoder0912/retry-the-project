@@ -46,6 +46,14 @@ export function mergeDatasets(datasets) {
     sample: []
   }));
 
+  if (datasets.length > 1) {
+    mergedColumns.push({
+      name: '__sourceFile',
+      type: 'string',
+      sample: datasets.slice(0, 3).map(d => d.name || 'unknown')
+    });
+  }
+
   const allRows = [];
   datasets.forEach(ds => {
     const sourceName = ds.name || 'unknown';

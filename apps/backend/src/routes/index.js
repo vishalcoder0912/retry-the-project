@@ -2,11 +2,19 @@
 import { handleDatasetRoutes } from './datasets.js';
 import { handleChatRoutes } from './chat.js';
 import { handleAnalyticsRoutes } from './analytics.js';
+import { handleAnalyticsBrainRoutes } from './analytics-brain.js';
 import { handleAIRoutes } from './ai.js';
 import { handleHealthRoutes } from './health.js';
 import { handleExportRoutes } from './export.js';
 import { handleMLRoutes } from './machine-learning.js';
 import { handleStateRoutes } from './state.js';
+import { handleQrUploadRoutes } from './qr-upload.js';
+import { handlePlaybookAnalysisRoutes } from './playbook-analysis.js';
+import { handlePdfRoutes } from './pdf.js';
+import { handleAiAnalystRoutes } from './ai-analyst.routes.js';
+import { handleSchemaTrainedAIRoutes } from './schema-trained-ai.routes.js';
+import { handleDashboardQualityRoutes } from './dashboard-quality.js';
+import { handleDashboardAiRoutes } from './dashboardAiRoutes.js';
 import { sendError, sendSuccess } from '../utils/response-utils.js';
 import { HTTP_STATUS } from '../config/constants.js';
 
@@ -24,13 +32,38 @@ export async function setupRoutes(request, response) {
       return;
     }
 
+    // Dashboard quality validation routes
+    if (await handleDashboardQualityRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Schema-only AI dashboard planner + local analytics engine
+    if (await handleDashboardAiRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // QR upload routes
+    if (await handleQrUploadRoutes(request, response, pathname)) {
+      return;
+    }
+
     // AI provider routes
     if (await handleAIRoutes(request, response, pathname)) {
       return;
     }
 
+    // PDF import and PDF Q&A routes
+    if (await handlePdfRoutes(request, response, pathname)) {
+      return;
+    }
+
     // Dataset routes
     if (await handleDatasetRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Schema-trained dashboard/chat routes, including dashboard-command override
+    if (await handleSchemaTrainedAIRoutes(request, response, pathname)) {
       return;
     }
 
@@ -41,6 +74,21 @@ export async function setupRoutes(request, response) {
 
     // Analytics routes
     if (await handleAnalyticsRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // DataAnalyticsProjects playbook route
+    if (await handlePlaybookAnalysisRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // AI Analyst routes
+    if (await handleAiAnalystRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Schema-safe analytics brain routes
+    if (await handleAnalyticsBrainRoutes(request, response, pathname)) {
       return;
     }
 

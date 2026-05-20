@@ -9,13 +9,15 @@
     "packages/shared-analytics"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev -w apps/backend\" \"npm run dev -w apps/frontend\"",
-    "dev:all": "concurrently \"npm run dev -w apps/backend\" \"npm run dev -w apps/frontend\"",
+    "dev": "concurrently --kill-others-on-fail --names backend,frontend,ml --prefix-colors cyan,green,magenta \"npm run dev:backend\" \"npm run dev:frontend\" \"npm run dev:ml\"",
+    "dev:all": "npm run dev",
     "dev:frontend": "npm run dev -w apps/frontend",
     "dev:backend": "npm run dev -w apps/backend",
+    "dev:ml": "python apps/ml-service/app.py",
     "build": "npm run build -w apps/frontend",
     "build:frontend": "npm run build -w apps/frontend",
     "build:backend": "npm run build -w apps/backend",
+    "export:ai-safe": "node scripts/export-ai-safe.js",
     "lint": "npm run lint -w apps/frontend",
     "test": "npm run test -w apps/frontend"
   },

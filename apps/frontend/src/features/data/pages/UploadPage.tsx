@@ -1,506 +1,477 @@
-import { useCallback, useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Upload, FileSpreadsheet, CheckCircle2, AlertCircle, ArrowRight, Layers, File, X, Loader2 } from 'lucide-react';
-import { useData } from '@/features/data/context/useData';
-import { useLocalData } from '@/features/data/context/localDataContext';
-import type { DatasetRow } from '@/features/data/model/dataStore';
-import { useNavigate } from 'react-router-dom';
-import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
-import { Button } from '@/shared/components/ui/button';
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Database,
+  ExternalLink,
+  File,
+  FileSpreadsheet,
+  Layers,
+  Loader2,
+  Lock,
+  RefreshCw,
+  ShieldCheck,
+  Trash2,
+  Upload,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { api, QrUploadSession, QrUploadStatus } from "@/features/data/api/dataApi";
+import { useData } from "@/features/data/context/useData";
 
-interface FilePreview {
-  id: number;
-  file: File;
-  name: string;
-  columns: Array<{ name: string; type: string }>;
-  rowCount: number;
-  status: 'pending' | 'parsing' | 'ready' | 'error';
-  error?: string;
-  parsedData?: { name: string; columns: Array<{ name: string; type: string; sample: string[] }>; rows: Record<string, unknown>[] };
+function getPortalBaseUrl() {
+  return import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin;
 }
 
-let fileIdCounter = 0;
-
-const UploadPage = () => {
-  const { dataset, uploadFile, loadDemo } = useData();
-  const { localDataset, importLocalDataset: importLocal } = useLocalData();
+export default function UploadPage() {
   const navigate = useNavigate();
-  const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [isMerging, setIsMerging] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [filePreviews, setFilePreviews] = useState<FilePreview[]>([]);
-  const [showMergeMode, setShowMergeMode] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processStatus, setProcessStatus] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const multiFileInputRef = useRef<HTMLInputElement>(null);
+  const {
+    dataset,
+    analysis,
+    loadDemo,
+    deleteDataset,
+    uploadFiles: uploadDataFiles,
+    retryHydrate,
+    isProcessing,
+  } = useData();
 
-  const inferType = (rows: Record<string, unknown>[], colName: string): string => {
-    const sample = rows.slice(0, 20).map(r => String(r[colName] ?? '')).filter(Boolean);
-    if (sample.length === 0) return 'string';
-    if (sample.every(v => !isNaN(Number(v)))) return 'number';
-    if (sample.every(v => !isNaN(Date.parse(v)))) return 'date';
-    return 'string';
-  };
+  const singleInputRef = useRef<HTMLInputElement>(null);
+  const multiInputRef = useRef<HTMLInputElement>(null);
 
-  const parseFile = async (file: File): Promise<{ name: string; columns: Array<{ name: string; type: string; sample: string[] }>; rows: Record<string, unknown>[] }> => {
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    
-    if (ext === 'csv') {
-      return new Promise((resolve, reject) => {
-        Papa.parse(file, { header: true, dynamicTyping: false, skipEmptyLines: true, complete: (results) => {
-          const rows = ((results.data || []) as Record<string, unknown>[]).filter(r => r && Object.keys(r).length > 0);
-          const fields = results.meta?.fields || [];
-          const columns = fields.map((name: string) => ({ name, type: inferType(rows, name), sample: rows.slice(0, 3).map(r => String(r[name] ?? '')) }));
-          resolve({ name: file.name.replace(/\.(csv|xlsx|xls|json)$/i, ''), columns, rows });
-        }, error: reject });
-      });
-    }
-    
-    if (ext === 'json') {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      const rows = (Array.isArray(parsed) ? parsed : [parsed]).filter(r => r && typeof r === 'object');
-      const fields = rows.length > 0 ? Object.keys(rows[0]) : [];
-      const columns = fields.map(name => ({ name, type: inferType(rows, name), sample: rows.slice(0, 3).map(r => String(r[name] ?? '')) }));
-      return { name: file.name.replace(/\.(csv|xlsx|xls|json)$/i, ''), columns, rows };
-    }
-    
-    if (ext === 'xlsx' || ext === 'xls') {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName]);
-      const fields = rows.length > 0 ? Object.keys(rows[0]) : [];
-      const columns = fields.map(name => ({ name, type: inferType(rows, name), sample: rows.slice(0, 3).map(r => String(r[name] ?? '')) }));
-      return { name: file.name.replace(/\.(csv|xlsx|xls|json)$/i, ''), columns, rows };
-    }
-    
-    throw new Error('Unsupported file type');
-  };
+  const [qrSession, setQrSession] = useState<QrUploadSession | null>(null);
+  const [qrStatus, setQrStatus] = useState<QrUploadStatus | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  const handleSingleFile = useCallback(async (file: File) => {
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!['csv', 'xlsx', 'xls', 'json'].includes(ext || '')) {
-      setError('Please upload a CSV, Excel (.xlsx), or JSON file');
-      return;
-    }
-    setError(null);
-    setIsUploading(true);
-    try {
-      await uploadFile(file);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to upload file');
-    } finally {
-      setIsUploading(false);
-    }
-  }, [uploadFile]);
+  const generateQr = useCallback(async () => {
+    setMessage("");
 
-  const handleMultipleFiles = useCallback(async (files: FileList) => {
-    const fileArray = Array.from(files);
-    if (fileArray.length === 0) return;
-    
-    const validExts = ['csv', 'xlsx', 'xls', 'json'];
-    const invalidFiles = fileArray.filter(f => !validExts.includes(f.name.split('.').pop()?.toLowerCase() || ''));
-    if (invalidFiles.length > 0) {
-      setError(`Invalid file type: ${invalidFiles.map(f => f.name).join(', ')}`);
-      return;
-    }
+    const session = await api.generateQRSession({
+      portalBaseUrl: getPortalBaseUrl(),
+      workspaceName: dataset?.name || "InsightFlow Workspace",
+    });
 
-    setError(null);
-    setShowMergeMode(true);
-    setIsProcessing(true);
-    setProcessStatus('Parsing files...');
+    setQrSession(session);
+    setQrStatus({
+      sessionId: session.sessionId,
+      status: session.status,
+      workspaceName: session.workspaceName,
+      files: [],
+      expiresAt: session.expiresAt,
+    });
 
-    const newPreviews: FilePreview[] = fileArray.map(file => ({
-      id: ++fileIdCounter,
-      file,
-      name: file.name.replace(/\.(csv|xlsx|xls|json)$/i, ''),
-      columns: [],
-      rowCount: 0,
-      status: 'parsing'
-    }));
-    
-    setFilePreviews(newPreviews);
+    return session;
+  }, [dataset?.name]);
 
-    for (let i = 0; i < fileArray.length; i++) {
+  useEffect(() => {
+    generateQr().catch((error) => {
+      setMessage(error instanceof Error ? error.message : "Failed to generate QR.");
+    });
+  }, [generateQr]);
+
+  useEffect(() => {
+    if (!qrSession) return;
+
+    const interval = window.setInterval(async () => {
       try {
-        const result = await parseFile(fileArray[i]);
-        setFilePreviews(prev => prev.map((p, idx) => {
-          if (idx === i) {
-            return {
-              ...p,
-              columns: result.columns,
-              rowCount: result.rows.length,
-              status: 'ready',
-              parsedData: result
-            };
-          }
-          return p;
-        }));
-      } catch (err) {
-        setFilePreviews(prev => prev.map((p, idx) => {
-          if (idx === i) {
-            return { ...p, status: 'error', error: err instanceof Error ? err.message : 'Parse failed' };
-          }
-          return p;
-        }));
+        const status = await api.getQRSessionStatus(
+          qrSession.sessionId,
+          qrSession.uploadToken
+        );
+
+        setQrStatus(status);
+
+        if (status.status === "completed" && status.dataset) {
+          await retryHydrate();
+        }
+      } catch {
+        // silent polling failure
       }
-    }
+    }, 2500);
 
-    setIsProcessing(false);
-    setProcessStatus('');
-  }, []);
+    return () => window.clearInterval(interval);
+  }, [qrSession, retryHydrate]);
 
-  const handleMergeUpload = useCallback(async () => {
-    const readyFiles = filePreviews.filter(p => p.status === 'ready' && p.parsedData);
-    if (readyFiles.length === 0) {
-      setError('No valid files to merge');
-      return;
-    }
+  async function uploadFiles(files: File[]) {
+    if (!files.length || uploading) return;
 
-    setIsMerging(true);
-    setProcessStatus('Merging datasets...');
+    setUploading(true);
+    setMessage("Generating schema-aware dashboard...");
 
     try {
-      const parsedDatasets = readyFiles.map(p => p.parsedData);
-
-      setProcessStatus('Sending to AI for analysis...');
-      
-      const response = await fetch('http://localhost:3001/api/datasets/merge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ datasets: parsedDatasets })
-      });
-      
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || 'Failed to merge datasets');
-      }
-      
-      const state = await response.json();
-      if (state.dataset) {
-        window.location.href = '/';
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to merge files');
+      await uploadDataFiles(files);
+      setMessage("Dataset uploaded. Opening schema-aware dashboard...");
+      navigate("/dashboard");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Upload failed.");
     } finally {
-      setIsMerging(false);
-      setProcessStatus('');
+      setUploading(false);
     }
-  }, [filePreviews]);
+  }
 
-  const removeFile = useCallback((id: number) => {
-    setFilePreviews(prev => prev.filter(p => p.id !== id));
-  }, []);
+  function onDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    uploadFiles(Array.from(event.dataTransfer.files || []));
+  }
 
-  const clearAllFiles = useCallback(() => {
-    setFilePreviews([]);
-    setShowMergeMode(false);
-    setError(null);
-  }, []);
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length === 1) {
-      handleSingleFile(files[0]);
-    } else if (files && files.length > 1) {
-      handleMultipleFiles(files);
-    }
-    e.target.value = '';
-  };
-
-  const handleMultiFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      handleMultipleFiles(files);
-    }
-    e.target.value = '';
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      if (files.length === 1) {
-        handleSingleFile(files[0]);
-      } else {
-        handleMultipleFiles(files);
-      }
-    }
-  };
+  const activeDataset = qrStatus?.dataset || dataset;
+  const activeAnalysis = qrStatus?.analysis || analysis;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-8">
-      <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-        <h2 className="text-2xl font-semibold text-foreground">Upload Data</h2>
-        <p className="text-muted-foreground mt-1">Import your datasets for analysis</p>
-      </motion.div>
-
-      {!showMergeMode ? (
-        <motion.div 
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="space-y-6"
-        >
-          <div className="grid gap-6 md:grid-cols-2">
-            <motion.div
-              className="relative cursor-pointer rounded-xl border border-border/50 bg-card p-8 text-center transition-all hover:border-primary/50 hover:shadow-md"
-            >
-              <input
-                id="single-file-input"
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls,.json"
-                className="hidden"
-                onChange={handleFileInputChange}
-              />
-              <label htmlFor="single-file-input" className="flex flex-col items-center gap-4 cursor-pointer">
-                <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-muted">
-                  <File className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-foreground">Single File</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Upload one dataset</p>
-                </div>
-                <Button variant="outline" className="w-full max-w-xs rounded-lg">Select File</Button>
-              </label>
-            </motion.div>
-
-            <motion.div
-              className="relative cursor-pointer rounded-xl border border-primary/30 bg-primary/5 p-8 text-center transition-all hover:border-primary/50 hover:shadow-md"
-            >
-              <input
-                id="multi-file-input"
-                ref={multiFileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls,.json"
-                multiple
-                className="hidden"
-                onChange={handleMultiFileInputChange}
-              />
-              <label htmlFor="multi-file-input" className="flex flex-col items-center gap-4 cursor-pointer">
-                <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary/10">
-                  <Layers className="h-8 w-8 text-primary" />
-                </div>
-                <div>
-                  <p className="text-lg font-semibold text-foreground">Multiple Files</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Merge multiple datasets</p>
-                </div>
-                <Button className="w-full max-w-xs rounded-lg">Select Files</Button>
-              </label>
-            </motion.div>
+    <div className="min-h-screen bg-[#07111f] p-6 text-white">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold text-slate-400">
+              {activeDataset?.name || "No dataset selected"}{" "}
+              {activeDataset?.rowCount
+                ? `• ${activeDataset.rowCount.toLocaleString()} rows`
+                : ""}
+            </p>
+            <h1 className="mt-1 text-3xl font-bold">Upload Data</h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Import your datasets for analysis
+            </p>
           </div>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.15 }}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-            onDragLeave={() => setIsDragging(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`rounded-xl border-2 border-dashed p-8 text-center transition-all cursor-pointer ${
-              isDragging ? 'border-primary bg-primary/5' : 'border-border/50 hover:border-muted-foreground/50'
-            }`}
-          >
-            <Upload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-            <p className="text-sm text-muted-foreground">
-              {isDragging ? 'Drop files here' : 'Drag & drop files here'}
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Single file uploads directly • Multiple files go to merge mode
-            </p>
-          </motion.div>
+          <button className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">
+            Docs
+          </button>
+        </div>
 
-          <div className="text-center text-sm text-muted-foreground">
-            Supported formats: .CSV, .XLSX, .JSON
+        <div className="grid gap-5 xl:grid-cols-[1.8fr_0.9fr]">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20">
+            <div className="grid gap-6 lg:grid-cols-[220px_1fr_250px]">
+              <div>
+                <div className="mb-3 flex items-center gap-2">
+                  <h2 className="text-xl font-bold">
+                    Scan to Upload from Mobile
+                  </h2>
+                  <span className="rounded-full bg-violet-500/15 px-2 py-1 text-xs text-violet-300">
+                    Recommended
+                  </span>
+                </div>
+
+                <div className="rounded-2xl bg-white p-3">
+                  {qrSession?.qrDataUrl ? (
+                    <img
+                      src={qrSession.qrDataUrl}
+                      alt="Upload QR code"
+                      className="h-52 w-52 rounded-xl"
+                    />
+                  ) : (
+                    <div className="flex h-52 w-52 items-center justify-center text-slate-900">
+                      <Loader2 className="h-8 w-8 animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col justify-center">
+                <p className="max-w-sm text-sm leading-6 text-slate-300">
+                  Scan this QR code to open the secure upload portal on your
+                  phone. Upload one or multiple files and sync them directly to
+                  InsightFlow.
+                </p>
+
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    disabled={!qrSession}
+                    onClick={() =>
+                      qrSession && window.open(qrSession.uploadUrl, "_blank")
+                    }
+                    className="rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
+                  >
+                    Open Upload Portal{" "}
+                    <ExternalLink className="ml-2 inline h-4 w-4" />
+                  </button>
+
+                  <button
+                    onClick={() => generateQr()}
+                    className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800"
+                  >
+                    Generate New QR{" "}
+                    <RefreshCw className="ml-2 inline h-4 w-4" />
+                  </button>
+                </div>
+
+                {message && (
+                  <p className="mt-4 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-sm text-slate-300">
+                    {message}
+                  </p>
+                )}
+              </div>
+
+              <div className="hidden overflow-hidden rounded-[2rem] border border-slate-700 bg-slate-950 p-4 lg:block">
+                <div className="mb-3 flex justify-between text-xs text-slate-400">
+                  <span>9:41</span>
+                  <span>●●●</span>
+                </div>
+
+                <p className="text-sm font-bold">InsightFlow</p>
+                <p className="mt-2 text-sm text-slate-300">Upload Files</p>
+
+                <div className="mt-4 rounded-xl border border-dashed border-violet-500/60 p-5 text-center">
+                  <Upload className="mx-auto mb-2 h-8 w-8 text-violet-400" />
+                  <p className="text-sm font-semibold">Tap to select files</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    CSV, XLSX, JSON
+                  </p>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-slate-800 p-3">
+                  <p className="text-xs text-slate-400">Recent upload</p>
+                  <p className="mt-1 text-sm">
+                    {qrStatus?.files?.[0]?.name || "customer_data.csv"}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
-        </motion.div>
-      ) : (
-        <motion.div 
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-border/50 bg-card p-6 space-y-6"
-        >
-          <div className="flex items-center justify-between pb-4 border-b border-border/50">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                <Layers className="h-6 w-6 text-primary" />
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-lg font-bold">
+                Mobile uploads auto-sync to this workspace
+              </h2>
+              <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300">
+                Live
+              </span>
+            </div>
+
+            {[
+              ["Scan QR", "Use your phone camera"],
+              ["Select files", "Choose one or multiple files"],
+              ["Upload", "Files are securely uploaded"],
+              ["Dataset appears here", "Ready for analysis instantly"],
+            ].map((step, index) => (
+              <div key={step[0]} className="flex gap-4 pb-5 last:pb-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-bold">
+                  {index + 1}
+                </div>
+                <div>
+                  <p className="font-semibold">{step[0]}</p>
+                  <p className="text-sm text-slate-400">{step[1]}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-5 lg:grid-cols-3">
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+            <div className="mb-4 flex items-center gap-4">
+              <div className="rounded-2xl bg-violet-500/15 p-4">
+                <File className="h-7 w-7 text-violet-300" />
               </div>
               <div>
-                <p className="text-lg font-semibold text-foreground">Merge Datasets</p>
-                <p className="text-sm text-muted-foreground">
-                  {filePreviews.length} files • {filePreviews.reduce((sum, p) => sum + p.rowCount, 0)} total rows
+                <h3 className="text-lg font-bold">Single File</h3>
+                <p className="text-sm text-slate-400">
+                  Upload one dataset file
+                </p>
+                <p className="text-sm text-slate-500">CSV, XLSX or JSON</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => singleInputRef.current?.click()}
+              className="w-full rounded-xl border border-slate-700 py-3 text-sm font-semibold hover:bg-slate-800"
+            >
+              Select File
+            </button>
+
+            <input
+              ref={singleInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls,.json"
+              className="hidden"
+              onChange={(event) =>
+                uploadFiles(Array.from(event.target.files || []).slice(0, 1))
+              }
+            />
+          </div>
+
+          <div className="rounded-2xl border border-violet-500/40 bg-slate-900/70 p-6">
+            <div className="mb-4 flex items-center gap-4">
+              <div className="rounded-2xl bg-violet-500/15 p-4">
+                <Layers className="h-7 w-7 text-violet-300" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">Multiple Files</h3>
+                <p className="text-sm text-slate-400">
+                  Upload and merge multiple files
+                </p>
+                <p className="text-sm text-slate-500">CSV, XLSX or JSON</p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => multiInputRef.current?.click()}
+              className="w-full rounded-xl bg-violet-600 py-3 text-sm font-semibold hover:bg-violet-500"
+            >
+              Select Files
+            </button>
+
+            <input
+              ref={multiInputRef}
+              type="file"
+              multiple
+              accept=".csv,.xlsx,.xls,.json"
+              className="hidden"
+              onChange={(event) =>
+                uploadFiles(Array.from(event.target.files || []))
+              }
+            />
+          </div>
+
+          <div
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={`flex min-h-[180px] flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center ${
+              dragging
+                ? "border-violet-400 bg-violet-500/10"
+                : "border-violet-500/50 bg-slate-900/70"
+            }`}
+          >
+            <Upload className="mb-3 h-10 w-10 text-violet-300" />
+            <h3 className="text-lg font-bold">Drag & Drop Files Here</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              Drop one or more files to upload
+            </p>
+            <p className="mt-1 text-sm text-slate-500">
+              CSV, XLSX, JSON • Multiple files supported
+            </p>
+          </div>
+        </div>
+
+        {uploading && (
+          <div className="rounded-2xl border border-violet-500/40 bg-violet-500/10 p-4 text-sm text-violet-200">
+            <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+            Uploading and syncing dataset...
+          </div>
+        )}
+
+        {activeDataset && (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/70">
+            <div className="flex items-center justify-between border-b border-slate-800 p-6">
+              <div className="flex items-center gap-4">
+                <CheckCircle2 className="h-7 w-7 text-emerald-400" />
+                <div>
+                  <h2 className="text-xl font-bold">{activeDataset.name}</h2>
+                  <p className="text-sm text-slate-400">
+                    Dataset loaded and ready
+                  </p>
+                </div>
+              </div>
+
+              <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm font-semibold text-emerald-300">
+                Ready
+              </span>
+            </div>
+
+            <div className="grid gap-5 p-6 md:grid-cols-4">
+              <div>
+                <p className="text-sm text-slate-400">Total Records</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {activeDataset.rowCount?.toLocaleString?.() ||
+                    activeDataset.rows?.length?.toLocaleString?.() ||
+                    0}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-400">Columns</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {activeDataset.columns?.length || 0}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-400">File Type</p>
+                <p className="mt-2 inline-flex items-center rounded-full bg-slate-800 px-3 py-1 text-sm">
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Dataset
+                </p>
+              </div>
+
+              <div>
+                <p className="text-sm text-slate-400">Uploaded</p>
+                <p className="mt-1 text-sm text-slate-200">
+                  {activeDataset.uploadedAt
+                    ? new Date(activeDataset.uploadedAt).toLocaleString()
+                    : "Just now"}
                 </p>
               </div>
             </div>
-            <Button variant="outline" onClick={clearAllFiles} disabled={isMerging} className="rounded-lg gap-2">
-              <X className="h-4 w-4" />
-              Clear All
-            </Button>
-          </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filePreviews.map((preview) => (
-              <motion.div 
-                key={preview.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="relative rounded-lg border border-border/50 bg-muted/30 p-4"
-              >
-                <button
-                  onClick={() => removeFile(preview.id)}
-                  className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"
-                  disabled={isMerging}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-                
-                <div className="flex items-center gap-3 mb-3">
-                  {preview.status === 'parsing' && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
-                  {preview.status === 'ready' && <CheckCircle2 className="h-5 w-5 text-green-500" />}
-                  {preview.status === 'error' && <AlertCircle className="h-5 w-5 text-red-500" />}
-                  <span className="text-sm font-medium text-foreground truncate pr-6">
-                    {preview.file.name}
+            <div className="px-6 pb-6">
+              <p className="mb-3 text-sm text-slate-400">Detected Fields</p>
+
+              <div className="flex flex-wrap gap-2">
+                {(activeDataset.columns || []).slice(0, 16).map((column: any) => (
+                  <span
+                    key={column.name}
+                    className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200"
+                  >
+                    {column.name}
                   </span>
-                </div>
-                
-                {preview.status === 'ready' && (
-                  <div className="space-y-2 text-xs text-muted-foreground">
-                    <div className="flex justify-between">
-                      <span>Rows:</span>
-                      <span className="text-foreground font-medium">{preview.rowCount.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Columns:</span>
-                      <span className="text-foreground font-medium">{preview.columns.length}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {preview.columns.slice(0, 4).map((col, i) => (
-                        <span key={i} className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{col.name}</span>
-                      ))}
-                      {preview.columns.length > 4 && (
-                        <span className="px-2 py-0.5 text-[10px] text-muted-foreground">+{preview.columns.length - 4}</span>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                {preview.status === 'error' && (
-                  <p className="text-xs text-red-500">{preview.error}</p>
-                )}
-              </motion.div>
-            ))}
-          </div>
+                ))}
+              </div>
 
-          {processStatus && (
-            <div className="flex items-center gap-2 text-sm text-primary">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {processStatus}
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  onClick={async () => {
+                    if (window.confirm(`Delete "${activeDataset.name}"? This cannot be undone.`)) {
+                      await deleteDataset();
+                    }
+                  }}
+                  className="rounded-xl border border-red-500/30 px-5 py-3 text-sm font-semibold text-red-400 hover:bg-red-500/10"
+                >
+                  <Trash2 className="mr-2 inline h-4 w-4" />
+                  Clear Dataset
+                </button>
+
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold hover:bg-violet-500"
+                >
+                  Proceed to Dashboard{" "}
+                  <ArrowRight className="ml-2 inline h-4 w-4" />
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+        )}
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-border/50">
-            <Button variant="outline" onClick={clearAllFiles} disabled={isMerging} className="rounded-lg">
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleMergeUpload} 
-              className="rounded-lg gap-2"
-              disabled={isMerging || filePreviews.filter(p => p.status === 'ready').length === 0}
+        {!activeDataset && (
+          <div className="flex justify-end">
+            <button
+              onClick={() => loadDemo()}
+              disabled={isProcessing}
+              className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold hover:bg-slate-800"
             >
-              {isMerging ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Merging...
-                </>
-              ) : (
-                <>
-                  <Layers className="h-4 w-4" />
-                  Merge & Analyze
-                </>
-              )}
-            </Button>
+              <Database className="mr-2 inline h-4 w-4" />
+              Use Demo Data
+            </button>
           </div>
-        </motion.div>
-      )}
+        )}
 
-      {error && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
-          <AlertCircle className="w-4 h-4" />
-          {error}
-        </motion.div>
-      )}
-
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }} className="flex justify-end">
-        <Button variant="outline" onClick={async () => {
-            try {
-              await loadDemo();
-              navigate('/');
-            } catch (err) {
-              console.error('Failed to load demo data:', err);
-              alert('Failed to load demo data. Please try uploading a file instead.');
-            }
-          }} className="rounded-lg"
-        >
-          <FileSpreadsheet className="mr-2 h-4 w-4" />
-          Use Demo Data
-        </Button>
-      </motion.div>
-
-      {dataset && !showMergeMode && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-border/50 bg-card p-6 space-y-6"
-        >
-          <div className="flex items-center justify-between gap-6 pb-4 border-b border-border/50">
-            <div>
-              <p className="text-xl font-semibold text-foreground">{dataset.name}</p>
-              <p className="text-sm text-muted-foreground mt-1">Dataset loaded and ready</p>
-            </div>
-            <div className="rounded-full bg-green-50 border border-green-200 px-4 py-2 text-sm font-medium text-green-700">Ready</div>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2">
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Total Records</p>
-              <p className="text-2xl font-semibold text-foreground mt-1">{dataset.rowCount.toLocaleString()}</p>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Columns</p>
-              <p className="text-2xl font-semibold text-foreground mt-1">{dataset.columns.length}</p>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-3">Detected Fields</p>
-            <div className="flex flex-wrap gap-2">
-              {dataset.columns.map((col) => (
-                <span key={col.name} className="rounded-full bg-muted px-3 py-1.5 text-sm">
-                  {col.name}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="outline" onClick={() => navigate('/')} className="rounded-lg">Cancel</Button>
-            <Button onClick={() => navigate('/analytics')} className="rounded-lg gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Proceed to Analytics
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </motion.div>
-      )}
+        <div className="flex flex-col gap-3 border-t border-slate-800 pt-5 text-sm text-slate-400 md:flex-row md:justify-between">
+          <p>
+            <ShieldCheck className="mr-2 inline h-4 w-4 text-emerald-400" />
+            All uploads are encrypted and stored securely.
+          </p>
+          <p>
+            <Lock className="mr-2 inline h-4 w-4 text-orange-400" />
+            Your data is private and never shared.
+          </p>
+        </div>
+      </div>
     </div>
   );
-};
-
-export default UploadPage;
+}
