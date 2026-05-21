@@ -122,7 +122,7 @@ class AIManager {
       }
 
       // Try fallback if enabled
-      if (this.fallbackEnabled) {
+      if (this.fallbackEnabled && !options.disableFallback) {
         console.warn(`⚠️  ${this.activeProvider} failed, trying fallback...`);
         return await this.tryFallback('generate', [prompt, options]);
       }
@@ -133,7 +133,7 @@ class AIManager {
     } catch (error) {
       this.stats.failedRequests++;
       
-      if (this.fallbackEnabled && !(error instanceof AIProviderError && error.provider === 'none')) {
+      if (this.fallbackEnabled && !options.disableFallback && !(error instanceof AIProviderError && error.provider === 'none')) {
         return await this.tryFallback('generate', [prompt, options]);
       }
 
@@ -161,7 +161,7 @@ class AIManager {
       }
 
       // Try fallback if enabled
-      if (this.fallbackEnabled) {
+      if (this.fallbackEnabled && !options.disableFallback) {
         console.warn(`⚠️  ${this.activeProvider} failed, trying fallback...`);
         return await this.tryFallback('chat', [messages, options]);
       }
@@ -172,7 +172,7 @@ class AIManager {
     } catch (error) {
       this.stats.failedRequests++;
       
-      if (this.fallbackEnabled && !(error instanceof AIProviderError && error.provider === 'none')) {
+      if (this.fallbackEnabled && !options.disableFallback && !(error instanceof AIProviderError && error.provider === 'none')) {
         return await this.tryFallback('chat', [messages, options]);
       }
 

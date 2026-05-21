@@ -1,105 +1,234 @@
-// Chat-related routes with AI integration
+import { randomUUID } from 'node:crypto';
 import { sendSuccess, sendError } from '../utils/response-utils.js';
 import { HTTP_STATUS, ERROR_CODES } from '../config/constants.js';
-import { getState, addChatMessage, clearChat } from './state.js';
-import { randomUUID } from 'crypto';
+import {
+  clearChatMessages,
+  getChatMessages,
+  getDatasetById,
+  saveChatMessage,
+} from '../database/dataset-repository.js';
+import { runDashboardAIAgent } from '../services/dashboard-ai-agent.js';
+import { runLlamaDatasetChat } from '../services/llama-chat-agent.js';
 
-// Helper to read request body
 async function getRequestBody(request) {
   return new Promise((resolve, reject) => {
     let body = '';
-    request.on('data', chunk => { body += chunk.toString(); });
-    request.on('end', () => {
-      try { resolve(body ? JSON.parse(body) : {}); }
-      catch (error) { reject(new Error('Invalid JSON body')); }
+
+    request.on('data', (chunk) => {
+      body += chunk.toString();
+
+      if (body.length > 10 * 1024 * 1024) {
+        reject(new Error('Request body too large'));
+      }
     });
+
+    request.on('end', () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
+        reject(new Error('Invalid JSON body'));
+      }
+    });
+
     request.on('error', reject);
   });
+}
+
+function normalizeMessage(message) {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    chart: message.chart || null,
+    insights: message.insights || [],
+    timestamp: message.timestamp || message.createdAt || new Date().toISOString(),
+    provider: message.provider,
+    model: message.model,
+  };
 }
 
 export async function handleChatRoutes(request, response, pathname) {
   const { method } = request;
 
-  // POST /api/datasets/:id/chat - Chat with dataset
-  if (pathname.match(/^\/api\/datasets\/[^/]+\/chat$/) && method === 'POST') {
+  if (
+    pathname.match(/^\/api\/datasets\/[^/]+\/dashboard-command$/) &&
+    method === 'POST'
+  ) {
     try {
       const datasetId = pathname.split('/')[3];
       const body = await getRequestBody(request);
-      const query = body.query || 'Analyze this data';
-      
-      console.log('[CHAT] Query for dataset:', datasetId, query);
-      
-      const state = getState();
-      const dataset = state.dataset;
-      
-      if (!dataset) {
-        sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
+      const query = String(body.query || '').trim();
+
+      if (!query) {
+        sendError(
+          response,
+          HTTP_STATUS.BAD_REQUEST,
+          'Query is required',
+          ERROR_CODES.VALIDATION_ERROR,
+        );
         return true;
       }
-      
-      // Create user message
+
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendError(
+          response,
+          HTTP_STATUS.NOT_FOUND,
+          'Dataset not found',
+          ERROR_CODES.DATASET_NOT_FOUND,
+        );
+        return true;
+      }
+
+      const result = await runDashboardAIAgent(dataset, query);
+
+      sendSuccess(response, result, 'Dashboard AI command completed');
+      return true;
+    } catch (error) {
+      console.error('[DASHBOARD AI ERROR]', error);
+
+      sendError(
+        response,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error.message || 'Dashboard AI failed',
+        ERROR_CODES.AI_GENERATION_FAILED,
+      );
+      return true;
+    }
+  }
+
+  if (
+    pathname.match(/^\/api\/datasets\/[^/]+\/chat$/) &&
+    method === 'POST'
+  ) {
+    try {
+      const datasetId = pathname.split('/')[3];
+      const body = await getRequestBody(request);
+      const query = String(body.query || '').trim();
+
+      if (!query) {
+        sendError(
+          response,
+          HTTP_STATUS.BAD_REQUEST,
+          'Query is required',
+          ERROR_CODES.VALIDATION_ERROR,
+        );
+        return true;
+      }
+
+      const dataset = getDatasetById(datasetId);
+
+      if (!dataset) {
+        sendError(
+          response,
+          HTTP_STATUS.NOT_FOUND,
+          'Dataset not found',
+          ERROR_CODES.DATASET_NOT_FOUND,
+        );
+        return true;
+      }
+
+      const now = new Date().toISOString();
+
       const userMessage = {
         id: randomUUID(),
         role: 'user',
         content: query,
-        timestamp: new Date().toISOString()
+        timestamp: now,
       };
-      
-      // Generate response
-      const assistantContent = generateFallbackResponse(query, dataset);
-      
-      // Create assistant message
+
+      const aiResult = await runLlamaDatasetChat(dataset, query);
+
       const assistantMessage = {
         id: randomUUID(),
         role: 'assistant',
-        content: assistantContent,
-        timestamp: new Date().toISOString()
+        content: [
+          aiResult.content,
+          aiResult.schemaOnly
+            ? '\n\nSchema-only mode: raw rows were not sent to AI.'
+            : '',
+          aiResult.model ? `\nModel: ${aiResult.model}` : '',
+          aiResult.aiError ? `\nFallback used: ${aiResult.aiError}` : '',
+        ]
+          .filter(Boolean)
+          .join(''),
+        chart: aiResult.chart || null,
+        insights: aiResult.insights || [],
+        timestamp: now,
+        provider: aiResult.provider,
+        model: aiResult.model,
       };
-      
-      // Update chat history
-      addChatMessage(userMessage);
-      addChatMessage(assistantMessage);
-      
-      console.log('[CHAT] ✅ Response generated');
-      
-      // Return in expected format
-      sendSuccess(response, {
-        userMessage,
-        assistantMessage
-      }, 'Chat response generated');
+
+      try {
+        saveChatMessage(datasetId, userMessage);
+        saveChatMessage(datasetId, assistantMessage);
+      } catch (error) {
+        console.warn('[CHAT HISTORY SAVE WARNING]', error.message);
+      }
+
+      sendSuccess(
+        response,
+        {
+          userMessage,
+          assistantMessage,
+        },
+        'Chat response generated',
+      );
+
       return true;
     } catch (error) {
-      console.error('[CHAT] ❌ Error:', error);
-      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to process chat', ERROR_CODES.AI_ERROR);
+      console.error('[AI CHAT ERROR]', error);
+
+      sendError(
+        response,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error.message || 'AI chat failed',
+        ERROR_CODES.AI_GENERATION_FAILED,
+      );
+
       return true;
     }
   }
 
-  // GET /api/datasets/:id/chat/history - Get chat history
-  if (pathname.match(/^\/api\/datasets\/[^/]+\/chat\/history$/) && method === 'GET') {
+  if (
+    pathname.match(/^\/api\/datasets\/[^/]+\/chat\/history$/) &&
+    method === 'GET'
+  ) {
     try {
-      const state = getState();
-      sendSuccess(response, {
-        messages: state.chatMessages || [],
-        count: state.chatMessages?.length || 0
-      }, 'Chat history retrieved');
+      const datasetId = pathname.split('/')[3];
+      const messages = getChatMessages(datasetId).map(normalizeMessage);
+
+      sendSuccess(response, { messages }, 'Chat history loaded');
       return true;
     } catch (error) {
-      console.error('Chat history error:', error);
-      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to get chat history', ERROR_CODES.DATABASE_ERROR);
+      sendError(
+        response,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error.message || 'Failed to load chat history',
+        ERROR_CODES.DATABASE_ERROR,
+      );
       return true;
     }
   }
 
-  // DELETE /api/datasets/:id/chat/history - Clear chat history
-  if (pathname.match(/^\/api\/datasets\/[^/]+\/chat\/history$/) && method === 'DELETE') {
+  if (
+    pathname.match(/^\/api\/datasets\/[^/]+\/chat\/history$/) &&
+    method === 'DELETE'
+  ) {
     try {
-      clearChat();
-      sendSuccess(response, { cleared: true, count: 0 }, 'Chat history cleared');
+      const datasetId = pathname.split('/')[3];
+      clearChatMessages(datasetId);
+
+      sendSuccess(response, { messages: [] }, 'Chat history cleared');
       return true;
     } catch (error) {
-      console.error('Chat history clear error:', error);
-      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to clear chat history', ERROR_CODES.DATABASE_ERROR);
+      sendError(
+        response,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error.message || 'Failed to clear chat history',
+        ERROR_CODES.DATABASE_ERROR,
+      );
       return true;
     }
   }
@@ -107,19 +236,6 @@ export async function handleChatRoutes(request, response, pathname) {
   return false;
 }
 
-function generateFallbackResponse(query, dataset) {
-  const { rows, columns } = dataset;
-  const lowerQuery = query.toLowerCase();
-  
-  if (lowerQuery.includes('summary') || lowerQuery.includes('overview')) {
-    return `## Dataset Summary\n\n**${dataset.name}** contains ${rows.length} rows and ${columns.length} columns.\n\n### Columns:\n${columns.map(c => `- **${c.name}**: ${c.type || 'unknown'}`).join('\n')}\n\nWould you like me to analyze specific aspects?`;
-  }
-  
-  if (lowerQuery.includes('chart') || lowerQuery.includes('visuali')) {
-    return `## Suggested Visualizations\n\nBased on your dataset:\n\n- **Bar Chart**: Compare categorical data\n- **Line Chart**: Show trends over time\n- **Pie Chart**: Display proportions\n\nWould you like me to generate specific charts?`;
-  }
-  
-  return `## Analysis Results\n\nI've received your query: "${query}"\n\n### Dataset Overview:\n- **Name**: ${dataset.name}\n- **Size**: ${rows.length} rows × ${columns.length} columns\n\nWhat would you like to explore?`;
-}
-
-export default { handleChatRoutes };
+export default {
+  handleChatRoutes,
+};

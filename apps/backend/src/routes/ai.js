@@ -1,11 +1,47 @@
 // AI provider routes and status
+import QRCode from 'qrcode';
 import { aiManager } from '../services/ai/ai-manager.js';
+import { getOllamaStatus } from '../services/ollama/ollama-dual-model-service.js';
+import {
+  createQrUploadSession,
+  verifyQrUploadSession,
+} from '../services/qr-upload/qr-upload-store.js';
 import { sendJson, sendSuccess, sendError, sendAIStatus } from '../utils/response-utils.js';
 import { HTTP_STATUS, ERROR_CODES } from '../config/constants.js';
 import { ValidationError } from '../middleware/error-handler.js';
 
 export async function handleAIRoutes(request, response, pathname) {
   const { method } = request;
+
+  // GET /api/ai/ollama-status - Get dual Ollama model status
+  if (pathname === '/api/ai/ollama-status' && method === 'GET') {
+    try {
+      const status = await getOllamaStatus();
+
+      sendSuccess(
+        response,
+        {
+          ollama: status,
+          usage: {
+            dashboardChatbot: status.dashboardModel,
+            aiChat: status.chatModel,
+          },
+        },
+        'Ollama dual-model status',
+      );
+
+      return true;
+    } catch (error) {
+      sendError(
+        response,
+        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error.message || 'Failed to get Ollama status',
+        ERROR_CODES.AI_GENERATION_FAILED,
+      );
+
+      return true;
+    }
+  }
 
   // GET /api/ai/status - Get AI provider status
   if (pathname === '/api/ai/status' && method === 'GET') {
@@ -243,18 +279,34 @@ export async function handleAIRoutes(request, response, pathname) {
   // POST /api/qr-upload/generate - Generate QR upload session
   if (pathname === '/api/qr-upload/generate' && method === 'POST') {
     try {
-      const sessionId = generateSessionId();
-      const uploadToken = generateToken();
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes
-      
-      // In production, store in database
-      const uploadUrl = `http://localhost:3001/api/qr-upload/${sessionId}/upload?token=${uploadToken}`;
+      const body = await parseRequestBody(request);
+      const session = createQrUploadSession({
+        portalBaseUrl:
+          body.portalBaseUrl ||
+          process.env.FRONTEND_PUBLIC_URL ||
+          process.env.VITE_PUBLIC_APP_URL ||
+          request.headers.origin ||
+          getDefaultPortalBaseUrl(request),
+        workspaceName: body.workspaceName || 'InsightFlow Workspace',
+      });
+
+      const qrDataUrl = await QRCode.toDataURL(session.uploadUrl, {
+        margin: 1,
+        width: 320,
+        color: {
+          dark: '#111827',
+          light: '#ffffff',
+        },
+      });
       
       sendSuccess(response, {
-        sessionId,
-        uploadToken,
-        expiresAt,
-        uploadUrl
+        sessionId: session.sessionId,
+        uploadToken: session.uploadToken,
+        expiresAt: session.expiresAt,
+        uploadUrl: session.uploadUrl,
+        qrDataUrl,
+        workspaceName: session.workspaceName,
+        status: session.status,
       }, 'QR session generated');
       return true;
     } catch (error) {
@@ -270,19 +322,23 @@ export async function handleAIRoutes(request, response, pathname) {
       const parts = pathname.split('/');
       const sessionId = parts[3];
       const token = request.searchParams?.get('token') || new URL(request.url, `http://${request.headers.host}`).searchParams.get('token');
+
+      const session = verifyQrUploadSession(sessionId, token);
       
-      // In production, check database for session status
-      const status = {
-        sessionId,
-        status: 'waiting', // waiting, uploaded, expired
-        fileInfo: null
-      };
-      
-      sendSuccess(response, status, 'Session status retrieved');
+      sendSuccess(response, {
+        sessionId: session.sessionId,
+        status: session.status,
+        workspaceName: session.workspaceName,
+        files: session.files,
+        dataset: session.dataset,
+        analysis: session.analysis,
+        error: session.error,
+        expiresAt: session.expiresAt,
+      }, 'Session status retrieved');
       return true;
     } catch (error) {
       console.error('QR status error:', error);
-      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, 'Failed to get session status', ERROR_CODES.INTERNAL_SERVER_ERROR);
+      sendError(response, HTTP_STATUS.BAD_REQUEST, error.message || 'Failed to get session status', ERROR_CODES.VALIDATION_ERROR);
       return true;
     }
   }
@@ -290,12 +346,19 @@ export async function handleAIRoutes(request, response, pathname) {
   return false;
 }
 
-function generateSessionId() {
-  return 'qr-' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-}
+function getDefaultPortalBaseUrl(request) {
+  const protocol = request.headers['x-forwarded-proto'] || 'http';
+  const host = request.headers.host || 'localhost:3001';
 
-function generateToken() {
-  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  if (host === 'localhost:3001') {
+    return `${protocol}://localhost:5173`;
+  }
+
+  if (host === '127.0.0.1:3001') {
+    return `${protocol}://127.0.0.1:5173`;
+  }
+
+  return `${protocol}://${host}`;
 }
 
 /**

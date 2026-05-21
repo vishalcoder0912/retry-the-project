@@ -117,18 +117,18 @@ function handleStatisticsQuery(dataset, analyticsDataset, schema, query) {
   if (lowerQuery.includes('count') || lowerQuery.includes('how many')) {
     if (dimension) {
       const grouped = countRowsByDimension(analyticsDataset.rows, dimension);
-      const total = Object.values(grouped).reduce((a, b) => a + b, 0);
-      const breakdown = Object.entries(grouped)
-        .sort((a, b) => b[1] - a[1])
+      const total = grouped.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      const breakdown = grouped
+        .sort((a, b) => Number(b.count || 0) - Number(a.count || 0))
         .slice(0, 5)
-        .map(([k, v]) => `${k}: ${v.toLocaleString()}`)
+        .map((row) => `${row[dimension.name]}: ${Number(row.count || 0).toLocaleString()}`)
         .join('\n');
       
       result.content = `Total records: **${total.toLocaleString()}**. Here's the breakdown by ${dimension.name}:\n${breakdown}`;
       result.chart = {
         type: 'bar',
         title: `Count by ${dimension.name}`,
-        data: Object.entries(grouped).map(([name, value]) => ({ [dimension.name]: name, count: value })),
+        data: grouped,
       };
       result.sql = `SELECT ${dimension.name}, COUNT(*) as count FROM dataset_rows GROUP BY ${dimension.name}`;
     }
@@ -162,27 +162,35 @@ function handleComparisonQuery(dataset, analyticsDataset, schema, query, intent)
   }
   
   const grouped = groupMetricByDimension(analyticsDataset.rows, dimension, metric, 'sum');
-  const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1]);
+  const sorted = [...grouped].sort((a, b) => Number(b[metric.name] || 0) - Number(a[metric.name] || 0));
   
   const isHighest = intent === 'HIGHEST';
   const isLowest = intent === 'LOWEST';
   const topN = isHighest || isLowest ? 5 : sorted.length;
   const slice = isHighest ? sorted.slice(0, topN) : sorted.slice(-topN).reverse();
   
-  const total = Object.values(grouped).reduce((a, b) => a + b, 0);
-  const topValue = slice[0]?.[1] || 0;
-  const topLabel = slice[0]?.[0] || 'N/A';
+  const total = grouped.reduce((sum, row) => sum + Number(row[metric.name] || 0), 0);
+  const topValue = Number(slice[0]?.[metric.name] || 0);
+  const topLabel = slice[0]?.[dimension.name] || 'N/A';
   
   let content = '';
   if (isHighest) {
     content = `Top ${topN} ${dimension.name} by **${metric.name}:**\n`;
-    content += slice.map(([label, value], i) => `${i + 1}. ${label}: ${value.toLocaleString()} (${((value / total) * 100).toFixed(1)}%)`).join('\n');
+    content += slice.map((row, i) => {
+      const value = Number(row[metric.name] || 0);
+      const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+      return `${i + 1}. ${row[dimension.name]}: ${value.toLocaleString()} (${percentage}%)`;
+    }).join('\n');
   } else if (isLowest) {
     content = `Lowest ${topN} ${dimension.name} by **${metric.name}:**\n`;
-    content += slice.map(([label, value], i) => `${i + 1}. ${label}: ${value.toLocaleString()} (${((value / total) * 100).toFixed(1)}%)`).join('\n');
+    content += slice.map((row, i) => {
+      const value = Number(row[metric.name] || 0);
+      const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : '0.0';
+      return `${i + 1}. ${row[dimension.name]}: ${value.toLocaleString()} (${percentage}%)`;
+    }).join('\n');
   } else {
     content = `**${metric.name}** by ${dimension.name}:\n`;
-    content += sorted.slice(0, 10).map(([label, value]) => `${label}: ${value.toLocaleString()}`).join('\n');
+    content += sorted.slice(0, 10).map((row) => `${row[dimension.name]}: ${Number(row[metric.name] || 0).toLocaleString()}`).join('\n');
   }
   
   return {
@@ -193,7 +201,7 @@ function handleComparisonQuery(dataset, analyticsDataset, schema, query, intent)
       title: `${metric.name} by ${dimension.name}`,
       xKey: dimension.name,
       yKey: metric.name,
-      data: slice.map(([name, value]) => ({ [dimension.name]: name, [metric.name]: value })),
+      data: slice,
     },
     insights: [
       `Top performer: ${topLabel} with ${topValue.toLocaleString()}`,
@@ -222,21 +230,21 @@ function handleTrendQuery(dataset, analyticsDataset, schema, query) {
   }
   
   const grouped = groupMetricByDimension(analyticsDataset.rows, { name: timeDim.name, role: 'dimension' }, metric, 'sum');
-  const sorted = Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]));
+  const sorted = [...grouped].sort((a, b) => String(a[timeDim.name]).localeCompare(String(b[timeDim.name])));
   
-  const firstValue = sorted[0]?.[1] || 0;
-  const lastValue = sorted[sorted.length - 1]?.[1] || 0;
+  const firstValue = Number(sorted[0]?.[metric.name] || 0);
+  const lastValue = Number(sorted[sorted.length - 1]?.[metric.name] || 0);
   const change = firstValue > 0 ? ((lastValue - firstValue) / firstValue * 100) : 0;
   
   return {
-    content: `**${metric.name}** trend over **${timeDim.name}:**\n${sorted.map(([period, value]) => `${period}: ${value.toLocaleString()}`).join('\n')}\n\nOverall change: ${change >= 0 ? '+' : ''}${change.toFixed(1)}%`,
+    content: `**${metric.name}** trend over **${timeDim.name}:**\n${sorted.map((row) => `${row[timeDim.name]}: ${Number(row[metric.name] || 0).toLocaleString()}`).join('\n')}\n\nOverall change: ${change >= 0 ? '+' : ''}${change.toFixed(1)}%`,
     sql: `SELECT ${timeDim.name}, SUM(${metric.name}) as ${metric.name} FROM dataset_rows GROUP BY ${timeDim.name} ORDER BY ${timeDim.name}`,
     chart: {
       type: 'line',
       title: `${metric.name} Over Time`,
       xKey: timeDim.name,
       yKey: metric.name,
-      data: sorted.map(([name, value]) => ({ [timeDim.name]: name, [metric.name]: value })),
+      data: sorted,
     },
     insights: [
       `First period: ${firstValue.toLocaleString()}`,
@@ -254,10 +262,17 @@ function handleBreakdownQuery(dataset, analyticsDataset, schema, query) {
   }
   
   const grouped = groupMetricByDimension(analyticsDataset.rows, dimension, metric, 'sum');
-  const total = Object.values(grouped).reduce((a, b) => a + b, 0);
-  const breakdown = Object.entries(grouped)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, value]) => ({ label, value, percentage: (value / total * 100).toFixed(1) }));
+  const total = grouped.reduce((sum, row) => sum + Number(row[metric.name] || 0), 0);
+  const breakdown = grouped
+    .sort((a, b) => Number(b[metric.name] || 0) - Number(a[metric.name] || 0))
+    .map((row) => {
+      const value = Number(row[metric.name] || 0);
+      return {
+        label: row[dimension.name],
+        value,
+        percentage: total > 0 ? (value / total * 100).toFixed(1) : '0.0',
+      };
+    });
   
   return {
     content: `**${metric.name}** breakdown by **${dimension.name}:**\n${breakdown.map(b => `${b.label}: ${b.value.toLocaleString()} (${b.percentage}%)`).join('\n')}`,
@@ -374,7 +389,7 @@ export function handleSmartQuery(dataset, query) {
     const schema = {
       ...enhancedSchema,
       ...basicSchema,
-      columns: dataset.columns,
+      columns: enhancedSchema.columns || basicSchema.columns || dataset.columns,
     };
     
     const intent = classifyQueryIntent(query);

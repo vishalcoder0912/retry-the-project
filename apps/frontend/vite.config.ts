@@ -11,14 +11,15 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"],
   },
   server: {
-    host: "::",
-    port: 8080,
+    host: "127.0.0.1",
+    port: 5173,
     // Enable CORS for development
     cors: true,
     proxy: {
       // Main API proxy
       "/api": {
-        target: "http://127.0.0.1:3001",
+        // Match the backend's default local bind behavior on Windows.
+        target: "http://localhost:3001",
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {
@@ -35,7 +36,7 @@ export default defineConfig({
       },
       // ML Service proxy
       "/api/ml": {
-        target: "http://127.0.0.1:5000",
+        target: "http://localhost:5000",
         changeOrigin: true,
         secure: false,
       },

@@ -2,9 +2,17 @@
 import { sendSuccess, sendError } from '../utils/response-utils.js';
 import { HTTP_STATUS, ERROR_CODES } from '../config/constants.js';
 import { updateDataset } from './state.js';
-import { randomUUID } from 'crypto';
+import {
+  createDataset,
+  deleteDataset,
+  getDatasetById,
+  listDatasets,
+  patchDatasetRow,
+} from '../database/dataset-repository.js';
+import { classifyUploadedDatasets } from '../services/dataset-role-detector.js';
+import { runFullAutoAnalysis } from '../services/ai-analyst/ai-analyst-orchestrator.js';
 
-// In-memory dataset storage (would be database in production)
+// Cached datasets are only retained for legacy in-memory data; normal datasets persist to SQLite.
 const datasets = new Map();
 
 // Helper to read request body
@@ -31,12 +39,18 @@ export async function handleDatasetRoutes(request, response, pathname) {
   // GET /api/datasets - List all datasets
   if (pathname === '/api/datasets' && method === 'GET') {
     try {
-      const datasetList = Array.from(datasets.values()).map(d => ({
+      const persistedDatasets = listDatasets();
+      const cachedDatasets = Array.from(datasets.values()).filter(
+        cached => !persistedDatasets.some(persisted => persisted.id === cached.id),
+      );
+      const datasetList = [...persistedDatasets, ...cachedDatasets].map(d => ({
         id: d.id,
         name: d.name,
-        rowCount: d.rows?.length || 0,
+        rowCount: d.rowCount || d.rows?.length || 0,
         columnCount: d.columns?.length || 0,
-        createdAt: d.createdAt
+        createdAt: d.uploadedAt || d.createdAt,
+        sourceType: d.sourceType,
+        fileName: d.fileName,
       }));
       
       sendSuccess(response, {
@@ -54,10 +68,21 @@ export async function handleDatasetRoutes(request, response, pathname) {
   // POST /api/datasets/demo - Load demo dataset
   if (pathname === '/api/datasets/demo' && method === 'POST') {
     try {
-      const demoDataset = {
-        id: randomUUID(),
+      const demoRows = [
+        { Date: '2024-01-01', Product: 'Widget A', Region: 'North', Sales: 1500, Quantity: 50 },
+        { Date: '2024-01-02', Product: 'Widget B', Region: 'South', Sales: 2300, Quantity: 75 },
+        { Date: '2024-01-03', Product: 'Widget A', Region: 'East', Sales: 1800, Quantity: 60 },
+        { Date: '2024-01-04', Product: 'Widget C', Region: 'West', Sales: 3200, Quantity: 100 },
+        { Date: '2024-01-05', Product: 'Widget B', Region: 'North', Sales: 2100, Quantity: 70 },
+        { Date: '2024-01-06', Product: 'Widget A', Region: 'South', Sales: 1650, Quantity: 55 },
+        { Date: '2024-01-07', Product: 'Widget C', Region: 'East', Sales: 2800, Quantity: 90 },
+        { Date: '2024-01-08', Product: 'Widget B', Region: 'West', Sales: 2450, Quantity: 80 }
+      ];
+
+      const demoDataset = createDataset({
         name: 'Demo Sales Data',
         fileName: 'demo-sales.csv',
+        sourceType: 'demo',
         columns: [
           { name: 'Date', type: 'date', inferredType: 'date' },
           { name: 'Product', type: 'string', inferredType: 'categorical' },
@@ -65,26 +90,16 @@ export async function handleDatasetRoutes(request, response, pathname) {
           { name: 'Sales', type: 'number', inferredType: 'numeric' },
           { name: 'Quantity', type: 'number', inferredType: 'numeric' }
         ],
-        rows: [
-          { Date: '2024-01-01', Product: 'Widget A', Region: 'North', Sales: 1500, Quantity: 50 },
-          { Date: '2024-01-02', Product: 'Widget B', Region: 'South', Sales: 2300, Quantity: 75 },
-          { Date: '2024-01-03', Product: 'Widget A', Region: 'East', Sales: 1800, Quantity: 60 },
-          { Date: '2024-01-04', Product: 'Widget C', Region: 'West', Sales: 3200, Quantity: 100 },
-          { Date: '2024-01-05', Product: 'Widget B', Region: 'North', Sales: 2100, Quantity: 70 },
-          { Date: '2024-01-06', Product: 'Widget A', Region: 'South', Sales: 1650, Quantity: 55 },
-          { Date: '2024-01-07', Product: 'Widget C', Region: 'East', Sales: 2800, Quantity: 90 },
-          { Date: '2024-01-08', Product: 'Widget B', Region: 'West', Sales: 2450, Quantity: 80 }
-        ],
-        createdAt: new Date().toISOString()
-      };
+        rows: demoRows,
+      });
       
-      datasets.set(demoDataset.id, demoDataset);
       updateDataset(demoDataset);
+      const analysis = await runFullAutoAnalysis(demoDataset);
       
       sendSuccess(response, {
         dataset: demoDataset,
         chatMessages: [],
-        analysis: null
+        analysis
       }, 'Demo dataset loaded');
       return true;
     } catch (error) {
@@ -113,32 +128,26 @@ export async function handleDatasetRoutes(request, response, pathname) {
       }
       
       // Create dataset
-      const datasetId = randomUUID();
-      const dataset = {
-        id: datasetId,
+      const dataset = createDataset({
         name: body.name,
         fileName: body.fileName || null,
         sourceType: body.sourceType || 'upload',
         columns: body.columns,
         rows: body.rows,
-        createdAt: new Date().toISOString(),
-        metadata: {
-          rowCount: body.rows.length,
-          columnCount: body.columns.length
-        }
-      };
+      });
       
-      // Store dataset
-      datasets.set(datasetId, dataset);
       updateDataset(dataset);
+      const datasetId = dataset.id;
       
       console.log('[DATASET] ✅ Dataset imported:', datasetId);
-      
+
+      const analysis = await runFullAutoAnalysis(dataset);
+
       sendSuccess(response, {
-        dataset: dataset,
+        dataset,
         chatMessages: [],
-        analysis: null
-      }, 'Dataset imported successfully');
+        analysis,
+      }, 'Dataset imported and schema dashboard generated');
       return true;
     } catch (error) {
       console.error('[DATASET] ❌ Import error:', error);
@@ -148,11 +157,78 @@ export async function handleDatasetRoutes(request, response, pathname) {
     }
   }
 
+  // POST /api/datasets/merge - Classify and smart-analyze multiple datasets
+  if (pathname === '/api/datasets/merge' && method === 'POST') {
+    try {
+      const body = await getRequestBody(request);
+      const datasets = Array.isArray(body.datasets) ? body.datasets : [];
+
+      if (!datasets.length) {
+        sendError(response, HTTP_STATUS.BAD_REQUEST, 'At least one dataset is required', ERROR_CODES.VALIDATION_ERROR);
+        return true;
+      }
+
+      const classified = classifyUploadedDatasets(datasets);
+
+      if (!classified.primaryDataset) {
+        sendError(response, HTTP_STATUS.BAD_REQUEST, 'No analyzable dataset found', ERROR_CODES.VALIDATION_ERROR);
+        return true;
+      }
+
+      const primary = classified.primaryDataset;
+
+      const savedDataset = createDataset({
+        name: `Combined (${[
+          primary.fileName || primary.name,
+          ...classified.testFiles.map((f) => f.fileName || f.name),
+        ].join(", ")})`,
+        sourceType: 'multi-file',
+        fileName: primary.fileName || primary.name,
+        columns: primary.columns,
+        rows: primary.rows,
+        metadata: {
+          fileRoles: classified.classified.map((f) => ({
+            name: f.fileName || f.name,
+            role: f.detectedRole.role,
+            reason: f.detectedRole.reason,
+          })),
+        },
+      });
+
+      updateDataset(savedDataset);
+
+      const analysis = await runFullAutoAnalysis(savedDataset);
+
+      sendSuccess(
+        response,
+        {
+          dataset: savedDataset,
+          chatMessages: [],
+          pipeline: 'multi-file-smart-analysis',
+          relatedDatasets: {
+            primaryDataset: primary.fileName || primary.name,
+            metadataFiles: classified.metadataFiles.map((f) => f.fileName || f.name),
+            testFiles: classified.testFiles.map((f) => f.fileName || f.name),
+          },
+          analysis,
+        },
+        'Multi-file dataset analyzed successfully'
+      );
+
+      return true;
+    } catch (error) {
+      console.error('[MERGE SMART ANALYSIS ERROR]', error);
+      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        error.message || 'Failed to analyze datasets', ERROR_CODES.DATABASE_ERROR);
+      return true;
+    }
+  }
+
   // GET /api/datasets/:id - Get specific dataset
   if (pathname.match(/^\/api\/datasets\/[^/]+$/) && method === 'GET') {
     try {
       const datasetId = pathname.split('/').pop();
-      const dataset = datasets.get(datasetId);
+      const dataset = getDatasetById(datasetId) || datasets.get(datasetId);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
@@ -175,7 +251,7 @@ export async function handleDatasetRoutes(request, response, pathname) {
       const datasetId = parts[3];
       const rowId = parseInt(parts[5]);
       
-      const dataset = datasets.get(datasetId);
+      const dataset = getDatasetById(datasetId) || datasets.get(datasetId);
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
         return true;
@@ -183,15 +259,20 @@ export async function handleDatasetRoutes(request, response, pathname) {
       
       const body = await getRequestBody(request);
       
+      let nextDataset = dataset;
       if (body.column && body.value !== undefined) {
-        if (dataset.rows[rowId]) {
+        const persistedDataset = getDatasetById(datasetId);
+        if (persistedDataset) {
+          nextDataset = patchDatasetRow({ datasetId, rowId, column: body.column, value: body.value }) || dataset;
+        } else if (dataset.rows[rowId]) {
           dataset.rows[rowId][body.column] = body.value;
           datasets.set(datasetId, dataset);
-          updateDataset(dataset);
+          nextDataset = dataset;
         }
       }
+      updateDataset(nextDataset);
       
-      sendSuccess(response, { dataset }, 'Row updated');
+      sendSuccess(response, { dataset: nextDataset }, 'Row updated');
       return true;
     } catch (error) {
       console.error('Row update error:', error);
@@ -204,13 +285,14 @@ export async function handleDatasetRoutes(request, response, pathname) {
   if (pathname.match(/^\/api\/datasets\/[^/]+$/) && method === 'DELETE') {
     try {
       const datasetId = pathname.split('/').pop();
+      const deletedPersisted = deleteDataset(datasetId);
+      const deletedCached = datasets.delete(datasetId);
       
-      if (!datasets.has(datasetId)) {
+      if (!deletedPersisted && !deletedCached) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
         return true;
       }
       
-      datasets.delete(datasetId);
       updateDataset(null);
       
       sendSuccess(response, { datasetId }, 'Dataset deleted');

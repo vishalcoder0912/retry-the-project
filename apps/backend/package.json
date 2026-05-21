@@ -7,6 +7,7 @@
     "dev": "node src/index.js",
     "dev:watch": "node --watch src/index.js",
     "start": "node src/index.js",
+    "build": "node --check src/index.js",
     "kill-port": "node kill-port.js",
     "test": "vitest",
     "test:run": "vitest run"
@@ -15,7 +16,9 @@
     "@anthropic-ai/sdk": "^0.24.3",
     "@google/generative-ai": "^0.24.1",
     "@insightflow/shared-analytics": "../packages/shared-analytics",
+    "@opendataloader/pdf": "^2.4.4",
     "axios": "^1.15.1",
+    "busboy": "^1.6.0",
     "dotenv": "^17.4.2",
     "exceljs": "^4.4.0",
     "ml-cart": "^2.1.1",
@@ -25,6 +28,7 @@
     "ml-random-forest": "^2.1.0",
     "node-cron": "^3.0.3",
     "openai": "^4.28.4",
-    "pdfkit": "^0.15.2"
+    "pdfkit": "^0.15.2",
+    "qrcode": "^1.5.4"
   }
 }
