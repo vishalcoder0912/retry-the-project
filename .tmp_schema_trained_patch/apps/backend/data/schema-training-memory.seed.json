@@ -35,7 +35,9 @@
         {"title":"Salary Distribution","type":"histogram","xKey":"salary_usd","xRole":"money_metric","yKey":"salary_usd","yRole":"money_metric","aggregation":"count","limit":12},
         {"title":"Salary vs Experience","type":"scatter","xKey":"experience","xRole":"continuous_metric","yKey":"salary_usd","yRole":"money_metric","aggregation":"count","limit":500},
         {"title":"Education Distribution","type":"donut","xKey":"education","xRole":"category","yKey":"count","aggregation":"count","limit":10},
-        {"title":"Average Salary by Company Size","type":"bar","xKey":"company_size","xRole":"category","yKey":"salary_usd","yRole":"money_metric","aggregation":"avg","limit":10}
+        {"title":"Average Salary by Company Size","type":"bar","xKey":"company_size","xRole":"category","yKey":"salary_usd","yRole":"money_metric","aggregation":"avg","limit":10},
+        {"title":"Average Salary by Language","type":"bar","xKey":"languages","xRole":"category","yKey":"salary_usd","yRole":"money_metric","aggregation":"avg","limit":10},
+        {"title":"Average Salary by Framework","type":"bar","xKey":"frameworks","xRole":"category","yKey":"salary_usd","yRole":"money_metric","aggregation":"avg","limit":10}
       ]
     },
     "examplesSeen": 1,

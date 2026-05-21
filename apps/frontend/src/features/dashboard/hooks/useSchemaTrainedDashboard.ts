@@ -1,40 +1,762 @@
-import { useCallback, useEffect, useState } from "react";
-import { api } from "@/features/data/api/dataApi";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { schemaTrainedApi } from "@/features/data/api/schemaTrainedApi.additions";
+import {
+  applyDashboardFilters,
+  calculateCharts,
+  calculateKpis,
+  validateChartSpecForRows,
+  type DashboardFilter,
+  type DataRow,
+} from "@/features/dashboard/utils/schemaLocalAnalytics";
 
-type DatasetLike = {
+export type SchemaDashboardChartSpec = {
   id?: string;
-  name?: string;
-  columns?: unknown[];
-  rows?: unknown[];
+  type:
+    | "bar"
+    | "line"
+    | "area"
+    | "pie"
+    | "donut"
+    | "histogram"
+    | "scatter"
+    | "radar"
+    | "composed"
+    | "heatmap"
+    | "horizontalBar";
+  title: string;
+  xKey: string;
+  yKey: string;
+  aggregation: "count" | "sum" | "avg" | "min" | "max" | "median" | "count_unique";
+  limit?: number;
 };
 
-export function useSchemaTrainedDashboard(dataset: DatasetLike | null | undefined) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [schemaDashboard, setSchemaDashboard] = useState<any>(null);
+export type SchemaDashboardKpiSpec = {
+  id?: string;
+  title: string;
+  metric: string;
+  aggregation: "count" | "sum" | "avg" | "min" | "max" | "median" | "count_unique";
+  format?: "number" | "currency" | "percent" | "text";
+};
 
-  const generate = useCallback(async () => {
-    if (!dataset?.id && !dataset?.rows?.length) return null;
+type DatasetInput = {
+  datasetId?: string;
+  datasetName?: string;
+  rows?: DataRow[];
+  columns?: Array<{ name: string } | string>;
+  dictionaryRows?: unknown[];
+  autoLoad?: boolean;
+};
+
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+function normalizeName(value = "") {
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function hasColumn(rows: DataRow[], name: string) {
+  if (!rows.length) return false;
+  return Object.prototype.hasOwnProperty.call(rows[0], name);
+}
+
+function getColumns(rows: DataRow[], explicitColumns?: Array<{ name: string } | string>) {
+  if (explicitColumns?.length) {
+    return explicitColumns
+      .map((column) => (typeof column === "string" ? column : column.name))
+      .filter(Boolean);
+  }
+
+  return Object.keys(rows[0] || {}).filter((key) => !key.startsWith("_"));
+}
+
+function findColumn(columns: string[], aliases: string[]) {
+  const normalizedAliases = aliases.map(normalizeName);
+
+  return (
+    columns.find((column) => normalizedAliases.includes(normalizeName(column))) ||
+    columns.find((column) =>
+      normalizedAliases.some((alias) => normalizeName(column).includes(alias)),
+    ) ||
+    null
+  );
+}
+
+function isSalaryDataset(rows: DataRow[], columns: string[]) {
+  const text = columns.map(normalizeName).join(" ");
+  return (
+    /salary|salary_usd|income|pay/.test(text) &&
+    /experience|country|education|language|languages|framework|frameworks|company_size/.test(text)
+  );
+}
+
+function strictSalaryKpis(columns: string[]): SchemaDashboardKpiSpec[] {
+  const salary = findColumn(columns, ["salary_usd", "salary", "income"]);
+
+  const country = findColumn(columns, ["country", "region", "location"]);
+
+  const kpis: SchemaDashboardKpiSpec[] = [
+    {
+      id: "total-records",
+      title: "Total Records",
+      metric: "__row_count__",
+      aggregation: "count",
+      format: "number",
+    },
+  ];
+
+  if (salary) {
+    kpis.push(
+      {
+        id: "average-salary",
+        title: "Average Salary",
+        metric: salary,
+        aggregation: "avg",
+        format: "currency",
+      },
+      {
+        id: "median-salary",
+        title: "Median Salary",
+        metric: salary,
+        aggregation: "median",
+        format: "currency",
+      },
+      {
+        id: "highest-salary",
+        title: "Highest Salary",
+        metric: salary,
+        aggregation: "max",
+        format: "currency",
+      },
+    );
+  }
+
+  if (country) {
+    kpis.push({
+      id: "countries",
+      title: "Countries",
+      metric: country,
+      aggregation: "count_unique",
+      format: "number",
+    });
+  }
+
+  return kpis;
+}
+
+function strictSalaryCharts(columns: string[]): SchemaDashboardChartSpec[] {
+  const salary = findColumn(columns, ["salary_usd", "salary", "income"]);
+  const experience = findColumn(columns, ["experience", "years_experience", "exp"]);
+  const country = findColumn(columns, ["country", "region", "location"]);
+  const education = findColumn(columns, ["education", "degree", "qualification"]);
+  const languages = findColumn(columns, ["languages", "language", "programming_language"]);
+  const frameworks = findColumn(columns, ["frameworks", "framework", "library"]);
+  const companySize = findColumn(columns, ["company_size", "company", "size"]);
+
+  const charts: SchemaDashboardChartSpec[] = [];
+
+  if (salary && country) {
+    charts.push({
+      id: "avg-salary-by-country",
+      title: "Average Salary by Country",
+      type: "bar",
+      xKey: country,
+      yKey: salary,
+      aggregation: "avg",
+      limit: 10,
+    });
+  }
+
+  if (salary) {
+    charts.push({
+      id: "salary-distribution",
+      title: "Salary Distribution",
+      type: "histogram",
+      xKey: salary,
+      yKey: salary,
+      aggregation: "count",
+      limit: 12,
+    });
+  }
+
+  if (experience && salary) {
+    charts.push({
+      id: "salary-vs-experience",
+      title: "Salary vs Experience",
+      type: "scatter",
+      xKey: experience,
+      yKey: salary,
+      aggregation: "count",
+      limit: 500,
+    });
+  }
+
+  if (education) {
+    charts.push({
+      id: "education-distribution",
+      title: "Education Distribution",
+      type: "donut",
+      xKey: education,
+      yKey: "count",
+      aggregation: "count",
+      limit: 10,
+    });
+  }
+
+  if (companySize && salary) {
+    charts.push({
+      id: "avg-salary-by-company-size",
+      title: "Average Salary by Company Size",
+      type: "bar",
+      xKey: companySize,
+      yKey: salary,
+      aggregation: "avg",
+      limit: 10,
+    });
+  }
+
+  if (languages && salary) {
+    charts.push({
+      id: "avg-salary-by-language",
+      title: "Average Salary by Language",
+      type: "bar",
+      xKey: languages,
+      yKey: salary,
+      aggregation: "avg",
+      limit: 10,
+    });
+  }
+
+  if (frameworks && salary) {
+    charts.push({
+      id: "avg-salary-by-framework",
+      title: "Average Salary by Framework",
+      type: "bar",
+      xKey: frameworks,
+      yKey: salary,
+      aggregation: "avg",
+      limit: 10,
+    });
+  }
+
+  return charts.slice(0, 7);
+}
+
+function makeLocalFallbackDashboard(
+  rows: DataRow[],
+  columnsInput?: Array<{ name: string } | string>,
+) {
+  const columns = getColumns(rows, columnsInput);
+
+  if (isSalaryDataset(rows, columns)) {
+    return {
+      source: "frontend-strict-salary-fallback",
+      domain: "workforce_salary",
+      kpis: strictSalaryKpis(columns),
+      charts: strictSalaryCharts(columns),
+    };
+  }
+
+  const numeric = columns.find((column) =>
+    rows.slice(0, 50).some((row) => Number.isFinite(Number(row[column]))),
+  );
+
+  const category = columns.find((column) => column !== numeric);
+
+  const kpis: SchemaDashboardKpiSpec[] = [
+    {
+      id: "total-records",
+      title: "Total Records",
+      metric: "__row_count__",
+      aggregation: "count",
+      format: "number",
+    },
+  ];
+
+  if (numeric) {
+    kpis.push({
+      id: `avg-${normalizeName(numeric)}`,
+      title: `Average ${numeric}`,
+      metric: numeric,
+      aggregation: "avg",
+      format: "number",
+    });
+  }
+
+  const charts: SchemaDashboardChartSpec[] = [];
+
+  if (numeric && category) {
+    charts.push({
+      id: `avg-${normalizeName(numeric)}-by-${normalizeName(category)}`,
+      title: `Average ${numeric} by ${category}`,
+      type: "bar",
+      xKey: category,
+      yKey: numeric,
+      aggregation: "avg",
+      limit: 10,
+    });
+  }
+
+  if (numeric) {
+    charts.push({
+      id: `${normalizeName(numeric)}-distribution`,
+      title: `${numeric} Distribution`,
+      type: "histogram",
+      xKey: numeric,
+      yKey: numeric,
+      aggregation: "count",
+      limit: 12,
+    });
+  }
+
+  if (category) {
+    charts.push({
+      id: `${normalizeName(category)}-distribution`,
+      title: `${category} Distribution`,
+      type: "donut",
+      xKey: category,
+      yKey: "count",
+      aggregation: "count",
+      limit: 10,
+    });
+  }
+
+  return {
+    source: "frontend-generic-fallback",
+    domain: "generic",
+    kpis,
+    charts,
+  };
+}
+
+function dedupeCharts(charts: SchemaDashboardChartSpec[]) {
+  const seen = new Set<string>();
+
+  return charts.filter((chart) => {
+    const key = `${chart.title}|${chart.type}|${chart.xKey}|${chart.yKey}|${chart.aggregation}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getPlanFromResponse(response: any) {
+  const data = response?.data || response || {};
+  return data.dashboardPlan || data.dashboard || data.data?.dashboardPlan || data.data?.dashboard || null;
+}
+
+export function useSchemaTrainedDashboard({
+  datasetId = "local-dataset",
+  datasetName = "Uploaded Dataset",
+  rows = [],
+  columns = [],
+  dictionaryRows = [],
+  autoLoad = true,
+}: DatasetInput) {
+  const [loading, setLoading] = useState(false);
+  const [commandLoading, setCommandLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [profile, setProfile] = useState<any>(null);
+  const [memoryMatch, setMemoryMatch] = useState<any>(null);
+  const [model, setModel] = useState<string | undefined>();
+  const [provider, setProvider] = useState<string>("local");
+
+  const [kpiSpecs, setKpiSpecs] = useState<SchemaDashboardKpiSpec[]>([]);
+  const [chartSpecs, setChartSpecs] = useState<SchemaDashboardChartSpec[]>([]);
+  const [filters, setFilters] = useState<DashboardFilter[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      role: "assistant",
+      content:
+        "Schema-trained assistant ready. I can build, fix, explain, or train dashboard patterns without sending raw rows to the LLM.",
+    },
+  ]);
+
+  const safeRows = useMemo(() => rows.filter(Boolean), [rows]);
+
+  const filteredRows = useMemo(
+    () => applyDashboardFilters(safeRows, filters),
+    [safeRows, filters],
+  );
+
+  const currentDashboard = useMemo(
+    () => ({
+      kpis: kpiSpecs,
+      charts: chartSpecs,
+      filters,
+    }),
+    [kpiSpecs, chartSpecs, filters],
+  );
+
+  const applyDashboardPlan = useCallback(
+    (plan: any, source = "unknown") => {
+      const fallback = makeLocalFallbackDashboard(safeRows, columns);
+      const incomingKpis = Array.isArray(plan?.kpis) ? plan.kpis : [];
+      const incomingCharts = Array.isArray(plan?.charts) ? plan.charts : [];
+
+      const columnsList = getColumns(safeRows, columns);
+      const salaryMode = isSalaryDataset(safeRows, columnsList);
+
+      const finalKpis = salaryMode
+        ? strictSalaryKpis(columnsList)
+        : incomingKpis.length
+          ? incomingKpis
+          : fallback.kpis;
+
+      const finalCharts = salaryMode
+        ? strictSalaryCharts(columnsList)
+        : incomingCharts.length
+          ? incomingCharts
+          : fallback.charts;
+
+      const validCharts = dedupeCharts(finalCharts)
+        .filter((spec) => {
+          if (spec.xKey === "__row_index__") return true;
+          if (!hasColumn(safeRows, spec.xKey)) return false;
+          if (spec.yKey !== "count" && !hasColumn(safeRows, spec.yKey)) return false;
+          const valid = validateChartSpecForRows(safeRows, spec as any);
+          return valid.ok;
+        })
+        .slice(0, salaryMode ? 7 : 10);
+
+      setKpiSpecs(finalKpis.slice(0, 8));
+      setChartSpecs(validCharts);
+
+      setProvider(plan?.provider || source);
+    },
+    [safeRows, columns],
+  );
+
+  const loadDashboard = useCallback(async () => {
+    if (!safeRows.length) return;
+
     setLoading(true);
     setError(null);
 
     try {
-      const datasetId = dataset.id || "local-dataset";
-      const fallbackPayload = dataset.id ? undefined : { rows: dataset.rows || [], columns: dataset.columns || [] };
-      const result = await api.generateSchemaDashboard(datasetId, true, fallbackPayload as any);
-      setSchemaDashboard(result);
-      return result;
-    } catch (err: any) {
-      setError(err?.message || "Failed to generate schema-trained dashboard");
-      return null;
+      const response = await schemaTrainedApi.generateSchemaDashboard(datasetId, {
+        name: datasetName,
+        rows: safeRows,
+        columns,
+        dictionaryRows,
+        useLlm: true,
+      } as any);
+
+      const data = response?.data || {};
+      const plan = getPlanFromResponse(response);
+
+      setProfile(data.profile || null);
+      setMemoryMatch(data.memoryMatch || data.match || null);
+      setModel(data.model);
+      setProvider(data.provider || "schema-trained-api");
+
+      applyDashboardPlan(plan, data.provider || "schema-trained-api");
+
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          content: `Dashboard loaded from ${
+            data.provider || "schema-trained-api"
+          }. If backend returns incomplete specs, local quality guard fills valid charts.`,
+        },
+      ]);
+    } catch (err) {
+      const fallback = makeLocalFallbackDashboard(safeRows, columns);
+      applyDashboardPlan(fallback, "frontend-fallback");
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Schema dashboard API failed. Local fallback dashboard generated.";
+
+      setError(message);
+      setProvider("frontend-fallback");
+
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          content: `Backend schema dashboard failed, so I generated a local schema-safe dashboard.\n\nDebug: ${message}`,
+        },
+      ]);
     } finally {
       setLoading(false);
     }
-  }, [dataset]);
+  }, [safeRows, datasetId, datasetName, columns, dictionaryRows, applyDashboardPlan]);
 
   useEffect(() => {
-    generate();
-  }, [generate]);
+    if (autoLoad && safeRows.length) {
+      void loadDashboard();
+    }
+  }, [autoLoad, safeRows.length, loadDashboard]);
 
-  return { loading, error, schemaDashboard, regenerate: generate };
+  const kpis = useMemo(() => calculateKpis(filteredRows, kpiSpecs as any), [filteredRows, kpiSpecs]);
+
+  const charts = useMemo(
+    () => calculateCharts(filteredRows, chartSpecs as any),
+    [filteredRows, chartSpecs],
+  );
+
+  const applyCommand = useCallback(
+    (command: any) => {
+      if (!command) return;
+
+      if (command.action === "GENERATE_DASHBOARD") {
+        const plan = command.dashboardPlan || command.dashboard;
+        if (plan) {
+          applyDashboardPlan(plan, command.provider || "dashboard-command");
+        }
+        return;
+      }
+
+      if (command.action === "GENERATE_CHART" && command.chartSpec) {
+        const valid = validateChartSpecForRows(safeRows, command.chartSpec);
+        if (!valid.ok) {
+          setMessages((current) => [
+            ...current,
+            {
+              role: "assistant",
+              content: valid.reason || "This chart is not compatible with the current dataset.",
+            },
+          ]);
+          return;
+        }
+
+        setChartSpecs((current) => dedupeCharts([command.chartSpec, ...current]).slice(0, 10));
+        return;
+      }
+
+      if (command.action === "MODIFY_CHART" && command.chartSpec) {
+        const valid = validateChartSpecForRows(safeRows, command.chartSpec);
+        if (!valid.ok) {
+          setMessages((current) => [
+            ...current,
+            {
+              role: "assistant",
+              content: valid.reason || "This chart conversion is not compatible.",
+            },
+          ]);
+          return;
+        }
+
+        setChartSpecs((current) => {
+          if (!current.length) return [command.chartSpec];
+          const copy = [...current];
+          copy[0] = { ...copy[0], ...command.chartSpec };
+          return copy;
+        });
+        return;
+      }
+
+      if (command.action === "DELETE_CHART") {
+        setChartSpecs((current) => current.slice(1));
+        return;
+      }
+
+      if (command.action === "GENERATE_KPI" && command.kpiSpec) {
+        setKpiSpecs((current) => [command.kpiSpec, ...current].slice(0, 8));
+        return;
+      }
+
+      if (command.action === "FILTER" && command.filters) {
+        const nextFilters = Array.isArray(command.filters)
+          ? command.filters
+          : Object.entries(command.filters).map(([key, value]) => ({
+              key,
+              operator: "equals" as const,
+              value,
+            }));
+
+        setFilters((current) => [...current, ...nextFilters]);
+        return;
+      }
+
+      if (command.action === "CLEAR_FILTERS") {
+        setFilters([]);
+      }
+    },
+    [safeRows, applyDashboardPlan],
+  );
+
+  const sendCommand = useCallback(
+    async (query: string) => {
+      const text = query.trim();
+      if (!text || !safeRows.length || commandLoading) return;
+
+      setCommandLoading(true);
+      setError(null);
+      setMessages((current) => [...current, { role: "user", content: text }]);
+
+      try {
+        const response = await schemaTrainedApi.runDashboardCommand(datasetId, {
+          query: text,
+          currentDashboard,
+          name: datasetName,
+          rows: safeRows,
+          columns,
+          dictionaryRows,
+          useLlm: true,
+        } as any);
+
+        const command = response?.data || response;
+        applyCommand(command);
+
+        setProvider(command?.provider || "dashboard-command");
+
+        setMessages((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content: command?.message || "Dashboard command applied.",
+          },
+        ]);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Dashboard command failed.";
+        setError(message);
+
+        if (/fix|build|regenerate|dashboard|7 chart|seven chart/i.test(text)) {
+          const fallback = makeLocalFallbackDashboard(safeRows, columns);
+          applyDashboardPlan(fallback, "frontend-command-fallback");
+
+          setMessages((current) => [
+            ...current,
+            {
+              role: "assistant",
+              content: `Backend command failed, so I rebuilt the dashboard locally with schema-safe rules.\n\nDebug: ${message}`,
+            },
+          ]);
+        } else {
+          setMessages((current) => [
+            ...current,
+            {
+              role: "assistant",
+              content: message,
+            },
+          ]);
+        }
+      } finally {
+        setCommandLoading(false);
+      }
+    },
+    [
+      safeRows,
+      commandLoading,
+      datasetId,
+      currentDashboard,
+      datasetName,
+      columns,
+      dictionaryRows,
+      applyCommand,
+      applyDashboardPlan,
+    ],
+  );
+
+  const sendChat = useCallback(
+    async (query: string) => {
+      const text = query.trim();
+      if (!text || !safeRows.length || commandLoading) return;
+
+      setCommandLoading(true);
+      setMessages((current) => [...current, { role: "user", content: text }]);
+
+      try {
+        const response = await schemaTrainedApi.runSchemaChat(datasetId, {
+          query: text,
+          name: datasetName,
+          rows: safeRows,
+          columns,
+          dictionaryRows,
+          useLlm: true,
+        } as any);
+
+        setMessages((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content:
+              response?.data?.assistantMessage?.content ||
+              "I generated a schema-safe explanation.",
+          },
+        ]);
+      } catch (err) {
+        const columnsList = getColumns(safeRows, columns);
+        const message = err instanceof Error ? err.message : "Schema chat failed.";
+
+        setMessages((current) => [
+          ...current,
+          {
+            role: "assistant",
+            content: `This dashboard has ${safeRows.length.toLocaleString()} rows and ${columnsList.length} columns. For this dataset, I recommend charts based on ${columnsList.join(
+              ", ",
+            )}.\n\nDebug: ${message}`,
+          },
+        ]);
+      } finally {
+        setCommandLoading(false);
+      }
+    },
+    [safeRows, commandLoading, datasetId, datasetName, columns, dictionaryRows],
+  );
+
+  const trainAcceptedDashboard = useCallback(async () => {
+    if (!safeRows.length) return;
+
+    await schemaTrainedApi.trainSchemaDashboard(datasetId, {
+      name: datasetName,
+      rows: safeRows,
+      columns,
+      dashboardPlan: {
+        kpis: kpiSpecs,
+        charts: chartSpecs,
+      },
+      rating: "good",
+      notes: "User accepted this dashboard pattern.",
+    } as any);
+
+    setMessages((current) => [
+      ...current,
+      {
+        role: "assistant",
+        content: "This dashboard pattern has been trained into schema memory.",
+      },
+    ]);
+  }, [safeRows, datasetId, datasetName, columns, kpiSpecs, chartSpecs]);
+
+  return {
+    loading,
+    commandLoading,
+    error,
+
+    profile,
+    memoryMatch,
+    model,
+    provider,
+
+    kpiSpecs,
+    chartSpecs,
+    filters,
+    filteredRows,
+    kpis,
+    charts,
+    messages,
+
+    setKpiSpecs,
+    setChartSpecs,
+    setFilters,
+    setMessages,
+
+    loadDashboard,
+    reload: loadDashboard,
+    sendCommand,
+    sendChat,
+    applyCommand,
+    trainAcceptedDashboard,
+  };
 }
