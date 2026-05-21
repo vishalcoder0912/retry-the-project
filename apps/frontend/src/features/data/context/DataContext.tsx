@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { api, DatasetImportPayload } from '@/features/data/api/dataApi';
-import { ChartConfig, ChatMessage, Dataset, DatasetAnalysis, DatasetCellValue, DatasetRow } from '@/features/data/model/dataStore';
+import { ChatMessage, Dataset, DatasetAnalysis, DatasetCellValue, DatasetRow } from '@/features/data/model/dataStore';
 import { DataContext } from '@/features/data/context/data-context-store';
 
 function inferType(values: string[]): 'string' | 'number' | 'date' {
@@ -40,13 +40,32 @@ const normalizeDatasetRow = (value: unknown): DatasetRow => {
   );
 };
 
+const looksLikeDictionaryRow = (row: DatasetRow) => {
+  const keys = Object.keys(row).map((key) =>
+    key.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
+  );
+  const source = String(row._source_file ?? row._sourceFile ?? row.source ?? "").toLowerCase();
+
+  return (
+    source.includes("dictionary") ||
+    (keys.includes("column") &&
+      (keys.includes("type") || keys.includes("data_type")) &&
+      (keys.includes("description") || keys.includes("definition")))
+  );
+};
+
 const normalizeDataset = (dataset: Dataset | null): Dataset | null => {
   if (!dataset) return null;
 
+  const columns = Array.isArray(dataset.columns) ? dataset.columns : [];
+  const rows = Array.isArray(dataset.rows) ? dataset.rows.map(normalizeDatasetRow) : [];
+
   return {
     ...dataset,
-    uploadedAt: new Date(dataset.uploadedAt),
-    rows: Array.isArray(dataset.rows) ? dataset.rows.map(normalizeDatasetRow) : [],
+    columns,
+    uploadedAt: dataset.uploadedAt ? new Date(dataset.uploadedAt) : new Date(),
+    rows,
+    rowCount: Number.isFinite(Number(dataset.rowCount)) ? Number(dataset.rowCount) : rows.length,
   };
 };
 
@@ -63,11 +82,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isHydrating, setIsHydrating] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  const applyApiState = useCallback((nextDataset: Dataset | null, nextMessages: ChatMessage[], nextAnalysis?: DatasetAnalysis) => {
+  const applyApiState = useCallback((nextDataset: Dataset | null, nextMessages: ChatMessage[] = [], nextAnalysis?: DatasetAnalysis | null) => {
     setDataset(normalizeDataset(nextDataset));
-    setChatMessages(nextMessages.map(normalizeChatMessage));
+    setChatMessages(Array.isArray(nextMessages) ? nextMessages.map(normalizeChatMessage) : []);
     if (nextAnalysis) {
-      setAnalysis(nextAnalysis);
+      setAnalysis({
+        ...nextAnalysis,
+        chartRecommendations: Array.isArray(nextAnalysis.chartRecommendations) ? nextAnalysis.chartRecommendations : [],
+        insights: Array.isArray(nextAnalysis.insights) ? nextAnalysis.insights : [],
+      });
+    } else {
+      setAnalysis(null);
     }
   }, []);
 
@@ -101,7 +126,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     void hydrateState();
   }, [hydrateState]);
 
-  const buildDatasetPayload = useCallback((rows: DatasetRow[], fields: string[], fileName: string): DatasetImportPayload => {
+  const buildDatasetPayload = useCallback((inputRows: DatasetRow[], fields: string[], fileName: string): DatasetImportPayload => {
+    const rows = inputRows.filter((row) => !looksLikeDictionaryRow(row));
+
+    if (rows.length === 0) {
+      throw new Error("File contains no analyzable data rows after removing schema/dictionary rows");
+    }
+
     const columns: Array<{
       name: string;
       type: 'string' | 'number' | 'date';
@@ -132,16 +163,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [applyApiState]);
 
-  const uploadFile = useCallback(async (file: File) => {
+  const parseFilePayload = useCallback(async (file: File): Promise<DatasetImportPayload> => {
     const ext = file.name.split('.').pop()?.toLowerCase();
 
     if (ext === 'csv') {
-      return new Promise<void>((resolve, reject) => {
+      return new Promise<DatasetImportPayload>((resolve, reject) => {
         Papa.parse(file, {
           header: true,
           dynamicTyping: false,
           skipEmptyLines: true,
-          complete: async (results) => {
+          complete: (results) => {
             try {
               const rows = (results.data || []).map(normalizeDatasetRow);
               
@@ -150,8 +181,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               }
               
               const fields = results.meta?.fields || [];
-              await importDatasetPayload(buildDatasetPayload(rows, fields, file.name));
-              resolve();
+              resolve(buildDatasetPayload(rows, fields, file.name));
             } catch (error) {
               reject(error);
             }
@@ -171,8 +201,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       const fields = Object.keys(rows[0] || {});
-      await importDatasetPayload(buildDatasetPayload(rows, fields, file.name));
-      return;
+      return buildDatasetPayload(rows, fields, file.name);
     }
 
     if (ext === 'xlsx' || ext === 'xls') {
@@ -197,12 +226,60 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       
       const fields = Object.keys(rows[0] || {});
-      await importDatasetPayload(buildDatasetPayload(rows, fields, file.name));
-      return;
+      return buildDatasetPayload(rows, fields, file.name);
     }
 
     throw new Error('Unsupported file type');
-  }, [buildDatasetPayload, importDatasetPayload]);
+  }, [buildDatasetPayload]);
+
+  const uploadFile = useCallback(async (file: File) => {
+    const payload = await parseFilePayload(file);
+    await importDatasetPayload(payload);
+  }, [importDatasetPayload, parseFilePayload]);
+
+  const uploadFiles = useCallback(async (files: File[]) => {
+    const selectedFiles = files.filter(Boolean);
+
+    if (selectedFiles.length === 0) return;
+
+    setIsProcessing(true);
+    setApiError(null);
+
+    try {
+      if (selectedFiles.length === 1) {
+        await uploadFile(selectedFiles[0]);
+        return;
+      }
+
+      const payloads = await Promise.all(selectedFiles.map(parseFilePayload));
+      const state = await api.mergeDatasets(payloads);
+      applyApiState(state.dataset, state.chatMessages, state.analysis || undefined);
+      setApiError(null);
+    } catch (error) {
+      setApiError(getErrorMessage(error));
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [applyApiState, parseFilePayload, uploadFile]);
+
+  const importPdfFile = useCallback(async (file: File) => {
+    setIsProcessing(true);
+    setApiError(null);
+
+    try {
+      const result = await api.importPdf(file);
+      setDataset(normalizeDataset(result.dataset));
+      setAnalysis(result.analysis ?? null);
+      setChatMessages([]);
+      return result;
+    } catch (error) {
+      setApiError(getErrorMessage(error));
+      throw error;
+    } finally {
+      setIsProcessing(false);
+    }
+  }, []);
 
   const loadDemo = useCallback(async () => {
     try {
@@ -212,6 +289,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       setApiError(getErrorMessage(error));
       throw error;
+    }
+  }, [applyApiState]);
+
+  const resetAppState = useCallback(async () => {
+    try {
+      const state = await api.resetState();
+      applyApiState(state.dataset, state.chatMessages, state.analysis || null);
+      setApiError(null);
+    } catch (error) {
+      setDataset(null);
+      setChatMessages([]);
+      setAnalysis(null);
+      setApiError(getErrorMessage(error));
     }
   }, [applyApiState]);
 
@@ -257,6 +347,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [dataset]);
 
+  const replaceDatasetLocally = useCallback((nextDataset: Dataset) => {
+    setDataset(normalizeDataset(nextDataset));
+    setApiError(null);
+  }, []);
+
+  const deleteDataset = useCallback(async () => {
+    if (!dataset) {
+      const errorMsg = 'No dataset to delete';
+      setApiError(errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    try {
+      await api.deleteDataset(dataset.id);
+      setDataset(null);
+      setChatMessages([]);
+      setAnalysis(null);
+      setApiError(null);
+    } catch (error) {
+      setApiError(getErrorMessage(error));
+      throw error;
+    }
+  }, [dataset]);
+
   return (
     <DataContext.Provider value={{
       dataset,
@@ -266,9 +380,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isHydrating,
       apiError,
       uploadFile,
+      uploadFiles,
+      importPdfFile,
       loadDemo,
       sendChatQuery,
       updateDatasetCell,
+      replaceDatasetLocally,
+      deleteDataset,
+      resetAppState,
       retryHydrate: hydrateState,
     }}>
       {children}

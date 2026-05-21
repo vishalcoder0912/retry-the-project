@@ -1,7 +1,7 @@
 // Export-related routes
 import { sendSuccess, sendError } from '../utils/response-utils.js';
 import { HTTP_STATUS, ERROR_CODES } from '../config/constants.js';
-import { getState } from './state.js';
+import { getDatasetById } from '../database/dataset-repository.js';
 
 export async function handleExportRoutes(request, response, pathname) {
   const { method } = request;
@@ -13,8 +13,7 @@ export async function handleExportRoutes(request, response, pathname) {
       const datasetId = parts[3];
       const format = parts[5];
       
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getDatasetById(datasetId);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);
@@ -69,8 +68,7 @@ export async function handleExportRoutes(request, response, pathname) {
   if (pathname.match(/^\/api\/datasets\/[^/]+\/export\/report$/) && method === 'POST') {
     try {
       const datasetId = pathname.split('/')[3];
-      const state = getState();
-      const dataset = state.dataset;
+      const dataset = getDatasetById(datasetId);
       
       if (!dataset) {
         sendError(response, HTTP_STATUS.NOT_FOUND, 'Dataset not found', ERROR_CODES.NOT_FOUND);

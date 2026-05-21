@@ -22,6 +22,7 @@ import { aiAnalyzer } from "./services/ai-analyzer.js";
 import { buildUnifiedSchema } from "./services/data-merger.js";
 import { smartAutoChartGenerationForSingle, smartAutoChartGenerationForMerged, classifyColumns, buildEnhancedSchema } from "./services/schema-detector.js";
 import { reportGenerator } from "./services/report-generator.js";
+import { handlePdfRoutes } from "./routes/pdf.js";
 
 const port = Number(process.env.PORT || 3001);
 
@@ -149,6 +150,10 @@ const server = createServer(async (request, response) => {
   const { pathname } = url;
 
   try {
+    if (await handlePdfRoutes(request, response, pathname)) {
+      return;
+    }
+
     if (request.method === "GET" && pathname === "/") {
       sendJson(response, 200, buildIndexPayload());
       return;

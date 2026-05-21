@@ -1,15 +1,17 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { X, Send, Bot, BarChart3, Loader2, RefreshCw, Filter, PieChart, LineChart, BarChart3 as BarIcon } from 'lucide-react';
-import { useData } from '@/features/data/context/useData';
-import { ChartConfig } from '@/features/data/model/dataStore';
-import { processQuery } from '@/features/dashboard/utils/dashboardController';
+import { ChartConfig, Dataset } from '@/features/data/model/dataStore';
+import { api } from '@/features/data/api/dataApi';
 
 interface AnalyticsSidebarProps {
   isOpen: boolean;
   onClose: () => void;
-  onChartGenerated?: (chart: ChartConfig) => void;
-  onChartModified?: (chart: ChartConfig) => void;
+  dataset: Dataset | null;
+  charts: ChartConfig[];
+  onAddChart?: (chart: ChartConfig) => void;
+  onReplaceLatestChart?: (chart: ChartConfig) => void;
+  onRemoveLatestChart?: () => void;
   onFilterChange?: (filters: Record<string, string>) => void;
 }
 
@@ -21,6 +23,8 @@ interface ChatMessage {
   chartConfig?: ChartConfig;
   chartAction?: 'generate' | 'modify' | 'delete';
   insightData?: InsightData;
+  model?: string;
+  provider?: string;
 }
 
 interface InsightData {
@@ -31,13 +35,10 @@ interface InsightData {
   comparisons?: string[];
 }
 
-const AnalyticsSidebar = ({ isOpen, onClose, onChartGenerated, onChartModified, onFilterChange }: AnalyticsSidebarProps) => {
-  const { dataset, analysis } = useData();
+const AnalyticsSidebar = ({ isOpen, onClose, dataset, charts: _charts, onAddChart, onReplaceLatestChart, onRemoveLatestChart, onFilterChange }: AnalyticsSidebarProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [generatedCharts, setGeneratedCharts] = useState<ChartConfig[]>([]);
-  const [currentFilters, setCurrentFilters] = useState<Record<string, string>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,7 +47,7 @@ const AnalyticsSidebar = ({ isOpen, onClose, onChartGenerated, onChartModified, 
         {
           id: '1',
           role: 'assistant',
-          content: `Hi! I'm your AI analytics assistant with full dashboard control. I can:
+          content: `Hi! I'm your AI analytics assistant with full dashboard control. I use neural-chat:7b when available and can:
 
 **Chart Commands:**
 • "Create a bar chart for salary by country"
@@ -79,443 +80,93 @@ What would you like to do?`,
     scrollToBottom();
   }, [messages]);
 
-  const generateChartFromQuery = useCallback((query: string, existingChart?: ChartConfig): ChartConfig | null => {
-    if (!dataset) return null;
-    
-    const q = query.toLowerCase();
-    const colsOriginal = dataset.columns.map(c => c.name);
-    const rows = dataset.rows;
-    
-    let xKey = '';
-    let yKey = '';
-    let chartType = existingChart?.type || 'bar';
-    let aggregation: 'sum' | 'avg' | 'count' | 'min' | 'max' = 'sum';
-    
-    const numericCols = colsOriginal.filter(c => {
-      const col = dataset.columns.find(col => col.name === c);
-      return col?.type === 'number';
-    });
-    const catCols = colsOriginal.filter(c => {
-      const col = dataset.columns.find(col => col.name === c);
-      return col?.type === 'string';
-    });
-    
-    const findCol = (patterns: string[], list: string[]) => {
-      for (const p of patterns) {
-        const idx = list.findIndex(c => c.includes(p.toLowerCase()));
-        if (idx !== -1) return colsOriginal[idx];
-      }
-      return list[0];
+  const applyDashboardCommand = async (query: string) => {
+    if (!dataset?.id) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: query,
+      type: "text",
     };
-    
-    xKey = findCol(['country', 'region', 'city', 'category', 'education', 'job', 'role', 'gender', 'status'], catCols) || colsOriginal[0];
-    yKey = findCol(['salary', 'revenue', 'profit', 'amount', 'value', 'bonus', 'experience', 'count', 'total'], numericCols) || numericCols[1] || colsOriginal[1];
-    
-    if (q.includes('line') || q.includes('trend') || q.includes('over time') || q.includes('growth')) {
-      chartType = 'line';
-    } else if (q.includes('pie') || q.includes('distribution') || q.includes('percentage') || q.includes('share')) {
-      chartType = 'pie';
-    } else if (q.includes('scatter') || q.includes('correlation') || q.includes('vs')) {
-      chartType = 'scatter';
-    } else if (q.includes('area') || q.includes('growth')) {
-      chartType = 'area';
-    } else if (q.includes('bar')) {
-      chartType = 'bar';
-    } else if (q.includes('radar')) {
-      chartType = 'radar';
-    }
-    
-    if (q.includes('average') || q.includes('avg') || q.includes('mean')) {
-      aggregation = 'avg';
-    } else if (q.includes('count') || q.includes('total people') || q.includes('how many')) {
-      aggregation = 'count';
-    } else if (q.includes('minimum') || q.includes('min')) {
-      aggregation = 'min';
-    } else if (q.includes('maximum') || q.includes('max')) {
-      aggregation = 'max';
-    }
-    
-    const xKeyOriginal = colsOriginal.find(c => c.toLowerCase() === xKey) || colsOriginal[0];
-    const yKeyOriginal = numericCols.find(c => c.toLowerCase() === yKey) || numericCols[0] || colsOriginal.find(c => c !== xKeyOriginal);
-    
-    const dataMap: Record<string, number> = {};
-    const yKeyActual = yKeyOriginal;
-    
-    rows.forEach((row: Record<string, unknown>) => {
-      const xVal = String(row[xKeyOriginal] || 'Unknown');
-      let yVal = Number(row[yKeyActual]) || 0;
-      
-      if (aggregation === 'count') {
-        yVal = 1;
-      } else if (aggregation === 'min') {
-        yVal = Number(row[yKeyActual]) || 0;
-      } else if (aggregation === 'max') {
-        yVal = Number(row[yKeyActual]) || 0;
+
+    setMessages((prev) => [...prev, userMessage]);
+    setIsProcessing(true);
+
+    try {
+      const command = await api.sendDashboardCommand(dataset.id, query);
+
+      let type: ChatMessage["type"] = "text";
+
+      if (command.action === "GENERATE_CHART" && command.chart) {
+        onAddChart?.(command.chart);
+        type = "chart";
       }
-      
-      if (!dataMap[xVal]) dataMap[xVal] = 0;
-      
-      if (aggregation === 'count') {
-        dataMap[xVal] += 1;
-      } else if (aggregation === 'avg') {
-        dataMap[xVal] += yVal;
-      } else {
-        dataMap[xVal] += yVal;
+
+      if (command.action === "MODIFY_CHART" && command.chart) {
+        onReplaceLatestChart?.(command.chart);
+        type = "chart";
       }
-    });
-    
-    let data = Object.entries(dataMap)
-      .map(([name, value]) => ({ [xKeyOriginal]: name, [yKeyActual]: aggregation === 'avg' && dataMap[name] > 0 ? value / rows.filter((r: Record<string, unknown>) => String(r[xKeyOriginal]) === name).length : value }))
-      .filter(d => d[yKeyActual] !== undefined && d[yKeyActual] !== null);
-    
-    if (aggregation === 'avg') {
-      const counts: Record<string, number> = {};
-      rows.forEach((row: Record<string, unknown>) => {
-        const xVal = String(row[xKeyOriginal] || 'Unknown');
-        counts[xVal] = (counts[xVal] || 0) + 1;
-      });
-      data = data.map(d => ({
-        ...d,
-        [yKeyActual]: dataMap[d[xKeyOriginal] as string] / (counts[d[xKeyOriginal] as string] || 1)
-      }));
+
+      if (command.action === "DELETE_CHART") {
+        onRemoveLatestChart?.();
+        type = "action";
+      }
+
+      if (command.action === "FILTER" && command.filters) {
+        onFilterChange?.(command.filters);
+        type = "action";
+      }
+
+      if (command.action === "CLEAR_FILTERS") {
+        onFilterChange?.({});
+        type = "action";
+      }
+
+      if (command.action === "GENERATE_KPI") {
+        type = "insight";
+      }
+
+      const kpiText = command.kpis?.length
+        ? "\n\n" + command.kpis.map((k) => `• ${k.title}: ${k.value}`).join("\n")
+        : "";
+
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        type,
+        content: [
+          command.message,
+          kpiText,
+          command.schemaOnly ? "\n\nSchema-only mode: raw rows were not sent to AI." : "",
+          command.model ? `\nModel: ${command.model}` : "",
+          command.aiError ? `\nFallback used: ${command.aiError}` : "",
+        ].join(""),
+        chartConfig: command.chart,
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          type: "text",
+          content: "Sorry, I could not control the dashboard for that request.",
+        },
+      ]);
+    } finally {
+      setIsProcessing(false);
     }
-    
-    data.sort((a, b) => Number(b[yKeyActual] ?? 0) - Number(a[yKeyActual] ?? 0));
-    data = data.slice(0, 10);
-    
-    if (data.length === 0) return null;
-    
-    const chartTitle = existingChart 
-      ? `Modified: ${yKeyActual.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} by ${xKeyOriginal.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`
-      : `${aggregation === 'avg' ? 'Average ' : ''}${yKeyActual.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} by ${xKeyOriginal.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
-    
-    return {
-      type: chartType as ChartConfig['type'],
-      title: chartTitle,
-      xKey: xKeyOriginal,
-      yKey: yKeyActual,
-      data,
-    };
-  }, [dataset]);
+  };
 
   const handleQuery = useCallback(async () => {
     if (!input.trim() || !dataset) return;
-    
-    const userQuery = input.trim();
+    const q = input.trim();
     setInput('');
-    setIsProcessing(true);
-    
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: userQuery,
-      type: 'text'
-    };
-    setMessages(prev => [...prev, userMessage]);
-    
-    setTimeout(() => {
-      const columnNames = dataset.columns.map(c => c.name);
-      const command = processQuery(userQuery, columnNames);
-      const q = userQuery.toLowerCase();
-      
-      let response = '';
-      let chartConfig: ChartConfig | undefined = undefined;
-      let messageType: ChatMessage['type'] = 'text';
-      
-      const parseChartCommand = (query: string) => {
-        const lowerQ = query.toLowerCase();
-        let chartType = 'bar';
-        let xAxis = dataset.columns[0]?.name || 'category';
-        let yAxis = dataset.columns.find(c => c.type === 'number')?.name || dataset.columns[1]?.name || 'value';
-        
-        if (lowerQ.includes('line')) chartType = 'line';
-        else if (lowerQ.includes('pie')) chartType = 'pie';
-        else if (lowerQ.includes('scatter')) chartType = 'scatter';
-        else if (lowerQ.includes('area')) chartType = 'area';
-        else if (lowerQ.includes('radar')) chartType = 'radar';
-        
-        const byMatch = lowerQ.match(/by\s+(\w+)/);
-        if (byMatch) {
-          const targetCol = byMatch[1].toLowerCase();
-          const found = dataset.columns.find(c => c.name.toLowerCase().includes(targetCol));
-          if (found) xAxis = found.name;
-        }
-        
-        const forMatch = lowerQ.match(/for\s+(\w+)/);
-        if (forMatch) {
-          const targetCol = forMatch[1].toLowerCase();
-          const found = dataset.columns.find(c => c.name.toLowerCase().includes(targetCol));
-          if (found) yAxis = found.name;
-        }
-        
-        return { type: chartType, xAxis, yAxis };
-      };
-      
-      const handleDelete = () => {
-        const lastIdx = generatedCharts.length - 1;
-        if (lastIdx >= 0) {
-          setGeneratedCharts(prev => prev.slice(0, -1));
-          return `Deleted chart "${generatedCharts[lastIdx].title}". ${generatedCharts.length - 1} charts remaining.`;
-        }
-        return 'No charts to delete.';
-      };
-      
-      const parseFilter = (query: string) => {
-        const filterPatterns = [
-          /filter\s+by\s+(\w+)\s*=\s*(.+)/i,
-          /filter\s+(\w+)\s*:\s*(.+)/i,
-          /show\s+only\s+(\w+)\s*=\s*(.+)/i,
-          /show\s+(\w+)\s+is\s+(.+)/i,
-        ];
-        
-        for (const pattern of filterPatterns) {
-          const match = query.match(pattern);
-          if (match) {
-            const colName = match[1].trim();
-            const colValue = match[2].trim().replace(/["']/g, '');
-            const col = dataset.columns.find(c => c.name.toLowerCase().includes(colName.toLowerCase()));
-            if (col) {
-              return { column: col.name, value: colValue };
-            }
-          }
-        }
-        return null;
-      };
-      
-      if (q.includes('delete') || q.includes('remove') || q.includes('clear chart')) {
-        response = handleDelete();
-        messageType = 'action';
-      }
-      else if ((q.includes('change') || q.includes('convert') || q.includes('switch') || q.includes('transform')) && q.includes('chart')) {
-        const existingChart = generatedCharts[generatedCharts.length - 1];
-        const modQuery = userQuery.replace(/change|convert|switch|transform/g, '').trim();
-        chartConfig = generateChartFromQuery(modQuery + ' line', existingChart);
-        if (chartConfig && existingChart) {
-          const newType = q.includes('line') ? 'line' : q.includes('pie') ? 'pie' : q.includes('scatter') ? 'scatter' : q.includes('area') ? 'area' : 'bar';
-          chartConfig = { ...chartConfig, type: newType as ChartConfig['type'] };
-        }
-        if (chartConfig) {
-          response = `Modified chart type. X: ${chartConfig.xKey}, Y: ${chartConfig.yKey}.`;
-          messageType = 'chart';
-        } else {
-          response = 'Could not modify chart. Try specifying a chart type like "change to line chart".';
-        }
-      }
-      else if (command.action === 'FILTER' && command.filter) {
-        const filterKey = Object.keys(command.filter)[0];
-        const filterVal = command.filter[filterKey];
-        const newFilters = { ...currentFilters, [filterKey]: filterVal };
-        setCurrentFilters(newFilters);
-        onFilterChange?.(newFilters);
-        response = `Applied filter: ${filterKey} = ${filterVal}. ${Object.keys(newFilters).length} active filter(s).`;
-        messageType = 'action';
-      }
-      else if (q.includes('filter') || q.includes('show only') || q.includes('where')) {
-        const filter = parseFilter(userQuery);
-        if (filter) {
-          const newFilters = { ...currentFilters, [filter.column]: filter.value };
-          setCurrentFilters(newFilters);
-          onFilterChange?.(newFilters);
-          response = `Filter applied: ${filter.column} = "${filter.value}".`;
-          messageType = 'action';
-        } else {
-          response = 'Could not parse filter. Try: "filter by country = USA" or "show only senior roles".';
-          messageType = 'error';
-        }
-      }
-      else if (q.includes('clear') && (q.includes('filter') || q.includes('all'))) {
-        setCurrentFilters({});
-        onFilterChange?.({});
-        response = 'All filters cleared.';
-        messageType = 'action';
-      }
-      else if (q.includes('generate') || q.includes('create') || q.includes('show') || q.includes('draw')) {
-        if (q.includes('chart') || q.includes('graph')) {
-          chartConfig = generateChartFromQuery(userQuery);
-          if (chartConfig) {
-            response = `**Chart Generated:** ${chartConfig.title}
-
-Type: ${chartConfig.type}
-X-Axis: ${chartConfig.xKey}
-Y-Axis: ${chartConfig.yKey}
-Data Points: ${chartConfig.data.length}`;
-            messageType = 'chart';
-          } else {
-            response = 'Could not generate chart. Try: "create bar chart for salary by country"';
-            messageType = 'error';
-          }
-        } else {
-          chartConfig = generateChartFromQuery(userQuery);
-          if (chartConfig) {
-            response = `Generated: ${chartConfig.title}`;
-            messageType = 'chart';
-          }
-        }
-      }
-      else if (q.includes('top') || q.includes('bottom') || q.includes('lowest') || q.includes('highest')) {
-        const nMatch = userQuery.match(/top\s+(\d+)|bottom\s+(\d+)|first\s+(\d+)/i);
-        const n = nMatch ? (Number(nMatch[1] || nMatch[2] || nMatch[3]) || 5) : 5;
-        chartConfig = generateChartFromQuery(userQuery);
-        if (chartConfig && chartConfig.data) {
-          if (q.includes('bottom') || q.includes('lowest')) {
-            chartConfig.data = [...chartConfig.data].reverse().slice(0, n);
-          } else {
-            chartConfig.data = chartConfig.data.slice(0, n);
-          }
-          chartConfig.title = `Top ${n} ${chartConfig.xKey}`;
-          response = `Showing top ${n} results: ${chartConfig.xKey}`;
-          messageType = 'chart';
-        } else {
-          response = 'Could not generate top/bottom chart.';
-          messageType = 'error';
-        }
-      }
-      else if (q.includes('compare') || q.includes('versus') || q.includes('vs')) {
-        chartConfig = generateChartFromQuery(userQuery);
-        if (chartConfig) {
-          chartConfig.title = `Comparison: ${chartConfig.xKey}`;
-          response = `Generated comparison chart between ${chartConfig.xKey} values.`;
-          messageType = 'chart';
-        }
-      }
-      else if (q.includes('trend') || q.includes('over time') || q.includes('growth')) {
-        chartConfig = generateChartFromQuery('line chart ' + userQuery);
-        if (chartConfig) {
-          response = `**Trend Analysis:** ${chartConfig.title}
-
-Shows data variation over time/sequence.
-Type: Line chart with smooth curves.`;
-          messageType = 'chart';
-        } else {
-          response = 'Could not generate trend chart.';
-          messageType = 'error';
-        }
-      }
-      else if (q.includes('distribution') || q.includes('spread') || q.includes('percentage')) {
-        chartConfig = generateChartFromQuery('pie chart ' + userQuery);
-        if (chartConfig) {
-          response = `**Distribution:** ${chartConfig.title}
-
-Shows proportion of each category.`;
-          messageType = 'chart';
-        }
-      }
-      else if (q.includes('what is the dataset') || q.includes('describe') || q.includes('columns')) {
-        response = `**Dataset: ${dataset.name}**
-
-• Total Rows: ${dataset.rowCount.toLocaleString()}
-• Total Columns: ${dataset.columns.length}
-
-**Columns:**
-${dataset.columns.map(c => `• ${c.name} (${c.type})`).join('\n')}
-
-**Quick Actions:**
-• "Create bar chart"
-• "Filter by country = USA"
-• "Show top 10"`;
-        messageType = 'insight';
-      }
-      else if (q.includes('insight') || q.includes('analyze')) {
-        if (analysis?.insights && analysis.insights.length > 0) {
-          response = '**AI Insights:**\n\n';
-          analysis.insights.forEach((insight: Record<string, unknown>) => {
-            response += `• **${insight.title}**: ${insight.message}\n`;
-          });
-        } else {
-          const numCols = dataset.columns.filter(c => c.type === 'number');
-          if (numCols.length > 0) {
-            const col = numCols[0].name;
-            const values = dataset.rows.map((r: Record<string, unknown>) => Number(r[col])).filter(v => !isNaN(v));
-            if (values.length > 0) {
-              const sum = values.reduce((a, b) => a + b, 0);
-              const avg = sum / values.length;
-              response = `**Quick Analysis - ${col}:**\n\n• Total: ${sum.toLocaleString()}\n• Average: ${avg.toFixed(2)}\n• Records: ${values.length}\n\nTry "create chart" to visualize this data.`;
-            }
-          } else {
-            response = 'No detailed insights available yet. Upload data to get AI insights.';
-          }
-        }
-        messageType = 'insight';
-      }
-      else if (q.includes('kpi') || q.includes('metric') || q.includes('summary')) {
-        const numCols = dataset.columns.filter(c => c.type === 'number');
-        response = '**Key Metrics:**\n\n';
-        
-        numCols.slice(0, 3).forEach(col => {
-          const values = dataset.rows.map((r: Record<string, unknown>) => Number(r[col.name])).filter(v => !isNaN(v));
-          if (values.length > 0) {
-            const sum = values.reduce((a, b) => a + b, 0);
-            const avg = sum / values.length;
-            const max = Math.max(...values);
-            const min = Math.min(...values);
-            response += `**${col.name}:**\n  Total: ${sum.toLocaleString()}\n  Avg: ${avg.toFixed(2)}\n  Range: ${min.toLocaleString()} - ${max.toLocaleString()}\n\n`;
-          }
-        });
-        messageType = 'insight';
-      }
-      else if (q.includes('hello') || q.includes('hi') || q.includes('hey')) {
-        response = `Hello! I can help you control the dashboard:
-
-**Charts:**
-• "Create bar chart"
-• "Change to line chart"
-• "Show scatter plot"
-
-**Filters:**
-• "Filter by country = USA"
-• "Clear filters"
-
-**Data:**
-• "Show top 10"
-• "Compare metrics"
-
-What would you like?`;
-      }
-      else {
-        chartConfig = generateChartFromQuery(userQuery);
-        if (chartConfig) {
-          response = `**Generated:** ${chartConfig.title}`;
-          messageType = 'chart';
-        } else {
-          response = `I understood: "${userQuery}"
-
-Try these commands:
-• "Create a bar chart"
-• "Filter by country = USA"
-• "Show top 5"
-• "Change to line chart"`;
-          messageType = 'error';
-        }
-      }
-      
-      const assistantMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response,
-        type: messageType,
-        chartConfig
-      };
-      
-      setMessages(prev => [...prev, assistantMessage]);
-      
-      if (chartConfig) {
-        // Check for duplicates before adding
-        const exists = generatedCharts.some(c => 
-          c.title === chartConfig.title && 
-          c.xKey === chartConfig.xKey && 
-          c.yKey === chartConfig.yKey
-        );
-        if (!exists) {
-          const newCharts = [...generatedCharts, chartConfig];
-          setGeneratedCharts(newCharts);
-          onChartGenerated?.(chartConfig);
-          onChartModified?.(chartConfig);
-        }
-      }
-      
-      setIsProcessing(false);
-    }, 600);
-  }, [input, dataset, analysis, generateChartFromQuery, onChartGenerated, onChartModified, onFilterChange, currentFilters, generatedCharts]);
+    await applyDashboardCommand(q);
+  }, [input, dataset]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -582,6 +233,11 @@ Try these commands:
                     <BarChart3 className="h-3 w-3" />
                     Chart generated
                   </div>
+                </div>
+              )}
+              {msg.model && (
+                <div className="mt-2 text-[11px] text-muted-foreground">
+                  Model: {msg.model}
                 </div>
               )}
             </div>

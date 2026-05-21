@@ -3,9 +3,16 @@ import { AlertTriangle } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
 import { api } from '@/features/data/api/dataApi';
 
+type Anomaly = {
+  column?: string;
+  explanation?: string;
+  type?: string;
+  severity?: 'high' | 'medium' | 'low';
+};
+
 const AnomalyDetectionPage = () => {
   const { dataset } = useData();
-  const [anomalies, setAnomalies] = useState([]);
+  const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -14,8 +21,8 @@ const AnomalyDetectionPage = () => {
     const loadAnomalies = async () => {
       setLoading(true);
       try {
-        const response = await api.get(`/datasets/${dataset.id}/ai/anomalies`);
-        setAnomalies(response.data.anomalies || []);
+        const response = await api.getAIAnomalies(dataset.id);
+        setAnomalies(Array.isArray(response.anomalies) ? response.anomalies as Anomaly[] : []);
       } catch (error) {
         console.error("Failed to load anomalies:", error);
       } finally {
@@ -48,7 +55,7 @@ const AnomalyDetectionPage = () => {
                 <div className="flex-1">
                   <div className="font-semibold">{anomaly.column || 'Dataset'}</div>
                   <div className="text-sm text-gray-600">{anomaly.explanation}</div>
-                  <div className="text-xs text-gray-500 mt-2">Type: {anomaly.type}</div>
+                  <div className="text-xs text-gray-500 mt-2">Type: {anomaly.type || 'unknown'}</div>
                 </div>
                 <span className={`px-3 py-1 rounded text-sm font-semibold ${anomaly.severity === 'high' ? 'bg-red-200 text-red-800' : 'bg-yellow-200 text-yellow-800'}`}>
                   {anomaly.severity}

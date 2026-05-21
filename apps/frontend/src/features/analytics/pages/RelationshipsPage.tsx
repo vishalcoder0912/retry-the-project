@@ -3,9 +3,17 @@ import { TrendingUp } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
 import { api } from '@/features/data/api/dataApi';
 
+type Relationship = {
+  column1?: string;
+  column2?: string;
+  correlation?: number | string;
+  direction?: string;
+  strength?: 'strong' | 'moderate' | 'weak' | string;
+};
+
 const RelationshipsPage = () => {
   const { dataset } = useData();
-  const [relationships, setRelationships] = useState([]);
+  const [relationships, setRelationships] = useState<Relationship[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -14,8 +22,8 @@ const RelationshipsPage = () => {
     const loadRelationships = async () => {
       setLoading(true);
       try {
-        const response = await api.get(`/datasets/${dataset.id}/ai/relationships`);
-        setRelationships(response.data.relationships || []);
+        const response = await api.getAIRelationships(dataset.id);
+        setRelationships(Array.isArray(response.relationships) ? response.relationships as Relationship[] : []);
       } catch (error) {
         console.error("Failed to load relationships:", error);
       } finally {
@@ -28,7 +36,7 @@ const RelationshipsPage = () => {
 
   if (loading) return <div className="p-4">Analyzing relationships...</div>;
 
-  const getStrengthColor = (strength) => {
+  const getStrengthColor = (strength?: string) => {
     switch (strength) {
       case 'strong':
         return 'bg-green-200 text-green-800';
@@ -57,21 +65,21 @@ const RelationshipsPage = () => {
                   <span className="font-semibold">{rel.column1} ↔ {rel.column2}</span>
                 </div>
                 <span className={`px-3 py-1 rounded text-sm font-semibold ${getStrengthColor(rel.strength)}`}>
-                  {rel.strength}
+                  {rel.strength || 'unknown'}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-4 text-sm">
                 <div>
                   <div className="text-gray-600">Correlation</div>
-                  <div className="text-lg font-bold">{rel.correlation}</div>
+                  <div className="text-lg font-bold">{rel.correlation ?? 'n/a'}</div>
                 </div>
                 <div>
                   <div className="text-gray-600">Direction</div>
-                  <div className="text-lg font-bold">{rel.direction}</div>
+                  <div className="text-lg font-bold">{rel.direction || 'n/a'}</div>
                 </div>
                 <div>
                   <div className="text-gray-600">Strength</div>
-                  <div className="text-lg font-bold">{rel.strength}</div>
+                  <div className="text-lg font-bold">{rel.strength || 'unknown'}</div>
                 </div>
               </div>
             </div>

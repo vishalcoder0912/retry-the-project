@@ -3,9 +3,16 @@ import { AlertCircle, CheckCircle } from 'lucide-react';
 import { useData } from '@/features/data/context/useData';
 import { api } from '@/features/data/api/dataApi';
 
+type CleaningSuggestion = {
+  column?: string;
+  description?: string;
+  impact?: string;
+  priority?: 'high' | 'medium' | 'low';
+};
+
 const DataCleaningPage = () => {
   const { dataset } = useData();
-  const [suggestions, setSuggestions] = useState([]);
+  const [suggestions, setSuggestions] = useState<CleaningSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -14,8 +21,8 @@ const DataCleaningPage = () => {
     const loadSuggestions = async () => {
       setLoading(true);
       try {
-        const response = await api.get(`/datasets/${dataset.id}/ai/cleaning`);
-        setSuggestions(response.data.suggestions || []);
+        const response = await api.getAICleaning(dataset.id);
+        setSuggestions(Array.isArray(response.suggestions) ? response.suggestions as CleaningSuggestion[] : []);
       } catch (error) {
         console.error("Failed to load suggestions:", error);
       } finally {
@@ -46,16 +53,16 @@ const DataCleaningPage = () => {
       ) : (
         <div className="space-y-3">
           {suggestions.map((sug, i) => (
-            <div key={i} className={`border rounded p-4 ${priorityColor[sug.priority]}`}>
+            <div key={i} className={`border rounded p-4 ${priorityColor[sug.priority || 'low']}`}>
               <div className="flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 mt-1" />
                 <div className="flex-1">
-                  <div className="font-semibold">{sug.column}</div>
-                  <div className="text-sm mt-1">{sug.description}</div>
-                  <div className="text-xs mt-2 opacity-75">Impact: {sug.impact}</div>
+                  <div className="font-semibold">{sug.column || 'Dataset'}</div>
+                  <div className="text-sm mt-1">{sug.description || 'Review this data quality suggestion.'}</div>
+                  <div className="text-xs mt-2 opacity-75">Impact: {sug.impact || 'n/a'}</div>
                 </div>
                 <span className="px-2 py-1 rounded text-xs font-semibold uppercase">
-                  {sug.priority}
+                  {sug.priority || 'low'}
                 </span>
               </div>
             </div>

@@ -135,11 +135,13 @@ const insertChatMessage = db.prepare(`
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const getDatasetRecord = db.prepare("SELECT * FROM datasets WHERE id = ?");
+const listDatasetRecords = db.prepare("SELECT * FROM datasets ORDER BY uploaded_at DESC");
 const getDatasetColumns = db.prepare("SELECT name, type, sample_json FROM dataset_columns WHERE dataset_id = ? ORDER BY id ASC");
 const getDatasetRows = db.prepare("SELECT id, row_index, row_json FROM dataset_rows WHERE dataset_id = ? ORDER BY row_index ASC");
 const getChatMessageRows = db.prepare("SELECT * FROM chat_messages WHERE dataset_id = ? ORDER BY created_at ASC");
 const getDatasetRow = db.prepare("SELECT id, row_json FROM dataset_rows WHERE dataset_id = ? AND row_index = ?");
 const updateDatasetRow = db.prepare("UPDATE dataset_rows SET row_json = ? WHERE dataset_id = ? AND row_index = ?");
+const deleteDatasetById = db.prepare("DELETE FROM datasets WHERE id = ?");
 
 const mapDataset = (datasetRecord) => {
   if (!datasetRecord) return null;
@@ -205,6 +207,8 @@ export const createDataset = ({ name, fileName = null, columns, rows, sourceType
 
 export const getDatasetById = (datasetId) => mapDataset(getDatasetRecord.get(datasetId));
 
+export const listDatasets = () => listDatasetRecords.all().map(mapDataset);
+
 export const getCurrentDatasetId = () => getMeta.get("current_dataset_id")?.value ?? null;
 
 export const getCurrentDataset = () => {
@@ -242,6 +246,14 @@ export const saveChatMessages = (datasetId, messages) => {
   });
 };
 
+export const saveChatMessage = (datasetId, message) => {
+  saveChatMessages(datasetId, [message]);
+};
+
+export const clearChatMessages = (datasetId) => {
+  db.prepare("DELETE FROM chat_messages WHERE dataset_id = ?").run(datasetId);
+};
+
 export const patchDatasetRow = ({ datasetId, rowId, column, value }) => {
   const existingRow = getDatasetRow.get(datasetId, rowId);
   if (!existingRow) {
@@ -255,6 +267,22 @@ export const patchDatasetRow = ({ datasetId, rowId, column, value }) => {
 
   updateDatasetRow.run(JSON.stringify(nextRow), datasetId, rowId);
   return getDatasetById(datasetId);
+};
+
+export const deleteDataset = (datasetId) => {
+  const existing = getDatasetRecord.get(datasetId);
+  if (!existing) {
+    return false;
+  }
+
+  withTransaction(() => {
+    deleteDatasetById.run(datasetId);
+    if (getCurrentDatasetId() === datasetId) {
+      setMeta.run("current_dataset_id", "");
+    }
+  });
+
+  return true;
 };
 
 export const getDatabasePath = () => databasePath;
