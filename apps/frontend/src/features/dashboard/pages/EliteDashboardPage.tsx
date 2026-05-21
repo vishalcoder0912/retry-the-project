@@ -16,16 +16,16 @@ import {
   X,
 } from "lucide-react";
 import SchemaDashboardChat from "@/features/dashboard/components/SchemaDashboardChat";
+import { useDashboardAiController } from "@/features/dashboard/hooks/useDashboardAiController";
 import SmartChartCard from "@/features/dashboard/components/SmartChartCard";
+import { useSchemaTrainedDashboard } from "@/features/dashboard/hooks/useSchemaTrainedDashboard";
 import { useData } from "@/features/data/context/useData";
-import type { DashboardCommandResponse } from "@/features/data/api/dataApi";
 import type { ChartType } from "@/features/dashboard/types/dashboardTypes";
 import {
   applyFilters,
   buildChartFromSpec,
   buildDataQualityScore,
   buildDatasetProfile,
-  buildDefaultCharts,
   buildKpiFromSpec,
   buildKpis,
   cleanDatasetRows,
@@ -121,14 +121,43 @@ export default function EliteDashboardPage() {
   const [hiddenChartIds, setHiddenChartIds] = useState<Set<string>>(new Set());
   const [chartTypeOverrides, setChartTypeOverrides] = useState<Record<string, ChartType>>({});
   const [showSchema, setShowSchema] = useState(false);
+  const [dashboardMode, setDashboardMode] = useState<"Executive" | "Analyst" | "Story">("Executive");
 
   const rawRows = useMemo<Row[]>(() => (dataset?.rows || []) as Row[], [dataset?.rows]);
   const rows = useMemo(() => cleanDatasetRows(rawRows), [rawRows]);
   const profile = useMemo(() => buildDatasetProfile(rows), [rows]);
   const quality = useMemo(() => buildDataQualityScore(rows), [rows]);
   const filteredRows = useMemo(() => applyFilters(rows, filters), [rows, filters]);
-  const baseCharts = useMemo(() => buildDefaultCharts(filteredRows), [filteredRows]);
   const defaultKpis = useMemo(() => buildKpis(filteredRows), [filteredRows]);
+  const tableColumns = profile.columns.map((column) => column.name);
+  const schemaDashboard = useSchemaTrainedDashboard({
+    datasetId: dataset?.id || "local-dataset",
+    datasetName: dataset?.name || "Uploaded Dataset",
+    rows,
+    columns: dataset?.columns || tableColumns,
+    dictionaryRows: (dataset as any)?.dictionaryRows || (dataset as any)?.dataDictionary || [],
+    autoLoad: Boolean(rows.length),
+  });
+  const aiController = useDashboardAiController({
+    dataset: {
+      id: dataset?.id || "local-dataset",
+      name: dataset?.name || "Uploaded Dataset",
+      rows,
+      columns: dataset?.columns || tableColumns,
+    },
+    initialDashboard: {
+      kpis: schemaDashboard.kpiSpecs as any,
+      charts: schemaDashboard.chartSpecs as any,
+      source: schemaDashboard.provider,
+    },
+    initialFilters: filters,
+  });
+
+  useEffect(() => {
+    const current = JSON.stringify(filters);
+    const next = JSON.stringify(aiController.filters);
+    if (current !== next) setFilters(aiController.filters);
+  }, [aiController.filters, filters]);
 
   useEffect(() => {
     if (!dataset?.id) return;
@@ -145,29 +174,49 @@ export default function EliteDashboardPage() {
     saveDashboardState(dataset.id, { filters, manualCharts, manualKpis });
   }, [dataset?.id, filters, manualCharts, manualKpis]);
 
-  const autoCharts = useMemo(
+  const trainedCharts = useMemo(
     () =>
-      baseCharts.map((chart) =>
-        chartTypeOverrides[chart.id]
-          ? buildChartFromSpec(filteredRows, { ...chart, type: chartTypeOverrides[chart.id] })
-          : chart,
-      ),
-    [baseCharts, chartTypeOverrides, filteredRows],
+      schemaDashboard.chartSpecs
+        .map((spec) =>
+          buildChartFromSpec(filteredRows, {
+            ...spec,
+            type: chartTypeOverrides[spec.id || spec.title] || spec.type,
+          } as any),
+        )
+        .filter(Boolean),
+    [chartTypeOverrides, filteredRows, schemaDashboard.chartSpecs],
   );
 
   const charts = useMemo(() => {
-    const merged = [...manualCharts, ...autoCharts].filter((chart) => !hiddenChartIds.has(chart.id));
-    const seen = new Set<string>();
-    return merged.filter((chart) => {
-      const key = `${chart.title}|${chart.type}|${chart.xKey}|${chart.yKey}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [autoCharts, hiddenChartIds, manualCharts]);
+    const aiCharts = aiController.charts.length ? aiController.charts : trainedCharts;
+    const merged = [...manualCharts, ...aiCharts]
+      .filter(Boolean)
+      .filter((chart) => !hiddenChartIds.has(chart.id));
 
-  const kpis = useMemo(() => [...defaultKpis, ...manualKpis].slice(0, 8), [defaultKpis, manualKpis]);
-  const tableColumns = profile.columns.map((column) => column.name);
+    const seen = new Set<string>();
+
+    return merged
+      .filter((chart) => {
+        const key = `${chart.title}|${chart.type}|${chart.xKey}|${chart.yKey}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 7);
+  }, [aiController.charts, hiddenChartIds, manualCharts, trainedCharts]);
+
+  const trainedKpis = useMemo(
+    () =>
+      schemaDashboard.kpiSpecs
+        .map((spec) => buildKpiFromSpec(filteredRows, spec as any))
+        .filter(Boolean),
+    [filteredRows, schemaDashboard.kpiSpecs],
+  );
+
+  const kpis = useMemo(
+    () => [...(aiController.kpis.length ? aiController.kpis : trainedKpis.length ? trainedKpis : defaultKpis), ...manualKpis].slice(0, 8),
+    [aiController.kpis, defaultKpis, manualKpis, trainedKpis],
+  );
   const primaryFilter = profile.primaryCategory;
   const dateColumn = profile.dateColumn;
 
@@ -192,6 +241,7 @@ export default function EliteDashboardPage() {
 
   function updateChartType(chart: DashboardChart, type: ChartType) {
     const converted = buildChartFromSpec(filteredRows, { ...chart, type });
+    aiController.convertChart(chart.id, type);
     setManualCharts((current) =>
       current.some((item) => item.id === chart.id)
         ? current.map((item) => (item.id === chart.id ? converted : item))
@@ -241,37 +291,32 @@ export default function EliteDashboardPage() {
 
   function resetDashboard() {
     setFilters({});
+    aiController.setFilters({});
     setManualCharts([]);
     setManualKpis([]);
     setHiddenChartIds(new Set());
     setChartTypeOverrides({});
   }
 
-  function applyDashboardCommand(command: DashboardCommandResponse) {
-    if (command.action === "FILTER" && command.filters) {
-      setFilters((current) => ({ ...current, ...command.filters }));
-      return;
+  function applyAiDashboardCommand(command: any) {
+    if (!command) return;
+
+    if (command.action === "GENERATE_DASHBOARD") {
+      const plan = command.dashboardPlan || command.dashboard;
+
+      if (plan?.charts?.length || plan?.kpis?.length) {
+        schemaDashboard.applyCommand(command);
+
+        setManualCharts([]);
+        setManualKpis([]);
+        setHiddenChartIds(new Set());
+
+        return;
+      }
     }
 
-    if (command.action === "CLEAR_FILTERS") {
-      setFilters({});
-      return;
-    }
-
-    if (command.action === "DELETE_CHART") {
-      const last = charts.at(-1);
-      if (last) removeChart(last);
-      return;
-    }
-
-    if ((command.action === "GENERATE_KPI" || command.action === "ADD_KPI") && command.kpiSpec) {
-      setManualKpis((current) => [buildKpiFromSpec(filteredRows, command.kpiSpec!), ...current]);
-      return;
-    }
-
-    if ((command.action === "GENERATE_CHART" || command.action === "MODIFY_CHART") && command.chartSpec) {
-      setManualCharts((current) => [buildChartFromSpec(filteredRows, command.chartSpec!), ...current]);
-    }
+    schemaDashboard.applyCommand(command);
+    aiController.applyCommand(command);
   }
 
   return (
@@ -311,7 +356,38 @@ export default function EliteDashboardPage() {
           </div>
         </header>
 
-        <div className="grid gap-5 2xl:grid-cols-[1fr_360px]">
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/70 p-3">
+          <div className="flex rounded-xl border border-slate-700/70 bg-slate-950/70 p-1">
+            {(["Executive", "Analyst", "Story"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setDashboardMode(mode)}
+                className={[
+                  "min-w-24 rounded-lg px-4 py-2 text-sm font-medium transition",
+                  dashboardMode === mode
+                    ? "bg-violet-600 text-white shadow-lg shadow-violet-900/30"
+                    : "text-slate-300 hover:bg-slate-800 hover:text-white",
+                ].join(" ")}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-200">
+              {schemaDashboard.chartSpecs.length || charts.length} charts
+            </span>
+            {schemaDashboard.memoryMatch && (
+              <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-cyan-200">
+                trained memory matched
+              </span>
+            )}
+            {schemaDashboard.loading && <span>Training dashboard...</span>}
+          </div>
+        </section>
+
+        <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_460px]">
           <main className="space-y-5">
             <section className="flex flex-wrap gap-3">
               <div className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-200">
@@ -321,14 +397,22 @@ export default function EliteDashboardPage() {
                     <input
                       type="date"
                       value={String(filters.dateStart || "")}
-                      onChange={(event) => setFilters((current) => ({ ...current, dateStart: event.target.value }))}
+                      onChange={(event) => {
+                        const next = { ...filters, dateStart: event.target.value };
+                        setFilters(next);
+                        aiController.setFilters(next);
+                      }}
                       className="bg-transparent outline-none"
                     />
                     <span className="text-slate-500">to</span>
                     <input
                       type="date"
                       value={String(filters.dateEnd || "")}
-                      onChange={(event) => setFilters((current) => ({ ...current, dateEnd: event.target.value }))}
+                      onChange={(event) => {
+                        const next = { ...filters, dateEnd: event.target.value };
+                        setFilters(next);
+                        aiController.setFilters(next);
+                      }}
                       className="bg-transparent outline-none"
                     />
                   </>
@@ -340,7 +424,11 @@ export default function EliteDashboardPage() {
               {primaryFilter && (
                 <select
                   value={String(filters[primaryFilter.name] || "")}
-                  onChange={(event) => setFilters((current) => ({ ...current, [primaryFilter.name]: event.target.value || undefined }))}
+                  onChange={(event) => {
+                    const next = { ...filters, [primaryFilter.name]: event.target.value || undefined };
+                    setFilters(next);
+                    aiController.setFilters(next);
+                  }}
                   className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 outline-none"
                 >
                   <option value="">All {primaryFilter.name}</option>
@@ -356,7 +444,7 @@ export default function EliteDashboardPage() {
                 <Plus className="mr-2 inline h-4 w-4" />
                 Add Filter
               </button>
-              <button onClick={() => setFilters({})} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+              <button onClick={() => { setFilters({}); aiController.setFilters({}); }} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
                 <RefreshCw className="mr-2 inline h-4 w-4" />
                 Reset
               </button>
@@ -469,10 +557,26 @@ export default function EliteDashboardPage() {
           </main>
 
           <SchemaDashboardChat
-            dataset={{ id: dataset.id, name: dataset.name, rows, columns: dataset.columns }}
-            currentDashboard={{ filters, charts, kpis }}
-            onCommand={applyDashboardCommand}
-            collapsible
+            dataset={{
+              id: dataset?.id || "local-dataset",
+              name: dataset?.name || "Uploaded Dataset",
+              rows,
+              columns: dataset?.columns || tableColumns,
+            }}
+            currentDashboard={{
+              kpis: schemaDashboard.kpiSpecs,
+              charts: schemaDashboard.chartSpecs,
+              filters: schemaDashboard.filters,
+            }}
+            controller={aiController}
+            onCommand={applyAiDashboardCommand}
+            onSend={(query) => {
+              if (/explain|why|summary|describe/i.test(query)) {
+                void schemaDashboard.sendChat(query);
+              } else {
+                void schemaDashboard.sendCommand(query);
+              }
+            }}
           />
         </div>
       </div>
