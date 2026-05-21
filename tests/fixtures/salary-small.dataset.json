@@ -1,0 +1,9 @@
+{
+  "name": "Salary Small",
+  "columns": ["country", "salary_usd", "experience"],
+  "rows": [
+    { "country": "India", "salary_usd": 50000, "experience": 2 },
+    { "country": "USA", "salary_usd": 90000, "experience": 5 },
+    { "country": "India", "salary_usd": 65000, "experience": 3 }
+  ]
+}
