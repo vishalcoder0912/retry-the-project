@@ -1,0 +1,9 @@
+{
+  "name": "Sales Small",
+  "columns": ["region", "product", "sales_usd", "units"],
+  "rows": [
+    { "region": "North", "product": "A", "sales_usd": 1200, "units": 12 },
+    { "region": "South", "product": "B", "sales_usd": 1800, "units": 18 },
+    { "region": "North", "product": "B", "sales_usd": 900, "units": 9 }
+  ]
+}
