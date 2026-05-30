@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from datetime import date, datetime
 from typing import Any
 
 import numpy as np
@@ -70,6 +71,8 @@ def _json_safe(value: Any) -> Any:
         if math.isnan(float(value)) or math.isinf(float(value)):
             return None
         return float(value)
+    if isinstance(value, (datetime, date, pd.Timestamp)):
+        return value.isoformat()
     if pd.isna(value):
         return None
     return value

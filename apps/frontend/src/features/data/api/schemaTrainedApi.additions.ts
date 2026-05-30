@@ -77,6 +77,11 @@ export type SchemaDashboardCommandResponse = {
 
 export const schemaTrainedApi = {
   getSchemaTrainingMemory: schemaAiClient.getSchemaTrainingMemory,
+  getSchemaRagMemory: () => schemaAiClient.getSchemaRagMemory(),
+  trainSchemaRagMemory: (payload: Record<string, unknown>) =>
+    schemaAiClient.trainSchemaRagMemory(payload),
+  trainCurrentDashboardPattern: (datasetId: string, payload: Record<string, unknown>) =>
+    schemaAiClient.trainCurrentDashboardPattern(datasetId, payload),
   generateSchemaDashboard: (datasetId: string, payload: DatasetPayload & Record<string, unknown> = {}) =>
     schemaAiClient.generateSchemaDashboard(datasetId, payload, {
       useLlm: payload.useLlm as boolean | undefined,

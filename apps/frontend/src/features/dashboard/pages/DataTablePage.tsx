@@ -116,6 +116,7 @@ export default function DataTablePage() {
   } = useData();
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(0);
@@ -146,6 +147,11 @@ export default function DataTablePage() {
     setPage(0);
   }, [dataset?.id]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 200);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const filteredRows = useMemo(() => {
     const tableFilters = activeTab === "flagged"
       ? {
@@ -162,13 +168,13 @@ export default function DataTablePage() {
       next = next.filter((row) => columns.some((column) => row[column] === null || row[column] === undefined || String(row[column]).trim() === ""));
     }
 
-    if (search.trim()) {
-      const query = search.trim().toLowerCase();
+    if (debouncedSearch.trim()) {
+      const query = debouncedSearch.trim().toLowerCase();
       next = next.filter((row) => columns.some((column) => String(row[column] ?? "").toLowerCase().includes(query)));
     }
 
     return next;
-  }, [activeTab, columns, filters, indexedRows, search]);
+  }, [activeTab, columns, filters, indexedRows, debouncedSearch]);
 
   const sortedRows = useMemo(() => {
     if (!sortCol) return filteredRows;

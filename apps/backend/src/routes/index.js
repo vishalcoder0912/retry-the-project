@@ -17,8 +17,8 @@ import { handleSchemaTrainedAIRoutes } from './schema-trained-ai.routes.js';
 import { handleDashboardQualityRoutes } from './dashboard-quality.js';
 import { handleDashboardAiRoutes } from './dashboardAiRoutes.js';
 import { handleAgenticModelRoutes } from './agentic-models.js';
-import { handleMlAnalyticsRoutes } from './ml-analytics.js';
 import { handleAgenticDataScienceRoutes } from './agentic-data-science.js';
+import { handleSchemaAgentRoutes } from './schema-agent.js';
 import {
   handleE2ECompatRoutes,
   handleE2ENotFound,
@@ -66,6 +66,11 @@ export async function setupRoutes(request, response) {
 
     // Dashboard quality validation routes
     if (await handleDashboardQualityRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Schema Agent: schema profiling, memory/RAG, dashboard planning, deterministic calculation
+    if (await handleSchemaAgentRoutes(request, response, pathname)) {
       return;
     }
 
