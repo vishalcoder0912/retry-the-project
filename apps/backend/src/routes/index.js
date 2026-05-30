@@ -15,13 +15,22 @@ import { handleAiAnalystRoutes } from './ai-analyst.routes.js';
 import { handleSchemaTrainedAIRoutes } from './schema-trained-ai.routes.js';
 import { handleDashboardQualityRoutes } from './dashboard-quality.js';
 import { handleDashboardAiRoutes } from './dashboardAiRoutes.js';
-import { sendError, sendSuccess } from '../utils/response-utils.js';
+import { handleAgenticModelRoutes } from './agentic-models.js';
+import {
+  handleE2ECompatRoutes,
+  handleE2ENotFound,
+} from './e2e-compat.routes.js';
+import { sendError, sendSuccess, sendJson } from '../utils/response-utils.js';
 import { HTTP_STATUS } from '../config/constants.js';
 
 export async function setupRoutes(request, response) {
   const { method, pathname } = request;
 
   try {
+    if (await handleE2ECompatRoutes(request, response, pathname)) {
+      return;
+    }
+
     // State routes (for frontend state management)
     if (await handleStateRoutes(request, response, pathname)) {
       return;
@@ -29,6 +38,16 @@ export async function setupRoutes(request, response) {
 
     // Health check routes (highest priority)
     if (await handleHealthRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Model-aware agentic routes before older AI/dashboard handlers
+    if (await handleAgenticModelRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Schema-trained dashboard/chat/RAG routes before legacy dashboard/chat handlers
+    if (await handleSchemaTrainedAIRoutes(request, response, pathname)) {
       return;
     }
 
@@ -59,11 +78,6 @@ export async function setupRoutes(request, response) {
 
     // Dataset routes
     if (await handleDatasetRoutes(request, response, pathname)) {
-      return;
-    }
-
-    // Schema-trained dashboard/chat routes, including dashboard-command override
-    if (await handleSchemaTrainedAIRoutes(request, response, pathname)) {
       return;
     }
 
@@ -105,7 +119,7 @@ export async function setupRoutes(request, response) {
     // Route not found
     if (method === 'GET' && pathname === '/') {
       // Root endpoint
-      sendSuccess(response, {
+      const rootData = {
         name: 'InsightFlow API',
         version: '2.0.0',
         description: 'AI-powered data analytics platform',
@@ -119,10 +133,11 @@ export async function setupRoutes(request, response) {
         },
         documentation: '/api/docs',
         timestamp: new Date().toISOString()
-      }, 'InsightFlow API is running');
+      };
+      sendJson(response, 200, rootData);
     } else {
       // 404 Not Found
-      sendError(response, HTTP_STATUS.NOT_FOUND, `Route not found: ${method} ${pathname}`, 'ROUTE_NOT_FOUND');
+      handleE2ENotFound(request, response);
     }
 
   } catch (error) {
