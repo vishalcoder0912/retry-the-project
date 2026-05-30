@@ -82,12 +82,12 @@ function fileType(datasetName?: string, sourceType?: string) {
 function QualityRing({ score }: { score: number }) {
   return (
     <div
-      className="grid h-20 w-20 place-items-center rounded-full"
+      className="grid size-20 place-items-center rounded-full"
       style={{
         background: `conic-gradient(#22c55e ${score * 3.6}deg, rgba(51,65,85,0.9) 0deg)`,
       }}
     >
-      <div className="grid h-14 w-14 place-items-center rounded-full bg-slate-950 text-center">
+      <div className="grid size-14 place-items-center rounded-full bg-slate-950 text-center">
         <span className="text-lg font-bold text-white">{Math.round(score)}%</span>
       </div>
     </div>
@@ -106,7 +106,7 @@ function KpiCard({ kpi, index }: { kpi: DashboardKpi; index: number }) {
           <p className="mt-1 text-xs text-slate-500">{kpi.subtitle}</p>
         </div>
         <div className={`rounded-2xl p-3 ${colors[index % colors.length]}`}>
-          <Database className="h-5 w-5" />
+          <Database className="size-5" />
         </div>
       </div>
     </div>
@@ -334,24 +334,24 @@ export default function EliteDashboardPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button onClick={shareDashboard} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-              <Share2 className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={shareDashboard} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+              <Share2 className="mr-2 inline size-4" />
               Share
             </button>
-            <button onClick={exportCsv} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-              <Download className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={exportCsv} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+              <Download className="mr-2 inline size-4" />
               Export CSV
             </button>
-            <button onClick={exportJson} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-              <FileText className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={exportJson} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+              <FileText className="mr-2 inline size-4" />
               JSON
             </button>
-            <button onClick={() => void deleteDataset()} className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 hover:bg-red-500/20">
-              <Trash2 className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={() => void deleteDataset()} className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 hover:bg-red-500/20">
+              <Trash2 className="mr-2 inline size-4" />
               Delete
             </button>
-            <button className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2 text-slate-100 hover:bg-slate-800">
-              <MoreVertical className="h-5 w-5" />
+            <button type="button" className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2 text-slate-100 hover:bg-slate-800">
+              <MoreVertical className="size-5" />
             </button>
           </div>
         </header>
@@ -391,7 +391,7 @@ export default function EliteDashboardPage() {
           <main className="space-y-5">
             <section className="flex flex-wrap gap-3">
               <div className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-200">
-                <Calendar className="h-4 w-4 text-slate-400" />
+                <Calendar className="size-4 text-slate-400" />
                 {dateColumn ? (
                   <>
                     <input
@@ -440,12 +440,12 @@ export default function EliteDashboardPage() {
                 </select>
               )}
 
-              <button className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-                <Plus className="mr-2 inline h-4 w-4" />
+              <button type="button" className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+                <Plus className="mr-2 inline size-4" />
                 Add Filter
               </button>
-              <button onClick={() => { setFilters({}); aiController.setFilters({}); }} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-                <RefreshCw className="mr-2 inline h-4 w-4" />
+              <button type="button" onClick={() => { setFilters({}); aiController.setFilters({}); }} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+                <RefreshCw className="mr-2 inline size-4" />
                 Reset
               </button>
             </section>
@@ -453,8 +453,8 @@ export default function EliteDashboardPage() {
             <section className={`${CARD} border-violet-500/60 bg-gradient-to-r from-violet-600/25 via-slate-900/80 to-blue-600/10 p-5`}>
               <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="grid h-20 w-20 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 shadow-lg shadow-violet-600/20">
-                    <FileSpreadsheet className="h-9 w-9 text-white" />
+                  <div className="grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 shadow-lg shadow-violet-600/20">
+                    <FileSpreadsheet className="size-9 text-white" />
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-3">
@@ -476,8 +476,8 @@ export default function EliteDashboardPage() {
                     <p className="text-xs text-slate-400">Data Quality Score</p>
                     <QualityRing score={quality.finalScore} />
                   </div>
-                  <button onClick={() => setShowSchema(true)} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-                    <Table2 className="mr-2 inline h-4 w-4" />
+                  <button type="button" onClick={() => setShowSchema(true)} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+                    <Table2 className="mr-2 inline size-4" />
                     View Schema
                   </button>
                 </div>
@@ -517,11 +517,11 @@ export default function EliteDashboardPage() {
                 </div>
                 <div className="flex gap-2">
                   <Link to="/data" className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-                    <Table2 className="mr-2 inline h-4 w-4" />
+                    <Table2 className="mr-2 inline size-4" />
                     View Full Table
                   </Link>
-                  <button onClick={exportCsv} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-                    <Download className="mr-2 inline h-4 w-4" />
+                  <button type="button" onClick={exportCsv} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+                    <Download className="mr-2 inline size-4" />
                     Download
                   </button>
                 </div>
@@ -589,8 +589,8 @@ export default function EliteDashboardPage() {
                 <h2 className="text-xl font-semibold text-white">Dataset Schema</h2>
                 <p className="text-sm text-slate-400">Column types, inferred roles, missing values, and examples.</p>
               </div>
-              <button onClick={() => setShowSchema(false)} className="rounded-xl border border-slate-700 bg-slate-950 p-2 text-slate-200">
-                <X className="h-4 w-4" />
+              <button type="button" onClick={() => setShowSchema(false)} className="rounded-xl border border-slate-700 bg-slate-950 p-2 text-slate-200">
+                <X className="size-4" />
               </button>
             </div>
             <div className="max-h-[65vh] overflow-auto">
@@ -624,7 +624,7 @@ export default function EliteDashboardPage() {
       )}
 
       <div className="fixed bottom-4 right-4 hidden items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/90 px-3 py-2 text-xs text-slate-400 shadow-xl backdrop-blur md:flex">
-        <ShieldCheck className="h-4 w-4 text-green-400" />
+        <ShieldCheck className="size-4 text-green-400" />
         Schema-only AI enabled
       </div>
     </div>

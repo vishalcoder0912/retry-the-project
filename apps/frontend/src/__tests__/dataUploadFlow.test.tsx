@@ -3,10 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import UploadPage from "@/features/data/pages/UploadPage";
 
 const uploadFiles = vi.fn(async () => undefined);
+const navigate = vi.fn();
 
 vi.mock("react-router-dom", async () => {
   const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return { ...actual, useNavigate: () => vi.fn() };
+  return { ...actual, useNavigate: () => navigate };
 });
 
 vi.mock("@/features/data/context/useData", () => ({
@@ -44,6 +45,8 @@ vi.mock("@/features/data/api/dataApi", () => ({
 
 describe("upload/data flow", () => {
   it("uploads a selected CSV file through the data context", async () => {
+    uploadFiles.mockClear();
+    navigate.mockClear();
     render(<UploadPage />);
 
     const file = new File(["country,salary_usd\nIndia,50000"], "salary.csv", { type: "text/csv" });
@@ -52,6 +55,8 @@ describe("upload/data flow", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(uploadFiles).toHaveBeenCalledWith([file]));
+    await waitFor(() => expect(screen.getByText(/schema validation completed/i)).toBeInTheDocument());
+    expect(navigate).not.toHaveBeenCalled();
     expect(screen.getByText(/Upload Data/)).toBeInTheDocument();
   });
 });

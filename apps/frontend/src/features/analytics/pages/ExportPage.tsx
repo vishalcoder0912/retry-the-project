@@ -40,13 +40,13 @@ const ExportPage = () => {
       
       <div className="grid grid-cols-3 gap-4">
         {formats.map(({ format, title, desc }) => (
-          <button
+          <button type="button"
             key={format}
             onClick={() => exportData(format)}
             disabled={exporting}
             className="p-6 border rounded hover:shadow-lg transition flex flex-col items-center gap-3 disabled:opacity-50"
           >
-            <Download className="w-8 h-8" />
+            <Download className="size-8" />
             <div className="font-semibold">{title}</div>
             <div className="text-sm text-gray-600">{desc}</div>
           </button>

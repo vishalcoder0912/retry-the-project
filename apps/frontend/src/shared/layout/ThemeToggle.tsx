@@ -13,7 +13,7 @@ const ThemeToggle = () => {
       aria-label={`Switch to ${isDark ? "light" : "dark"} mode`}
     >
       <span className="flex items-center gap-2">
-        {isDark ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+        {isDark ? <Moon className="size-4" /> : <Sun className="size-4" />}
         {isDark ? "Dark" : "Light"}
       </span>
       <span
@@ -22,7 +22,7 @@ const ThemeToggle = () => {
         }`}
       >
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
+          className={`absolute top-0.5 size-5 rounded-full bg-white transition ${
             isDark ? "left-[22px]" : "left-0.5"
           }`}
         />

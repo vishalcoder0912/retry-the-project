@@ -194,16 +194,16 @@ export default function PdfUploadPage() {
             <p className="mt-1 text-sm text-slate-400">Extract, analyze and visualize data from your PDF documents.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={exportCsv} disabled={!rows.length} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm disabled:opacity-50">
-              <Download className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={exportCsv} disabled={!rows.length} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm disabled:opacity-50">
+              <Download className="mr-2 inline size-4" />
               Export Data
             </button>
-            <button onClick={shareSummary} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm">
-              <Share2 className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={shareSummary} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm">
+              <Share2 className="mr-2 inline size-4" />
               Share
             </button>
-            <button onClick={() => inputRef.current?.click()} className="rounded-xl bg-violet-600 px-4 py-2 text-sm">
-              <Upload className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={() => inputRef.current?.click()} className="rounded-xl bg-violet-600 px-4 py-2 text-sm">
+              <Upload className="mr-2 inline size-4" />
               Upload New PDF
             </button>
           </div>
@@ -212,8 +212,8 @@ export default function PdfUploadPage() {
         <section className={`${CARD} p-5`}>
           <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr_repeat(4,180px)]">
             <div className="flex items-center gap-4 rounded-2xl border border-dashed border-slate-700/60 bg-slate-950/40 p-5">
-              <div className="grid h-20 w-20 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600">
-                <FileText className="h-10 w-10 text-white" />
+              <div className="grid size-20 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600">
+                <FileText className="size-10 text-white" />
               </div>
               <div>
                 <p className="font-semibold text-white">{file?.name || result?.pdf.fileName || activeDataset?.fileName || "No PDF selected"}</p>
@@ -222,14 +222,14 @@ export default function PdfUploadPage() {
               </div>
             </div>
 
-            <button
+            <button type="button"
               onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={(event) => { event.preventDefault(); setDragging(false); handleFiles(event.dataTransfer.files); }}
               onClick={() => inputRef.current?.click()}
               className={`rounded-2xl border border-dashed p-5 text-center text-sm ${dragging ? "border-violet-400 bg-violet-500/10" : "border-slate-700/60 bg-slate-950/40"}`}
             >
-              {isProcessing ? <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin" /> : <Upload className="mx-auto mb-2 h-6 w-6" />}
+              {isProcessing ? <Loader2 className="mx-auto mb-2 size-6 animate-spin" /> : <Upload className="mx-auto mb-2 size-6" />}
               Drag and drop PDF here or click to browse
             </button>
 
@@ -240,8 +240,8 @@ export default function PdfUploadPage() {
               ["Data Points", rows.length * Math.max(visibleColumns.length, 1)],
             ].map(([label, value], index) => (
               <div key={String(label)} className="rounded-2xl border border-slate-700/60 bg-slate-950/40 p-5">
-                <div className={`mb-4 grid h-10 w-10 place-items-center rounded-xl ${index === 0 ? "bg-blue-500/20 text-blue-300" : index === 1 ? "bg-green-500/20 text-green-300" : index === 2 ? "bg-violet-500/20 text-violet-300" : "bg-amber-500/20 text-amber-300"}`}>
-                  {index === 1 ? <Table2 className="h-5 w-5" /> : <BarChart3 className="h-5 w-5" />}
+                <div className={`mb-4 grid size-10 place-items-center rounded-xl ${index === 0 ? "bg-blue-500/20 text-blue-300" : index === 1 ? "bg-green-500/20 text-green-300" : index === 2 ? "bg-violet-500/20 text-violet-300" : "bg-amber-500/20 text-amber-300"}`}>
+                  {index === 1 ? <Table2 className="size-5" /> : <BarChart3 className="size-5" />}
                 </div>
                 <p className="text-sm text-slate-400">{label}</p>
                 <p className="mt-1 text-2xl font-semibold text-white">{String(value)}</p>
@@ -257,7 +257,7 @@ export default function PdfUploadPage() {
           <main className="space-y-5">
             <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2">
               {["Overview", "Extracted Data", "Visualizations", "Pages", "Insights"].map((tab) => (
-                <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-xl px-4 py-2 text-sm ${activeTab === tab ? "bg-violet-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
+                <button type="button" key={tab} onClick={() => setActiveTab(tab)} className={`rounded-xl px-4 py-2 text-sm ${activeTab === tab ? "bg-violet-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
                   {tab}
                 </button>
               ))}
@@ -286,7 +286,7 @@ export default function PdfUploadPage() {
               <div className={`${CARD} p-5`}>
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-white">Key Insights</h2>
-                  <button onClick={() => void askPdf("What are the key insights?")} disabled={!result?.pdf.id || asking} className="rounded-xl border border-violet-500/50 px-3 py-2 text-xs text-violet-200 disabled:opacity-50">
+                  <button type="button" onClick={() => void askPdf("What are the key insights?")} disabled={!result?.pdf.id || asking} className="rounded-xl border border-violet-500/50 px-3 py-2 text-xs text-violet-200 disabled:opacity-50">
                     Summarize
                   </button>
                 </div>
@@ -303,7 +303,7 @@ export default function PdfUploadPage() {
               <div className={`${CARD} p-5`}>
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-white">Page Preview</h2>
-                  <Maximize2 className="h-4 w-4 text-slate-400" />
+                  <Maximize2 className="size-4 text-slate-400" />
                 </div>
                 <div className="grid h-64 place-items-center rounded-2xl border border-slate-700/60 bg-slate-950/50">
                   <div className="w-36 rounded-xl bg-slate-200 p-4 text-slate-900 shadow-xl">
@@ -311,15 +311,15 @@ export default function PdfUploadPage() {
                     <p className="mt-2 text-lg font-bold">{page}</p>
                     <div className="mt-4 space-y-2">
                       <div className="h-2 rounded bg-slate-400" />
-                      <div className="h-2 w-2/3 rounded bg-slate-400" />
+                      <div className="size-2/3 rounded bg-slate-400" />
                       <div className="h-16 rounded bg-slate-300" />
                     </div>
                   </div>
                 </div>
                 <div className="mt-4 flex items-center justify-center gap-4 text-sm text-slate-300">
-                  <button onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft className="h-5 w-5" /></button>
+                  <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))}><ChevronLeft className="size-5" /></button>
                   <span>{page} / {pageCount}</span>
-                  <button onClick={() => setPage((current) => Math.min(pageCount, current + 1))}><ChevronRight className="h-5 w-5" /></button>
+                  <button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))}><ChevronRight className="size-5" /></button>
                 </div>
               </div>
             </section>
@@ -329,7 +329,7 @@ export default function PdfUploadPage() {
                 <div className="flex items-center justify-between border-b border-slate-700/60 p-4">
                   <h2 className="text-lg font-semibold text-white">Extracted Tables</h2>
                   <div className="relative w-64">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
                     <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search tables..." className="w-full rounded-xl border border-slate-700 bg-slate-950 py-2 pl-10 pr-3 text-sm outline-none" />
                   </div>
                 </div>
@@ -357,7 +357,7 @@ export default function PdfUploadPage() {
               <div className={`${CARD} p-4`}>
                 <div className="mb-4 flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-white">Extracted Charts</h2>
-                  <button onClick={exportMarkdown} className="rounded-xl border border-slate-700 px-3 py-2 text-xs">Markdown Report</button>
+                  <button type="button" onClick={exportMarkdown} className="rounded-xl border border-slate-700 px-3 py-2 text-xs">Markdown Report</button>
                 </div>
                 <div className="grid gap-4">
                   {charts.length ? charts.slice(0, 2).map((chart) => <SmartChartCard key={chart.id} chart={chart} />) : <div className="rounded-2xl border border-dashed border-slate-700 p-8 text-center text-sm text-slate-400">No extracted table data available for charts.</div>}
@@ -368,7 +368,7 @@ export default function PdfUploadPage() {
 
           <aside className={`${CARD} h-fit p-5`}>
             <div className="mb-5 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-violet-300" />
+              <Sparkles className="size-5 text-violet-300" />
               <h2 className="text-lg font-semibold text-white">AI Assistant</h2>
               <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] uppercase text-violet-200">Beta</span>
             </div>
@@ -389,12 +389,12 @@ export default function PdfUploadPage() {
                   ) : null}
                 </div>
               ))}
-              {asking && <div className="mr-8 rounded-2xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm"><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Reading PDF sources...</div>}
+              {asking && <div className="mr-8 rounded-2xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-sm"><Loader2 className="mr-2 inline size-4 animate-spin" />Reading PDF sources...</div>}
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
               {promptChips.map((prompt) => (
-                <button key={prompt} onClick={() => void askPdf(prompt)} className="rounded-full border border-violet-500/40 px-3 py-1 text-xs text-violet-200">
+                <button type="button" key={prompt} onClick={() => void askPdf(prompt)} className="rounded-full border border-violet-500/40 px-3 py-1 text-xs text-violet-200">
                   {prompt}
                 </button>
               ))}
@@ -402,12 +402,12 @@ export default function PdfUploadPage() {
 
             <div className="mt-5 flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950/70 p-2">
               <input value={query} onChange={(event) => setQuery(event.target.value)} onKeyDown={(event) => event.key === "Enter" && void askPdf()} placeholder="Ask anything about this PDF..." className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-slate-500" />
-              <button onClick={() => void askPdf()} disabled={!query.trim() || asking} className="rounded-xl bg-violet-600 p-3 disabled:opacity-50"><Send className="h-4 w-4" /></button>
+              <button type="button" onClick={() => void askPdf()} disabled={!query.trim() || asking} className="rounded-xl bg-violet-600 p-3 disabled:opacity-50"><Send className="size-4" /></button>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button onClick={exportJson} disabled={!rows.length} className="rounded-xl border border-slate-700 px-3 py-2 text-xs disabled:opacity-50">JSON</button>
-              <button onClick={exportCsv} disabled={!rows.length} className="rounded-xl border border-slate-700 px-3 py-2 text-xs disabled:opacity-50">CSV</button>
-              <button onClick={exportMarkdown} disabled={!rows.length} className="rounded-xl border border-slate-700 px-3 py-2 text-xs disabled:opacity-50">Report</button>
+              <button type="button" onClick={exportJson} disabled={!rows.length} className="rounded-xl border border-slate-700 px-3 py-2 text-xs disabled:opacity-50">JSON</button>
+              <button type="button" onClick={exportCsv} disabled={!rows.length} className="rounded-xl border border-slate-700 px-3 py-2 text-xs disabled:opacity-50">CSV</button>
+              <button type="button" onClick={exportMarkdown} disabled={!rows.length} className="rounded-xl border border-slate-700 px-3 py-2 text-xs disabled:opacity-50">Report</button>
             </div>
             <p className="mt-5 text-center text-xs text-slate-500">All answers are generated from extracted content. Verify important data.</p>
           </aside>

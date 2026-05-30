@@ -1,6 +1,26 @@
-import { generateSchemaDashboard, runDashboardCommand, runSchemaChat, trainSchemaDashboard } from "../services/ai-analyst/schema-trained-ai-service.js";
+import {
+  generateSchemaDashboard,
+  runDashboardCommand,
+  runSchemaChat,
+  trainSchemaDashboard,
+  trainSchemaRagDashboard,
+} from "../services/ai-analyst/schema-trained-ai-service.js";
 import { getMemoryStats, readSchemaTrainingMemory, trainManySchemaExamples } from "../services/ai-analyst/schema-training-store.js";
 import { validateAndFixDashboard } from "../services/dashboard/dashboard-integrity-engine.js";
+import { buildSchemaProfile } from "../services/ai-analyst/schema-fingerprint.js";
+import {
+  getSchemaRagStats,
+  readSchemaRagMemory,
+} from "../services/ai-analyst/schema-rag-store.js";
+import {
+  retrieveSchemaRagMemories,
+  trainSchemaRagMemoryFromDataset,
+} from "../services/ai-analyst/schema-rag-retriever.js";
+import {
+  buildSmartDashboardTrainingContext,
+  explainDatasetSchemaForUser,
+  trainSmartRagFromApprovedDashboard,
+} from "../services/ai-analyst/smart-rag-training-service.js";
 
 async function readJsonBody(request) {
   try {
@@ -80,14 +100,176 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
     }
   }
 
+  if (method === "GET" && pathname === "/api/ai/schema-rag-memory") {
+    ok(
+      response,
+      {
+        stats: getSchemaRagStats(),
+        memory: readSchemaRagMemory().map((item) => {
+          const { embedding, ...safe } = item;
+          return safe;
+        }),
+      },
+      "Schema RAG memory loaded"
+    );
+    return true;
+  }
+
+  if (method === "POST" && pathname === "/api/ai/schema-rag/train") {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = body.dataset;
+
+      if (!dataset?.rows && !body.schemaProfile?.columns) {
+        return fail(response, 400, "dataset.rows or schemaProfile.columns is required");
+      }
+
+      const result = await trainSchemaRagMemoryFromDataset({
+        dataset,
+        schemaProfile: body.schemaProfile,
+        acceptedDashboardPlan:
+          body.acceptedDashboardPlan || body.dashboardPlan || body.currentDashboard,
+        rating: body.rating || "good",
+        notes: body.notes || "",
+        source: body.source || "api",
+        useOllama: body.useOllama !== false,
+      });
+
+      ok(response, result, "Schema RAG memory trained");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Schema RAG training failed");
+      return true;
+    }
+  }
+
+  if (method === "POST" && pathname === "/api/ai/schema-rag/retrieve") {
+    try {
+      const body = await readJsonBody(request);
+      const schemaProfile = body.schemaProfile?.columns
+        ? body.schemaProfile
+        : buildSchemaProfile(body.dataset || { rows: body.rows || [], columns: body.columns || [] });
+
+      const result = await retrieveSchemaRagMemories(schemaProfile, {
+        limit: body.limit || 5,
+        threshold: body.threshold ?? 0.55,
+        useOllama: body.useOllama !== false,
+      });
+
+      ok(response, result, "Schema RAG memories retrieved");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Schema RAG retrieval failed");
+      return true;
+    }
+  }
+
+  const ragTrainMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema-rag-train$/);
+  if (method === "POST" && ragTrainMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(ragTrainMatch[1], body);
+
+      if (!dataset) return fail(response, 404, "Dataset not found");
+
+      const result = await trainSchemaRagDashboard(dataset, {
+        acceptedDashboardPlan:
+          body.acceptedDashboardPlan || body.dashboardPlan || body.currentDashboard,
+        rating: body.rating || "good",
+        notes: body.notes || "",
+        source: "dashboard-user-feedback",
+        useOllama: body.useOllama !== false,
+      });
+
+      ok(response, result, "Current dashboard pattern saved to RAG memory");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Dataset RAG training failed");
+      return true;
+    }
+  }
+
+  const understandMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema-understand$/);
+  if (method === "POST" && understandMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(understandMatch[1], body);
+
+      if (!dataset) return fail(response, 404, "Dataset not found");
+
+      const result = await explainDatasetSchemaForUser(dataset);
+
+      ok(response, result, "Schema understanding generated");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Schema understanding failed");
+      return true;
+    }
+  }
+
+  const smartDashboardMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/smart-rag-dashboard$/);
+  if (method === "POST" && smartDashboardMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(smartDashboardMatch[1], body);
+
+      if (!dataset) return fail(response, 404, "Dataset not found");
+
+      const result = await buildSmartDashboardTrainingContext(dataset, {
+        ragThreshold: body.ragThreshold ?? 0.55,
+        ragLimit: body.ragLimit ?? 5,
+        useOllama: body.useOllama !== false,
+        maxCharts: body.maxCharts ?? 7,
+        maxKpis: body.maxKpis ?? 8,
+      });
+
+      ok(response, result, "Smart RAG dashboard generated");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Smart RAG dashboard failed");
+      return true;
+    }
+  }
+
+  const smartTrainMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/smart-rag-train$/);
+  if (method === "POST" && smartTrainMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(smartTrainMatch[1], body);
+
+      if (!dataset) return fail(response, 404, "Dataset not found");
+
+      const result = await trainSmartRagFromApprovedDashboard({
+        dataset,
+        dashboardPlan: body.acceptedDashboardPlan || body.dashboardPlan || body.currentDashboard,
+        rating: body.rating || "good",
+        notes: body.notes || "User approved dashboard pattern.",
+        source: "smart-dashboard-feedback",
+        useOllama: body.useOllama !== false,
+      });
+
+      ok(response, result, "Smart RAG memory trained");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Smart RAG training failed");
+      return true;
+    }
+  }
+
   const dashboardMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema-dashboard$/);
   if (method === "POST" && dashboardMatch) {
     try {
       const body = await readJsonBody(request);
       const dataset = await loadDatasetById(dashboardMatch[1], body);
       if (!dataset) return fail(response, 404, "Dataset not found. Pass {rows, columns} in body or check dataset repository integration.");
-      const result = await generateSchemaDashboard(dataset, { useLlm: body.useLlm !== false, threshold: body.threshold });
-      ok(response, result, "Schema-trained dashboard generated");
+      const result = await generateSchemaDashboard(dataset, {
+        useLlm: body.useLlm !== false,
+        threshold: body.threshold,
+        ragThreshold: body.ragThreshold,
+        ragLimit: body.ragLimit,
+        useRagEmbedding: body.useRagEmbedding !== false,
+      });
+      ok(response, result, "Schema-trained RAG dashboard generated");
       return true;
     } catch (error) {
       fail(response, 500, error.message || "Dashboard generation failed");
@@ -124,7 +306,10 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
       const query = String(body.query || "").trim();
       if (!query) return fail(response, 400, "query is required");
 
-      if (/fix|validate|correct|wrong|repair|regenerate/i.test(query)) {
+      if (
+        /fix|validate|correct|wrong|repair|regenerate/i.test(query) &&
+        /dashboard|chart|charts|kpi|broken|invalid|wrong/i.test(query)
+      ) {
         const result = validateAndFixDashboard(dataset, body.currentDashboard || {});
         ok(response, {
           action: "FIX_DASHBOARD",
@@ -132,7 +317,7 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
           issues: result.issues,
           observations: result.observations,
           correctedDashboard: result.correctedDashboard,
-          schemaOnly: false,
+          schemaOnly: true,
           provider: "local-integrity-engine",
           model: "local-calculation",
         }, "Dashboard fixed");

@@ -70,7 +70,7 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
               filters.dateRange.from && 'border-primary/50 text-primary bg-primary/5',
             )}
           >
-            <CalendarIcon className="h-4 w-4" />
+            <CalendarIcon className="size-4" />
             {filters.dateRange.from
               ? `${format(filters.dateRange.from, 'MMM d')}${filters.dateRange.to ? ` - ${format(filters.dateRange.to, 'MMM d')}` : ''}`
               : 'Date range'}
@@ -125,7 +125,7 @@ const DashboardFilters = ({ dataset, filters, onChange }: DashboardFiltersProps)
                 onClick={() => removeColumnFilter(columnName)}
               >
                 <span className="text-muted-foreground">{columnName}:</span> {value}
-                <X className="h-3 w-3" />
+                <X className="size-3" />
               </Badge>
             ))}
           <Button

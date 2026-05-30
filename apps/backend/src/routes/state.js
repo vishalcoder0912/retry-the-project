@@ -1,9 +1,10 @@
 // Application state endpoint
 import { sendSuccess, sendError } from '../utils/response-utils.js';
 import { HTTP_STATUS } from '../config/constants.js';
-import { getCurrentDataset } from '../database/dataset-repository.js';
+import { getChatMessages, getCurrentDataset } from '../database/dataset-repository.js';
 
-// In-memory state storage (would be database in production)
+// In-memory UI state. Datasets and chat history hydrate from SQLite; analysis
+// remains in memory until a persisted analysis store exists.
 let appState = {
   dataset: null,
   chatMessages: [],
@@ -16,8 +17,10 @@ export async function handleStateRoutes(request, response, pathname) {
   // GET /api/state - Get current application state
   if (pathname === '/api/state' && method === 'GET') {
     try {
-      if (!appState.dataset) {
-        appState.dataset = getCurrentDataset();
+      const persistedDataset = getCurrentDataset();
+      if (persistedDataset) {
+        appState.dataset = persistedDataset;
+        appState.chatMessages = getChatMessages(persistedDataset.id);
       }
 
       sendSuccess(response, {

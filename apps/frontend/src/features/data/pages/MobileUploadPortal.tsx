@@ -29,10 +29,10 @@ function fileIcon(name: string) {
   const lower = name.toLowerCase();
 
   if (lower.endsWith(".json")) {
-    return <FileJson className="h-7 w-7 text-violet-300" />;
+    return <FileJson className="size-7 text-violet-300" />;
   }
 
-  return <FileSpreadsheet className="h-7 w-7 text-emerald-300" />;
+  return <FileSpreadsheet className="size-7 text-emerald-300" />;
 }
 
 function formatBytes(bytes: number) {
@@ -152,13 +152,13 @@ export default function MobileUploadPortal() {
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-violet-600 p-2">
-              <Upload className="h-5 w-5" />
+              <Upload className="size-5" />
             </div>
             <h1 className="text-xl font-bold">InsightFlow</h1>
           </div>
 
-          <button className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">
-            <HelpCircle className="mr-1 inline h-4 w-4" />
+          <button type="button" className="rounded-xl border border-slate-700 px-3 py-2 text-sm text-slate-300">
+            <HelpCircle className="mr-1 inline size-4" />
             Help
           </button>
         </div>
@@ -170,7 +170,7 @@ export default function MobileUploadPortal() {
 
         <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <p className="text-sm text-slate-400">
-            <span className="mr-2 inline-block h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="mr-2 inline-block size-2 rounded-full bg-emerald-400" />
             Connected to Workspace
           </p>
 
@@ -185,7 +185,7 @@ export default function MobileUploadPortal() {
         </div>
 
         <div className="mt-5 grid grid-cols-2 rounded-2xl border border-slate-800 p-1">
-          <button
+          <button type="button"
             onClick={() => {
               setMode("single");
               setQueue([]);
@@ -197,7 +197,7 @@ export default function MobileUploadPortal() {
             Single File
           </button>
 
-          <button
+          <button type="button"
             onClick={() => {
               setMode("multiple");
               setQueue([]);
@@ -214,15 +214,15 @@ export default function MobileUploadPortal() {
           onClick={() => inputRef.current?.click()}
           className="mt-5 rounded-2xl border border-dashed border-violet-500/60 p-8 text-center"
         >
-          <Upload className="mx-auto mb-3 h-14 w-14 text-violet-400" />
+          <Upload className="mx-auto mb-3 size-14 text-violet-400" />
           <p className="text-xl font-bold">Tap to select files</p>
           <p className="mt-1 text-slate-400">or drag and drop</p>
           <p className="mx-auto mt-3 inline-flex rounded-full bg-slate-800 px-4 py-2 text-sm text-slate-300">
             CSV, XLSX, JSON
           </p>
 
-          <button className="mt-6 w-full rounded-xl bg-violet-600 py-4 font-bold">
-            <FolderOpen className="mr-2 inline h-5 w-5" />
+          <button type="button" className="mt-6 w-full rounded-xl bg-violet-600 py-4 font-bold">
+            <FolderOpen className="mr-2 inline size-5" />
             Select Files
           </button>
 
@@ -272,7 +272,7 @@ export default function MobileUploadPortal() {
 
                     {item.status === "uploaded" && (
                       <p className="mt-1 text-sm text-emerald-400">
-                        <CheckCircle2 className="mr-1 inline h-4 w-4" />
+                        <CheckCircle2 className="mr-1 inline size-4" />
                         Uploaded • Synced to workspace
                       </p>
                     )}
@@ -284,8 +284,8 @@ export default function MobileUploadPortal() {
                     )}
                   </div>
 
-                  <button onClick={() => removeFile(item.id)} disabled={uploading}>
-                    <X className="h-5 w-5 text-slate-400" />
+                  <button type="button" onClick={() => removeFile(item.id)} disabled={uploading}>
+                    <X className="size-5 text-slate-400" />
                   </button>
                 </div>
               ))}
@@ -296,12 +296,12 @@ export default function MobileUploadPortal() {
         <div className="mt-5 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
           <div className="flex items-center gap-4">
             <div className="rounded-full bg-violet-600 p-3">
-              <RefreshCw className="h-6 w-6" />
+              <RefreshCw className="size-6" />
             </div>
             <p className="font-semibold">
               Uploads sync automatically to your desktop dashboard.
             </p>
-            <Smartphone className="ml-auto h-7 w-7 text-violet-300" />
+            <Smartphone className="ml-auto size-7 text-violet-300" />
           </div>
         </div>
 
@@ -311,38 +311,38 @@ export default function MobileUploadPortal() {
           </div>
         )}
 
-        <button
+        <button type="button"
           onClick={uploadNow}
           disabled={!queue.length || uploading}
           className="mt-5 w-full rounded-xl bg-violet-600 py-4 text-lg font-bold disabled:cursor-not-allowed disabled:opacity-50"
         >
           {uploading ? (
             <>
-              <Loader2 className="mr-2 inline h-5 w-5 animate-spin" />
+              <Loader2 className="mr-2 inline size-5 animate-spin" />
               Uploading...
             </>
           ) : (
             <>
-              <Upload className="mr-2 inline h-5 w-5" />
+              <Upload className="mr-2 inline size-5" />
               Upload Now
             </>
           )}
         </button>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
-          <button
+          <button type="button"
             onClick={() => inputRef.current?.click()}
             className="rounded-xl border border-slate-700 py-3 font-semibold text-slate-200"
           >
-            <Plus className="mr-2 inline h-5 w-5" />
+            <Plus className="mr-2 inline size-5" />
             Add More
           </button>
 
-          <button
+          <button type="button"
             onClick={() => window.location.reload()}
             className="rounded-xl border border-slate-700 py-3 font-semibold text-slate-200"
           >
-            <QrCode className="mr-2 inline h-5 w-5" />
+            <QrCode className="mr-2 inline size-5" />
             Scan New QR
           </button>
         </div>

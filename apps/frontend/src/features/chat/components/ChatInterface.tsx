@@ -21,6 +21,7 @@ import {
 import { api, type DashboardCommandResponse } from "@/features/data/api/dataApi";
 import { useData } from "@/features/data/context/useData";
 import SmartChartCard from "@/features/dashboard/components/SmartChartCard";
+import type { Aggregation } from "@/features/dashboard/types/dashboardTypes";
 import { generateDynamicQuestionSuggestions } from "@/features/dashboard/utils/dynamicQuestionSuggestions";
 import {
   buildChartFromSpec,
@@ -61,6 +62,10 @@ function titleCase(value: string) {
   return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatNumber(value: number) {
+  return value.toLocaleString(undefined, { maximumFractionDigits: value % 1 === 0 ? 0 : 2 });
+}
+
 function findColumn(columns: string[], text: string) {
   const normalizedText = normalize(text);
   return (
@@ -70,7 +75,117 @@ function findColumn(columns: string[], text: string) {
   );
 }
 
-function localCommand(query: string, rows: Row[]): DashboardCommandResponse | null {
+function makeMessageId() {
+  return globalThis.crypto?.randomUUID?.() || `message-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function firstGroupedChart(rows: Row[], query: string) {
+  const profile = buildDatasetProfile(rows);
+  const columns = profile.columns.map((column) => column.name);
+  const lower = query.toLowerCase();
+  const metric =
+    columns.find((column) => lower.includes(normalize(column).replace(/_/g, " "))) ||
+    profile.primaryMetric?.name ||
+    profile.numericColumns[0]?.name;
+  const category =
+    profile.categoryColumns.find((column) => lower.includes(normalize(column.name).replace(/_/g, " ")))?.name ||
+    profile.primaryCategory?.name ||
+    profile.columns.find((column) => column.type === "string")?.name;
+
+  if (!metric || !category) return null;
+
+  const aggregation: Aggregation = /total|sum|revenue|sales|units/i.test(lower) ? "sum" : "avg";
+  return {
+    type: "bar" as const,
+    title: `${aggregation === "sum" ? "Total" : "Average"} ${titleCase(metric)} by ${titleCase(category)}`,
+    xKey: category,
+    yKey: metric,
+    aggregation,
+    limit: 10,
+  };
+}
+
+function summarizeDataset(rows: Row[]) {
+  const profile = buildDatasetProfile(rows);
+  const quality = buildDataQualityScore(rows);
+  const metric = profile.primaryMetric?.name;
+  const category = profile.primaryCategory?.name;
+  const parts = [
+    `This dataset has ${rows.length.toLocaleString()} rows and ${profile.columns.length} columns.`,
+    `Data quality score is ${Math.round(quality.finalScore)}%.`,
+  ];
+
+  if (metric) parts.push(`Primary metric detected: ${titleCase(metric)}.`);
+  if (category) parts.push(`Primary grouping column detected: ${titleCase(category)}.`);
+
+  return parts.join(" ");
+}
+
+function dataDictionary(rows: Row[]) {
+  const profile = buildDatasetProfile(rows);
+  return profile.columns
+    .slice(0, 8)
+    .map((column) => {
+      const completeness = Math.max(0, 100 - column.missingPct);
+      const role = column.name === profile.primaryMetric?.name ? "primary metric" : column.name === profile.primaryCategory?.name ? "primary category" : column.type;
+      return `${column.name}: ${role}, ${completeness}% complete, ${column.uniqueCount} unique values`;
+    })
+    .join("\n");
+}
+
+function anomalySummary(rows: Row[]) {
+  const profile = buildDatasetProfile(rows);
+  const metric = profile.primaryMetric?.name || profile.numericColumns[0]?.name;
+  if (!metric) return "No numeric column was available for anomaly detection.";
+
+  const values = rows
+    .map((row, index) => ({ index, value: safeNumber(row[metric]) }))
+    .filter((entry) => Number.isFinite(entry.value));
+  if (values.length < 3) return `Not enough numeric values in ${metric} to flag anomalies confidently.`;
+
+  const mean = values.reduce((sum, entry) => sum + entry.value, 0) / values.length;
+  const variance = values.reduce((sum, entry) => sum + Math.pow(entry.value - mean, 2), 0) / values.length;
+  const stdDev = Math.sqrt(variance);
+  if (!stdDev) return `${titleCase(metric)} has no meaningful spread, so no anomalies were detected.`;
+
+  const unusual = values
+    .map((entry) => ({ ...entry, z: Math.abs((entry.value - mean) / stdDev) }))
+    .filter((entry) => entry.z >= 1.5)
+    .sort((a, b) => b.z - a.z)
+    .slice(0, 3);
+
+  if (!unusual.length) return `No strong anomalies detected in ${titleCase(metric)}.`;
+  return `Potential anomalies in ${titleCase(metric)}: ${unusual
+    .map((entry) => `row ${entry.index + 1} (${entry.value.toLocaleString()})`)
+    .join(", ")}.`;
+}
+
+function thresholdSummary(query: string, rows: Row[]) {
+  const profile = buildDatasetProfile(rows);
+  const metric = profile.primaryMetric?.name || profile.numericColumns[0]?.name;
+  if (!metric) return null;
+
+  const plainNumber = query.trim().match(/^\$?([\d,]+(?:\.\d+)?)$/);
+  const comparison = query.match(/\b(above|over|greater than|more than|at least|>=|below|under|less than|<=)\s+\$?([\d,]+(?:\.\d+)?)/i);
+  if (!plainNumber && !comparison) return null;
+
+  const rawValue = plainNumber?.[1] || comparison?.[2];
+  const threshold = rawValue ? safeNumber(rawValue) : null;
+  if (threshold === null) return null;
+
+  const operatorText = comparison?.[1]?.toLowerCase() || "at least";
+  const isUpperBound = ["below", "under", "less than", "<="].includes(operatorText);
+  const matchedRows = rows.filter((row) => {
+    const value = safeNumber(row[metric]);
+    if (value === null) return false;
+    return isUpperBound ? value <= threshold : value >= threshold;
+  });
+
+  const share = rows.length ? Math.round((matchedRows.length / rows.length) * 1000) / 10 : 0;
+  return `${matchedRows.length.toLocaleString()} rows have ${titleCase(metric)} ${isUpperBound ? "at or below" : "at or above"} ${formatNumber(threshold)} (${share}% of ${rows.length.toLocaleString()} rows).`;
+}
+
+export function localCommand(query: string, rows: Row[]): DashboardCommandResponse | null {
   const profile = buildDatasetProfile(rows);
   const columns = profile.columns.map((column) => column.name);
   const lower = query.toLowerCase();
@@ -80,6 +195,11 @@ function localCommand(query: string, rows: Row[]): DashboardCommandResponse | nu
   const category =
     profile.categoryColumns.find((column) => lower.includes(normalize(column.name).replace(/_/g, " ")))?.name ||
     profile.primaryCategory?.name;
+  const thresholdAnswer = thresholdSummary(query, rows);
+
+  if (thresholdAnswer) {
+    return { action: "ANSWER", message: thresholdAnswer, schemaOnly: true };
+  }
 
   if (/filter\s+(.+?)\s*=\s*(.+)$/i.test(query)) {
     const match = query.match(/filter\s+(.+?)\s*=\s*(.+)$/i);
@@ -89,8 +209,76 @@ function localCommand(query: string, rows: Row[]): DashboardCommandResponse | nu
     }
   }
 
+  if (/^filter data$|apply filters/i.test(lower)) {
+    const categoryColumn = profile.primaryCategory?.name || profile.categoryColumns[0]?.name;
+    const topValue = categoryColumn ? rows.find((row) => row[categoryColumn] != null)?.[categoryColumn] : undefined;
+    if (categoryColumn && topValue != null) {
+      return {
+        action: "FILTER",
+        message: `Applied a sample filter: ${categoryColumn} = ${String(topValue)}.`,
+        filters: { [categoryColumn]: String(topValue) },
+        schemaOnly: true,
+      };
+    }
+    return { action: "ANSWER", message: "No categorical column is available for a safe sample filter.", schemaOnly: true };
+  }
+
+  if (/build dashboard|dashboard automatically|dashboard$/.test(lower)) {
+    const chartSpec = firstGroupedChart(rows, query);
+    return {
+      action: chartSpec ? "GENERATE_CHART" : "GENERATE_KPI",
+      message: chartSpec
+        ? "Built a starter dashboard with local KPI cards and a schema-aware chart."
+        : "Built starter KPI cards from the available schema.",
+      chartSpec: chartSpec || undefined,
+      schemaOnly: true,
+    };
+  }
+
+  if (/generate chart|create chart|new chart/.test(lower)) {
+    const chartSpec = firstGroupedChart(rows, query);
+    return chartSpec
+      ? { action: "GENERATE_CHART", message: `Generated ${chartSpec.title}.`, chartSpec, schemaOnly: true }
+      : { action: "ANSWER", message: "No metric/category pair was available for a chart.", schemaOnly: true };
+  }
+
   if (/kpi|cards/.test(lower)) {
     return { action: "GENERATE_KPI", message: "Generated schema-aware KPI cards.", schemaOnly: true };
+  }
+
+  if (/summarize|summary|takeaway/.test(lower)) {
+    return { action: "ANSWER", message: summarizeDataset(rows), schemaOnly: true };
+  }
+
+  if (/data quality|quality score|completeness|missing|duplicate/.test(lower)) {
+    const quality = buildDataQualityScore(rows);
+    return {
+      action: "ANSWER",
+      message: `Data quality is ${Math.round(quality.finalScore)}%. Completeness is ${Math.round(quality.completeness)}%, uniqueness is ${Math.round(quality.uniqueness)}%, and ${quality.missingCells.toLocaleString()} cells are missing.`,
+      schemaOnly: true,
+    };
+  }
+
+  if (/anomal/.test(lower)) {
+    return { action: "ANSWER", message: anomalySummary(rows), schemaOnly: true };
+  }
+
+  if (/data dictionary|explain columns|columns and values/.test(lower)) {
+    return { action: "ANSWER", message: dataDictionary(rows), schemaOnly: true };
+  }
+
+  if (/group|aggregate/.test(lower)) {
+    const chartSpec = firstGroupedChart(rows, query);
+    return chartSpec
+      ? { action: "GENERATE_CHART", message: `Grouped ${chartSpec.yKey} by ${chartSpec.xKey}.`, chartSpec, schemaOnly: true }
+      : { action: "ANSWER", message: "No metric/category pair was available for grouping.", schemaOnly: true };
+  }
+
+  if (/sql preview|view sql|sql for this dataset/.test(lower)) {
+    const chartSpec = firstGroupedChart(rows, query);
+    return chartSpec
+      ? { action: "GENERATE_CHART", message: "Generated SQL preview for a grouped dataset query.", chartSpec, schemaOnly: true }
+      : { action: "ANSWER", message: "SELECT *\nFROM dataset\nLIMIT 25;", schemaOnly: true };
   }
 
   if (/pie|donut/.test(lower) && category) {
@@ -148,6 +336,25 @@ function sqlPreview(command: DashboardCommandResponse) {
   return undefined;
 }
 
+function safeBuildChart(rows: Row[], chartSpec: NonNullable<DashboardCommandResponse["chartSpec"]>) {
+  try {
+    return buildChartFromSpec(rows, chartSpec);
+  } catch {
+    return undefined;
+  }
+}
+
+function safeBuildKpis(rows: Row[], command: DashboardCommandResponse, query: string) {
+  try {
+    if (command.kpiSpec) return [buildKpiFromSpec(rows, command.kpiSpec)];
+    if (/kpi|cards|dashboard/i.test(query)) return buildKpis(rows).slice(0, 5);
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
 export default function ChatInterface() {
   const { dataset } = useData();
   const [input, setInput] = useState("");
@@ -161,8 +368,19 @@ export default function ChatInterface() {
   const suggestions = useMemo(() => generateDynamicQuestionSuggestions({ id: dataset?.id, name: dataset?.name, rows, columns: dataset?.columns }, 5), [dataset, rows]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView?.({ behavior: "smooth" });
   }, [messages, loading]);
+
+  function pushAssistant(content: string) {
+    setMessages((current) => [
+      ...current,
+      {
+        id: makeMessageId(),
+        role: "assistant",
+        content,
+      },
+    ]);
+  }
 
   async function sendPrompt(prompt = input) {
     const query = prompt.trim();
@@ -170,7 +388,7 @@ export default function ChatInterface() {
 
     setInput("");
     setLoading(true);
-    setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", content: query }]);
+    setMessages((current) => [...current, { id: makeMessageId(), role: "user", content: query }]);
 
     const planned = localCommand(query, rows);
 
@@ -180,12 +398,12 @@ export default function ChatInterface() {
         const command = response.action === "ANSWER" && planned ? planned : response.chartSpec || response.kpiSpec || response.filters ? response : planned;
 
         if (command) {
-          const chart = command.chartSpec ? buildChartFromSpec(rows, command.chartSpec) : undefined;
-          const kpis = command.kpiSpec ? [buildKpiFromSpec(rows, command.kpiSpec)] : /kpi|cards/i.test(query) ? buildKpis(rows).slice(0, 5) : undefined;
+          const chart = command.chartSpec ? safeBuildChart(rows, command.chartSpec) : undefined;
+          const kpis = safeBuildKpis(rows, command, query);
           setMessages((current) => [
             ...current,
             {
-              id: crypto.randomUUID(),
+              id: makeMessageId(),
               role: "assistant",
               content: command.message || "Generated a schema-aware response.",
               chart,
@@ -202,7 +420,7 @@ export default function ChatInterface() {
       setMessages((current) => [
         ...current,
         {
-          id: crypto.randomUUID(),
+          id: makeMessageId(),
           role: "assistant",
           content: response.assistantMessage.content,
           takeaway: "Schema-only answer. Raw rows were not sent to the LLM.",
@@ -210,12 +428,12 @@ export default function ChatInterface() {
       ]);
     } catch (error) {
       if (planned) {
-        const chart = planned.chartSpec ? buildChartFromSpec(rows, planned.chartSpec) : undefined;
-        const kpis = planned.kpiSpec ? [buildKpiFromSpec(rows, planned.kpiSpec)] : /kpi|cards/i.test(query) ? buildKpis(rows).slice(0, 5) : undefined;
+        const chart = planned.chartSpec ? safeBuildChart(rows, planned.chartSpec) : undefined;
+        const kpis = safeBuildKpis(rows, planned, query);
         setMessages((current) => [
           ...current,
           {
-            id: crypto.randomUUID(),
+            id: makeMessageId(),
             role: "assistant",
             content: planned.message || "Generated locally from schema.",
             chart,
@@ -228,7 +446,7 @@ export default function ChatInterface() {
         setMessages((current) => [
           ...current,
           {
-            id: crypto.randomUUID(),
+            id: makeMessageId(),
             role: "assistant",
             content: error instanceof Error ? error.message : "I could not process that request.",
           },
@@ -252,6 +470,7 @@ export default function ChatInterface() {
   async function shareChat() {
     const summary = messages.map((message) => `${message.role}: ${message.content}`).join("\n\n");
     await navigator.clipboard?.writeText(summary || "InsightFlow AI Chat");
+    pushAssistant("Conversation summary copied to clipboard.");
   }
 
   function exportChat() {
@@ -262,6 +481,15 @@ export default function ChatInterface() {
     link.download = `${dataset?.name || "chat"}-conversation.json`;
     link.click();
     URL.revokeObjectURL(url);
+    pushAssistant("Conversation exported as JSON.");
+  }
+
+  function openAttachmentGuidance() {
+    pushAssistant("Use the Upload or PDF Intelligence page to attach CSV, Excel, JSON, or PDF files. I will analyze the active dataset here after it is loaded.");
+  }
+
+  function showSettingsSummary() {
+    pushAssistant("Current AI chat settings: schema-only mode, local chart/KPI calculation, Qwen3:8B provider when backend AI is available, and browser fallback when it is not.");
   }
 
   const visibleMessages = messages.length ? messages : [];
@@ -282,20 +510,20 @@ export default function ChatInterface() {
             <p className="mt-1 text-sm text-slate-400">Ask questions, generate charts, and build insights from your data.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={shareChat} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm">
-              <Share2 className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={shareChat} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm">
+              <Share2 className="mr-2 inline size-4" />
               Share
             </button>
-            <button onClick={exportChat} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm">
-              <Download className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={exportChat} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm">
+              <Download className="mr-2 inline size-4" />
               Export
             </button>
             <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-2 text-sm text-blue-100">
-              <span className="mr-2 inline-block h-2 w-2 rounded-full bg-green-400" />
+              <span className="mr-2 inline-block size-2 rounded-full bg-green-400" />
               Qwen3:8B Online
             </div>
-            <button className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2">
-              <Settings className="h-5 w-5" />
+            <button type="button" onClick={showSettingsSummary} aria-label="Show AI chat settings" className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2">
+              <Settings className="size-5" />
             </button>
           </div>
         </header>
@@ -304,8 +532,8 @@ export default function ChatInterface() {
           <main className={`${CARD} flex min-h-[calc(100vh-10rem)] flex-col overflow-hidden`}>
             <div className="border-b border-slate-700/60 p-5">
               <div className="flex gap-4">
-                <div className="grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600">
-                  <Sparkles className="h-8 w-8 text-white" />
+                <div className="grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600">
+                  <Sparkles className="size-8 text-white" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -315,7 +543,7 @@ export default function ChatInterface() {
                   <p className="mt-2 text-sm text-slate-400">I can answer schema questions, generate local charts and KPIs, filter records, and explain data quality.</p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {suggestions.map((suggestion) => (
-                      <button key={suggestion} onClick={() => void sendPrompt(suggestion)} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">
+                      <button type="button" key={suggestion} onClick={() => void sendPrompt(suggestion)} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800">
                         {suggestion}
                       </button>
                     ))}
@@ -356,14 +584,14 @@ export default function ChatInterface() {
 
                     {message.takeaway && (
                       <div className="mt-3 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-3 text-left text-sm text-blue-100">
-                        <Brain className="mr-2 inline h-4 w-4" />
+                        <Brain className="mr-2 inline size-4" />
                         {message.takeaway}
                       </div>
                     )}
 
                     {(message.chart || message.kpis?.length) && (
-                      <button onClick={() => addToDashboard(message)} className="mt-3 rounded-xl border border-violet-500/50 px-4 py-2 text-sm text-violet-200">
-                        <Grid3X3 className="mr-2 inline h-4 w-4" />
+                      <button type="button" onClick={() => addToDashboard(message)} className="mt-3 rounded-xl border border-violet-500/50 px-4 py-2 text-sm text-violet-200">
+                        <Grid3X3 className="mr-2 inline size-4" />
                         Add to Dashboard
                       </button>
                     )}
@@ -373,7 +601,7 @@ export default function ChatInterface() {
 
               {loading && (
                 <div className="rounded-2xl border border-slate-700/60 bg-slate-950/60 px-4 py-3 text-sm text-slate-300">
-                  <Bot className="mr-2 inline h-4 w-4 animate-pulse text-violet-300" />
+                  <Bot className="mr-2 inline size-4 animate-pulse text-violet-300" />
                   Thinking in schema-only mode...
                 </div>
               )}
@@ -392,19 +620,19 @@ export default function ChatInterface() {
                     }
                   }}
                   placeholder="Ask anything about your data, charts, filters, or KPIs..."
-                  className="h-20 w-full resize-none bg-transparent px-2 py-2 text-sm outline-none placeholder:text-slate-500"
+                  className="h-20 w-full resize-none bg-transparent p-2 text-sm outline-none placeholder:text-slate-500"
                 />
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-                    <span className="rounded-xl border border-slate-700 px-3 py-2"><Database className="mr-2 inline h-4 w-4" />Schema only</span>
+                    <span className="rounded-xl border border-slate-700 px-3 py-2"><Database className="mr-2 inline size-4" />Schema only</span>
                     <span className="rounded-xl border border-slate-700 px-3 py-2">Qwen3:8B</span>
                   </div>
                   <div className="flex gap-2">
-                    <button className="rounded-xl border border-slate-700 p-3"><Paperclip className="h-4 w-4" /></button>
-                    <button onClick={() => void sendPrompt("Generate chart")} className="rounded-xl border border-slate-700 p-3"><BarChart3 className="h-4 w-4" /></button>
-                    <button onClick={() => void sendPrompt("Filter data")} className="rounded-xl border border-slate-700 p-3"><Filter className="h-4 w-4" /></button>
-                    <button onClick={() => void sendPrompt("Summarize dataset")} className="rounded-xl border border-slate-700 p-3"><Table2 className="h-4 w-4" /></button>
-                    <button disabled={!input.trim() || loading} onClick={() => void sendPrompt()} className="rounded-xl bg-violet-600 p-3 disabled:opacity-50"><Send className="h-4 w-4" /></button>
+                    <button type="button" onClick={openAttachmentGuidance} aria-label="Attach data guidance" className="rounded-xl border border-slate-700 p-3"><Paperclip className="size-4" /></button>
+                    <button type="button" onClick={() => void sendPrompt("Generate chart")} className="rounded-xl border border-slate-700 p-3"><BarChart3 className="size-4" /></button>
+                    <button type="button" onClick={() => void sendPrompt("Filter data")} className="rounded-xl border border-slate-700 p-3"><Filter className="size-4" /></button>
+                    <button type="button" onClick={() => void sendPrompt("Summarize dataset")} className="rounded-xl border border-slate-700 p-3"><Table2 className="size-4" /></button>
+                    <button type="button" disabled={!input.trim() || loading} onClick={() => void sendPrompt()} className="rounded-xl bg-violet-600 p-3 disabled:opacity-50"><Send className="size-4" /></button>
                   </div>
                 </div>
               </div>
@@ -414,8 +642,8 @@ export default function ChatInterface() {
           <aside className="space-y-4">
             <div className={`${CARD} p-4`}>
               <div className="flex items-center gap-3">
-                <div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-500/20 text-violet-200">
-                  <FileText className="h-6 w-6" />
+                <div className="grid size-12 place-items-center rounded-2xl bg-violet-500/20 text-violet-200">
+                  <FileText className="size-6" />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate font-semibold text-white">{dataset?.name}</p>
@@ -447,10 +675,10 @@ export default function ChatInterface() {
               </div>
               <div className="grid place-items-center">
                 <div
-                  className="grid h-32 w-32 place-items-center rounded-full"
+                  className="grid size-32 place-items-center rounded-full"
                   style={{ background: `conic-gradient(#22c55e ${quality.finalScore * 3.6}deg, rgba(51,65,85,0.9) 0deg)` }}
                 >
-                  <div className="grid h-24 w-24 place-items-center rounded-full bg-slate-950">
+                  <div className="grid size-24 place-items-center rounded-full bg-slate-950">
                     <span className="text-3xl font-semibold">{Math.round(quality.finalScore)}%</span>
                   </div>
                 </div>
@@ -461,7 +689,7 @@ export default function ChatInterface() {
               <h3 className="font-semibold text-white">Quick Actions</h3>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 {["Generate Chart", "Build Dashboard", "Find Anomalies", "Summarize Dataset"].map((action) => (
-                  <button key={action} onClick={() => void sendPrompt(action)} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-3 py-3 text-left text-xs text-slate-200">
+                  <button type="button" key={action} onClick={() => void sendPrompt(action)} className="rounded-xl border border-slate-700/60 bg-slate-950/60 p-3 text-left text-xs text-slate-200">
                     {action}
                   </button>
                 ))}
@@ -477,7 +705,7 @@ export default function ChatInterface() {
                   ["Data Dictionary", "Explain columns and values"],
                   ["SQL Preview", "View SQL for this dataset"],
                 ].map(([title, subtitle]) => (
-                  <button key={title} onClick={() => void sendPrompt(title)} className="w-full rounded-xl border border-slate-700/60 bg-slate-950/60 px-3 py-3 text-left">
+                  <button type="button" key={title} onClick={() => void sendPrompt(title)} className="w-full rounded-xl border border-slate-700/60 bg-slate-950/60 p-3 text-left">
                     <p className="text-sm text-slate-200">{title}</p>
                     <p className="text-xs text-slate-500">{subtitle}</p>
                   </button>
@@ -490,12 +718,12 @@ export default function ChatInterface() {
               <div className="mt-3 space-y-2 text-sm text-slate-400">
                 {insights.slice(0, 3).map((insight) => (
                   <p key={insight.id}>
-                    <Trophy className="mr-2 inline h-4 w-4 text-amber-300" />
+                    <Trophy className="mr-2 inline size-4 text-amber-300" />
                     {insight.description}
                   </p>
                 ))}
                 <p>
-                  <ShieldCheck className="mr-2 inline h-4 w-4 text-green-300" />
+                  <ShieldCheck className="mr-2 inline size-4 text-green-300" />
                   Schema-only mode is active.
                 </p>
               </div>

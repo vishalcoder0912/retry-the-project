@@ -7,6 +7,10 @@ function aggregate(values = [], aggregation = "count") {
 
   if (aggregation === "count") return present.length;
 
+  if (aggregation === "count_unique") {
+    return new Set(present.map((v) => String(v).trim().toLowerCase())).size;
+  }
+
   const numbers = present.map(safeNumber).filter((value) => value !== null);
 
   if (!numbers.length) return 0;
@@ -19,10 +23,21 @@ function aggregate(values = [], aggregation = "count") {
   if (aggregation === "median") {
     const sorted = [...numbers].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
-
     return sorted.length % 2
       ? sorted[mid]
       : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  if (aggregation === "p75") {
+    const sorted = [...numbers].sort((a, b) => a - b);
+    const index = Math.ceil(sorted.length * 0.75) - 1;
+    return sorted[Math.max(0, index)];
+  }
+
+  if (aggregation === "p25") {
+    const sorted = [...numbers].sort((a, b) => a - b);
+    const index = Math.ceil(sorted.length * 0.25) - 1;
+    return sorted[Math.max(0, index)];
   }
 
   return present.length;
@@ -34,14 +49,17 @@ function calculateQualityScore(rows, schema) {
     (sum, column) => sum + column.nullCount,
     0
   );
-
   return ((totalCells - missingCells) / totalCells) * 100;
 }
 
-function formatValue(metricName, value) {
+function formatValue(metricName, value, aggregation) {
   const name = String(metricName || "").toLowerCase();
 
-  if (/salary|revenue|sales|amount|price|cost|profit|income/.test(name)) {
+  if (aggregation === "count_unique") {
+    return Math.round(value).toLocaleString();
+  }
+
+  if (/salary|revenue|sales|amount|price|cost|profit|income|compensation/.test(name)) {
     return `$${Math.round(value).toLocaleString()}`;
   }
 
@@ -49,6 +67,9 @@ function formatValue(metricName, value) {
     return `${Number(value).toFixed(1)}%`;
   }
 
+  if (Number.isInteger(value) || Math.abs(value) >= 1000) {
+    return Math.round(value).toLocaleString();
+  }
   return Number(value.toFixed ? value.toFixed(2) : value).toLocaleString();
 }
 
@@ -73,6 +94,30 @@ function buildKpiFromTemplate(rows, schema, template) {
     };
   }
 
+  if (template.aggregation === "count_unique") {
+    const col =
+      findColumn(schema, template.metricAliases || [], "dimension") ||
+      findColumn(schema, template.metricAliases || [], "category") ||
+      findColumn(schema, template.metricAliases || [], "location");
+
+    if (!col) return null;
+
+    const uniqueCount = new Set(
+      rows
+        .map((row) => row[col.name])
+        .filter((v) => v !== null && v !== undefined && v !== "")
+        .map((v) => String(v).trim().toLowerCase())
+    ).size;
+
+    return {
+      id: crypto.randomUUID(),
+      title: template.title,
+      value: uniqueCount.toLocaleString(),
+      metric: col.name,
+      aggregation: "count_unique",
+    };
+  }
+
   const metric =
     findColumn(schema, template.metricAliases || [], "metric") ||
     (template.metricRole ? findColumn(schema, [], template.metricRole) : null) ||
@@ -88,7 +133,7 @@ function buildKpiFromTemplate(rows, schema, template) {
   return {
     id: crypto.randomUUID(),
     title: template.title,
-    value: formatValue(metric.name, value),
+    value: formatValue(metric.name, value, template.aggregation),
     metric: metric.name,
     aggregation: template.aggregation,
   };

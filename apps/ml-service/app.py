@@ -1,741 +1,416 @@
-"""
-AutoGluon ML Service for InsightFlow
-Completely FREE, no external APIs
-Cost: $0/month
+from __future__ import annotations
 
-Enhanced with:
-- Multiple training presets (fast, medium, best quality)
-- Hyperparameter tuning configurations
-- Model persistence and loading
-- Cross-validation support
-- Feature engineering options
-- Evaluation metrics and diagnostics
-"""
+import hashlib
+import math
+from datetime import date, datetime
+from typing import Any
 
-import sys
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-
-try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-except Exception:
-    pass
-
-try:
-    from autogluon.tabular import TabularPredictor
-    from autogluon.core.metrics import make_scorer
-    AUTOGLUON_AVAILABLE = True
-except Exception as e:
-    AUTOGLUON_AVAILABLE = False
-    TabularPredictor = None
-    print(f"AutoGluon not available: {e}")
-
-import json
-import os
-import logging
-import pandas as pd
 import numpy as np
-from datetime import datetime
-from typing import Dict, List, Optional, Any
-import shutil
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] [%(levelname)s] %(message)s'
-)
-logger = logging.getLogger(__name__)
+try:
+    import polars as pl
+except Exception:  # pragma: no cover - optional acceleration
+    pl = None
 
-# ============================================================
-# AUTOGLUON CONFIGURATION
-# ============================================================
-
-# Training presets with different quality/speed tradeoffs
-TRAINING_PRESETS = {
-    'fast': {
-        'time_limit': 30,  # 30 seconds
-        'presets': 'fast_training',
-        'hyperparameters': 'light',
-        'num_bag_folds': 0,
-        'num_bag_sets': 1,
-        'description': 'Fast training, lower accuracy. Good for quick experiments.'
-    },
-    'medium': {
-        'time_limit': 120,  # 2 minutes
-        'presets': 'medium_quality',
-        'hyperparameters': 'default',
-        'num_bag_folds': 0,
-        'num_bag_sets': 1,
-        'description': 'Balanced speed and accuracy. Good for most use cases.'
-    },
-    'high': {
-        'time_limit': 300,  # 5 minutes
-        'presets': 'high_quality',
-        'hyperparameters': 'default',
-        'num_bag_folds': 5,
-        'num_bag_sets': 1,
-        'description': 'High accuracy, slower training. Good for production models.'
-    },
-    'best': {
-        'time_limit': 600,  # 10 minutes
-        'presets': 'best_quality',
-        'hyperparameters': 'default',
-        'num_bag_folds': 8,
-        'num_bag_sets': 2,
-        'description': 'Best accuracy, slowest training. Use for critical models.'
-    }
-}
-
-# Hyperparameter configurations for different model types
-HYPERPARAMETER_CONFIGS = {
-    'light': {
-        'NN': {},  # Neural network with defaults
-        'GBM': {},  # LightGBM with defaults
-    },
-    'default': {
-        'NN': {},
-        'GBM': {},
-        'CAT': {},  # CatBoost
-        'XGB': {},  # XGBoost
-        'RF': {},   # Random Forest
-        'XT': {},   # Extra Trees
-        'KNN': {},  # K-Nearest Neighbors
-    },
-    'full': {
-        'NN': {'num_epochs': 50},
-        'GBM': {'num_boost_round': 1000},
-        'CAT': {'iterations': 1000},
-        'XGB': {'n_estimators': 1000},
-        'RF': {'n_estimators': 300},
-        'XT': {'n_estimators': 300},
-        'KNN': {},
-        'LR': {},  # Linear Regression
-        'FASTAI': {},  # FastAI neural network
-    }
-}
-
-# Model evaluation metrics
-EVALUATION_METRICS = {
-    'regression': ['r2', 'rmse', 'mae', 'mse', 'pearsonr', 'spearmanr'],
-    'classification': ['accuracy', 'f1', 'roc_auc', 'log_loss', 'balanced_accuracy'],
-    'multiclass': ['accuracy', 'f1_macro', 'f1_micro', 'roc_auc_ovr', 'log_loss']
-}
+from sklearn.ensemble import IsolationForest, RandomForestClassifier, RandomForestRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.cluster import KMeans
 
 
-class LocalBaselinePredictor:
-    """Fallback predictor when AutoGluon is unavailable in this Python runtime."""
-    def __init__(self, label, problem_type='regression'):
-        self.label = label
-        self.problem_type = problem_type
-        self._baseline = 0.0
-        self._feature_importance = {}
-        self.model_types = ['baseline']
+MAX_ANALYTICS_ROWS = 50_000
+MAX_RESPONSE_ROWS = 500
+analytics_cache: dict[str, Any] = {}
+trained_models: dict[str, Any] = {}
 
-    def fit(self, df):
-        features = [col for col in df.columns if col != self.label]
-        target = df[self.label]
-        if self.problem_type == 'regression':
-            self._baseline = float(pd.to_numeric(target, errors='coerce').mean())
-            self._feature_importance = {feature: 1.0 / max(len(features), 1) for feature in features}
-        else:
-            mode_series = target.mode(dropna=True)
-            self._baseline = mode_series.iloc[0] if not mode_series.empty else None
-            self._feature_importance = {feature: 1.0 / max(len(features), 1) for feature in features}
-        return self
+app = FastAPI(title="InsightFlow Analytics ML Service", version="3.0.0")
 
-    def predict(self, df_input):
-        return pd.Series([self._baseline] * len(df_input))
 
-    def predict_proba(self, df_input):
-        """Return dummy probabilities for classification"""
-        if self.problem_type == 'regression':
+class DatasetPayload(BaseModel):
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+    columns: list[Any] = Field(default_factory=list)
+    datasetId: str | None = None
+    target: str | None = None
+    method: str | None = None
+    nClusters: int = 3
+
+
+class PredictPayload(BaseModel):
+    modelId: str | None = None
+    rows: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class ComparePayload(BaseModel):
+    left: DatasetPayload
+    right: DatasetPayload
+
+
+class RagTrainingPayload(DatasetPayload):
+    dataset_name: str = "dataset"
+    goal: str = "agentic analytics"
+    max_examples: int = 50
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _json_safe(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        if math.isnan(float(value)) or math.isinf(float(value)):
             return None
-        # Return dummy probabilities
-        return pd.DataFrame({'prob': [0.5] * len(df_input)})
+        return float(value)
+    if isinstance(value, (datetime, date, pd.Timestamp)):
+        return value.isoformat()
+    if pd.isna(value):
+        return None
+    return value
 
-    def feature_importance(self, _df):
-        return pd.Series(self._feature_importance)
 
-    def evaluate(self, df):
-        """Evaluate model performance"""
-        predictions = self.predict(df)
-        target = df[self.label]
-        
-        if self.problem_type == 'regression':
-            target_numeric = pd.to_numeric(target, errors='coerce')
-            pred_numeric = pd.to_numeric(predictions, errors='coerce')
-            valid_mask = target_numeric.notna() & pred_numeric.notna()
-            
-            if valid_mask.any():
-                y_true = target_numeric[valid_mask]
-                y_pred = pred_numeric[valid_mask]
-                ss_res = ((y_true - y_pred) ** 2).sum()
-                ss_tot = ((y_true - y_true.mean()) ** 2).sum()
-                r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-                rmse = np.sqrt(((y_true - y_pred) ** 2).mean())
-                mae = np.abs(y_true - y_pred).mean()
-                return {'r2': r2, 'rmse': rmse, 'mae': mae}
-        
-        return {'accuracy': 0.0}
+def _dataframe(rows: list[dict[str, Any]]) -> pd.DataFrame:
+    if not rows:
+        return pd.DataFrame()
+    if pl is not None and len(rows) > 10_000:
+        return pl.DataFrame(rows).to_pandas()
+    return pd.DataFrame(rows)
 
-    def leaderboard(self, df=None):
-        """Return a dummy leaderboard"""
-        return pd.DataFrame({
-            'model': ['Baseline'],
-            'score_val': [0.0],
-            'pred_time_val': [0.001],
-            'fit_time': [0.001]
-        })
 
-app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend
+def _sample(df: pd.DataFrame, limit: int = MAX_ANALYTICS_ROWS) -> pd.DataFrame:
+    if len(df) <= limit:
+        return df
+    return df.sample(n=limit, random_state=42)
 
-# Store models in memory (for MVP)
-# Production: Use persistent storage
-predictors = {}
-model_metadata = {}
-MODEL_BASE_PATH = os.path.join(os.path.dirname(__file__), "models")
-os.makedirs(MODEL_BASE_PATH, exist_ok=True)
 
-# Load existing models on startup
-def load_existing_models():
-    """Load previously trained models from disk"""
-    if not AUTOGLUON_AVAILABLE:
-        logger.info("Skipping model loading - AutoGluon not available")
-        return
-    
-    logger.info("📂 Loading existing models from disk...")
-    loaded_count = 0
-    
-    if os.path.exists(MODEL_BASE_PATH):
-        for dataset_id in os.listdir(MODEL_BASE_PATH):
-            model_path = os.path.join(MODEL_BASE_PATH, dataset_id)
-            if os.path.isdir(model_path):
-                try:
-                    predictor = TabularPredictor.load(model_path)
-                    predictors[dataset_id] = predictor
-                    
-                    # Load metadata if available
-                    metadata_path = os.path.join(model_path, 'metadata.json')
-                    if os.path.exists(metadata_path):
-                        with open(metadata_path, 'r') as f:
-                            model_metadata[dataset_id] = json.load(f)
-                    else:
-                        model_metadata[dataset_id] = {
-                            'loaded_at': datetime.now().isoformat(),
-                            'path': model_path
-                        }
-                    
-                    loaded_count += 1
-                    logger.info(f"  ✅ Loaded model: {dataset_id}")
-                except Exception as e:
-                    logger.warning(f"  ⚠️  Failed to load model {dataset_id}: {e}")
-    
-    logger.info(f"✅ Loaded {loaded_count} existing models")
+def _column_names(payload: DatasetPayload, df: pd.DataFrame) -> list[str]:
+    if payload.columns:
+        names = []
+        for column in payload.columns:
+            if isinstance(column, dict):
+                names.append(str(column.get("name", "")))
+            else:
+                names.append(str(column))
+        return [name for name in names if name]
+    return [str(column) for column in df.columns]
 
-logger.info("🚀 AutoGluon ML Service starting...")
-if not AUTOGLUON_AVAILABLE:
-    logger.warning("⚠️  AutoGluon is not available in this Python version. Using local baseline predictor.")
-    logger.warning("   Install with: pip install autogluon.tabular")
-else:
-    logger.info(f"✅ AutoGluon available")
-    load_existing_models()
 
-@app.route('/api/ml/health', methods=['GET'])
+def _schema(df: pd.DataFrame) -> dict[str, str]:
+    return {str(column): str(dtype) for column, dtype in df.dtypes.items()}
+
+
+def _fingerprint(df: pd.DataFrame, columns: list[str]) -> str:
+    sample = df.head(100).to_json(orient="records", date_format="iso")
+    payload = {
+        "columns": columns,
+        "rowCount": int(len(df)),
+        "schema": _schema(df),
+        "sampleHash": hashlib.sha256(sample.encode("utf-8")).hexdigest(),
+    }
+    return hashlib.sha256(str(payload).encode("utf-8")).hexdigest()
+
+
+def _cached(endpoint: str, payload: DatasetPayload, builder):
+    df = _dataframe(payload.rows)
+    columns = _column_names(payload, df)
+    cache_key = f"{endpoint}:{_fingerprint(df, columns)}:{payload.target}:{payload.method}:{payload.nClusters}"
+    if cache_key in analytics_cache:
+        cached = dict(analytics_cache[cache_key])
+        cached["cacheHit"] = True
+        return cached
+    result = builder(_sample(df), columns)
+    result["fingerprint"] = cache_key.split(":", 1)[1]
+    result["cacheHit"] = False
+    analytics_cache[cache_key] = result
+    return result
+
+
+def _numeric_columns(df: pd.DataFrame) -> list[str]:
+    return [str(column) for column in df.select_dtypes(include=[np.number]).columns]
+
+
+def _prepare_xy(df: pd.DataFrame, target: str):
+    if target not in df.columns:
+        raise HTTPException(status_code=400, detail=f'Target column "{target}" not found')
+    clean = df.dropna(subset=[target])
+    if clean.empty:
+        raise HTTPException(status_code=400, detail="No rows with target values")
+    x = clean.drop(columns=[target])
+    y = clean[target]
+    numeric_features = list(x.select_dtypes(include=[np.number]).columns)
+    categorical_features = [column for column in x.columns if column not in numeric_features]
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("num", SimpleImputer(strategy="median"), numeric_features),
+            ("cat", make_pipeline(SimpleImputer(strategy="most_frequent"), OneHotEncoder(handle_unknown="ignore")), categorical_features),
+        ],
+        remainder="drop",
+    )
+    is_regression = pd.api.types.is_numeric_dtype(y) and y.nunique(dropna=True) > 10
+    return x, y, preprocessor, is_regression
+
+
+@app.get("/health")
 def health():
-    """Health check endpoint"""
-    return jsonify({
-        'success': True,
-        'status': 'healthy',
-        'timestamp': datetime.now().isoformat(),
-        'models_loaded': len(predictors),
-        'autogluon_available': AUTOGLUON_AVAILABLE,
-        'presets_available': list(TRAINING_PRESETS.keys()),
-        'version': '2.0.0'
-    })
-
-@app.route('/api/ml/config', methods=['GET'])
-def get_config():
-    """Get available training configurations"""
-    return jsonify({
-        'success': True,
-        'presets': TRAINING_PRESETS,
-        'hyperparameter_configs': list(HYPERPARAMETER_CONFIGS.keys()),
-        'evaluation_metrics': EVALUATION_METRICS,
-        'autogluon_available': AUTOGLUON_AVAILABLE
-    })
-
-@app.route('/api/ml/train', methods=['POST'])
-def train_model():
-    """
-    Train AutoGluon model on dataset with enhanced configuration
-    
-    Expected JSON:
-    {
-        "dataset_id": "uuid",
-        "rows": [{...}, {...}],
-        "target_column": "column_name",
-        "problem_type": "regression" or "classification" (optional, auto-detected),
-        "preset": "fast" | "medium" | "high" | "best" (default: "medium"),
-        "time_limit": int (optional, overrides preset),
-        "hyperparameters": "light" | "default" | "full" (optional),
-        "eval_metric": string (optional, auto-selected),
-        "feature_engineering": bool (default: True),
-        "save_model": bool (default: True)
+    return {
+        "success": True,
+        "status": "healthy",
+        "engine": "fastapi",
+        "polarsAvailable": pl is not None,
+        "cacheEntries": len(analytics_cache),
     }
-    """
-    try:
-        data = request.json
-        
-        # Validate input
-        dataset_id = data.get('dataset_id')
-        rows = data.get('rows')
-        target_column = data.get('target_column')
-        problem_type = data.get('problem_type')  # Optional, will auto-detect
-        preset = data.get('preset', 'medium')
-        time_limit = data.get('time_limit')  # Optional override
-        hyperparameters = data.get('hyperparameters', 'default')
-        eval_metric = data.get('eval_metric')  # Optional
-        feature_engineering = data.get('feature_engineering', True)
-        save_model = data.get('save_model', True)
-        
-        if not all([dataset_id, rows, target_column]):
-            return jsonify({
-                'success': False,
-                'error': 'Missing required fields: dataset_id, rows, target_column'
-            }), 400
-        
-        # Validate preset
-        if preset not in TRAINING_PRESETS:
-            return jsonify({
-                'success': False,
-                'error': f'Invalid preset. Available: {list(TRAINING_PRESETS.keys())}'
-            }), 400
-        
-        logger.info(f"[TRAIN] Starting training for dataset {dataset_id}")
-        logger.info(f"[TRAIN] Dataset size: {len(rows)} rows")
-        logger.info(f"[TRAIN] Preset: {preset}")
-        
-        # Convert to DataFrame
-        df = pd.DataFrame(rows)
-        
-        # Validate target column exists
-        if target_column not in df.columns:
-            return jsonify({
-                'success': False,
-                'error': f'Target column "{target_column}" not found in dataset'
-            }), 400
-        
-        logger.info(f"[TRAIN] Columns: {list(df.columns)}")
-        logger.info(f"[TRAIN] Shape: {df.shape}")
-        
-        # Get preset configuration
-        preset_config = TRAINING_PRESETS[preset]
-        actual_time_limit = time_limit if time_limit else preset_config['time_limit']
-        actual_hyperparameters = HYPERPARAMETER_CONFIGS.get(hyperparameters, HYPERPARAMETER_CONFIGS['default'])
-        
-        logger.info(f"[TRAIN] Time limit: {actual_time_limit}s")
-        logger.info(f"[TRAIN] Hyperparameters: {hyperparameters}")
-        
-        # Auto-detect problem type if not specified
-        if not problem_type:
-            target_data = df[target_column]
-            unique_values = target_data.nunique()
-            
-            if unique_values <= 10:
-                problem_type = 'classification'
-                logger.info(f"[TRAIN] Auto-detected: classification ({unique_values} unique values)")
-            else:
-                # Check if numeric
-                try:
-                    pd.to_numeric(target_data, errors='raise')
-                    problem_type = 'regression'
-                    logger.info(f"[TRAIN] Auto-detected: regression (numeric target)")
-                except:
-                    problem_type = 'classification'
-                    logger.info(f"[TRAIN] Auto-detected: classification (categorical target)")
-        
-        
-        logger.info(f"[TRAIN] Problem type: {problem_type}")
-        
-        # Prepare model path
-        model_path = os.path.join(MODEL_BASE_PATH, dataset_id)
-        
-        # Remove existing model if present
-        if os.path.exists(model_path):
-            logger.info(f"[TRAIN] Removing existing model at {model_path}")
-            shutil.rmtree(model_path)
 
-        if AUTOGLUON_AVAILABLE:
-            # Build fit arguments
-            fit_args = {
-                'time_limit': actual_time_limit,
-                'presets': preset_config['presets'],
-                'verbosity': 2,  # More detailed logging
+
+@app.post("/profile")
+def profile(payload: DatasetPayload):
+    def build(df: pd.DataFrame, columns: list[str]):
+        missing = {column: int(df[column].isna().sum()) if column in df else 0 for column in columns}
+        numeric = df.select_dtypes(include=[np.number])
+        categorical = df.select_dtypes(exclude=[np.number, "datetime64[ns]"])
+        measures = [str(column) for column in numeric.columns]
+        dimensions = [str(column) for column in categorical.columns]
+        dates = {
+            column: {
+                "min": _json_safe(pd.to_datetime(df[column], errors="coerce").min()),
+                "max": _json_safe(pd.to_datetime(df[column], errors="coerce").max()),
             }
-            
-            # Add hyperparameters if specified
-            if actual_hyperparameters:
-                fit_args['hyperparameters'] = actual_hyperparameters
-            
-            
-            # Add bagging for high quality presets
-            if preset in ['high', 'best']:
-                fit_args['num_bag_folds'] = preset_config['num_bag_folds']
-                fit_args['num_bag_sets'] = preset_config['num_bag_sets']
-            
-            
-            # Add eval metric if specified
-            if eval_metric:
-                fit_args['eval_metric'] = eval_metric
-            
-            
-            # Create predictor
-            predictor = TabularPredictor(
-                label=target_column,
-                problem_type=problem_type,
-                path=model_path,
-                eval_metric=eval_metric
-            )
-            
-            # Fit the model
-            logger.info(f"[TRAIN] Training with AutoGluon...")
-            predictor.fit(df, **fit_args)
-            
-            logger.info("[TRAIN] ✅ AutoGluon training completed")
-        else:
-            predictor = LocalBaselinePredictor(
-                label=target_column,
-                problem_type=problem_type,
-            ).fit(df)
-            
-            logger.info("[TRAIN] ✅ Baseline predictor training completed")
-
-        # Get feature importance
-        feature_importance = predictor.feature_importance(df)
-        logger.info(f"[TRAIN] Feature importance calculated")
-        
-        # Get predictions for evaluation
-        predictions = predictor.predict(df)
-        
-        # Evaluate model performance
-        if AUTOGLUON_AVAILABLE:
-            # Use AutoGluon's evaluation
-            evaluation = predictor.evaluate(df)
-            leaderboard = predictor.leaderboard(df)
-            
-            # Get best model score
-            if not leaderboard.empty:
-                best_score = leaderboard.iloc[0]['score_val']
-                best_model = leaderboard.iloc[0]['model']
-            else:
-                best_score = 0.0
-                best_model = 'unknown'
-        else:
-            # Use baseline evaluation
-            evaluation = predictor.evaluate(df)
-            leaderboard = predictor.leaderboard(df)
-            best_score = 0.0
-            best_model = 'baseline'
-        
-        # Calculate additional metrics
-        if problem_type == 'regression':
-            target_series = pd.to_numeric(df[target_column], errors='coerce')
-            pred_series = pd.to_numeric(predictions, errors='coerce')
-            valid_mask = target_series.notna() & pred_series.notna()
-            
-            if valid_mask.any():
-                y_true = target_series[valid_mask]
-                y_pred = pred_series[valid_mask]
-                
-                ss_res = ((y_true - y_pred) ** 2).sum()
-                ss_tot = ((y_true - y_true.mean()) ** 2).sum()
-                r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0
-                rmse = np.sqrt(((y_true - y_pred) ** 2).mean())
-                mae = np.abs(y_true - y_pred).mean()
-                
-                performance = r2
-                additional_metrics = {'r2': r2, 'rmse': rmse, 'mae': mae}
-            else:
-                performance = 0.0
-                additional_metrics = {}
-        else:
-            # Classification accuracy
-            performance = float((predictions == df[target_column]).mean())
-            additional_metrics = {'accuracy': performance}
-        
-        # Save metadata
-        metadata = {
-            'trained_at': datetime.now().isoformat(),
-            'rows': len(rows),
-            'columns': len(df.columns),
-            'target_column': target_column,
-            'problem_type': problem_type,
-            'preset': preset,
-            'time_limit': actual_time_limit,
-            'hyperparameters': hyperparameters,
-            'autogluon_available': AUTOGLUON_AVAILABLE,
-            'best_model': best_model,
-            'best_score': float(best_score),
+            for column in columns
+            if column in df and pd.to_datetime(df[column], errors="coerce").notna().mean() > 0.7
         }
-        
-        # Save metadata to disk
-        if save_model and AUTOGLUON_AVAILABLE:
-            metadata_path = os.path.join(model_path, 'metadata.json')
-            with open(metadata_path, 'w') as f:
-                json.dump(metadata, f, indent=2)
-            logger.info(f"[TRAIN] Metadata saved to {metadata_path}")
-        
-        
-        # Store predictor in memory
-        predictors[dataset_id] = predictor
-        model_metadata[dataset_id] = metadata
-        
-        logger.info(f"[TRAIN] Performance: {performance}")
-        logger.info(f"[TRAIN] Best model: {best_model}")
-        
-        # Prepare response
-        response = {
-            'success': True,
-            'model_id': dataset_id,
-            'performance': float(performance) if performance is not None else 0.0,
-            'best_score': float(best_score),
-            'best_model': best_model,
-            'feature_importance': feature_importance.to_dict(),
-            'evaluation': evaluation if isinstance(evaluation, dict) else {},
-            'additional_metrics': additional_metrics,
-            'leaderboard': leaderboard.to_dict('records') if not leaderboard.empty else [],
-            'training_completed_at': datetime.now().isoformat(),
-            'preset_used': preset,
-            'time_limit': actual_time_limit,
-            'problem_type': problem_type,
-            'message': '✅ Model trained successfully',
-        }
-        
-        return jsonify(response)
-        
-    except Exception as e:
-        logger.error(f"[TRAIN] ❌ Error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'error_type': type(e).__name__,
-        }), 500
-
-@app.route('/api/ml/predict', methods=['POST'])
-def predict():
-    """
-    Make predictions with trained model
-    
-    Expected JSON:
-    {
-        "dataset_id": "uuid",
-        "input_data": [{...}] or {...},
-        "return_proba": bool (optional, default: False),
-        "as_pandas": bool (optional, default: False)
-    }
-    """
-    try:
-        data = request.json
-        dataset_id = data.get('dataset_id')
-        input_data = data.get('input_data')
-        return_proba = data.get('return_proba', False)
-        as_pandas = data.get('as_pandas', False)
-        
-        if not dataset_id:
-            return jsonify({
-                'success': False,
-                'error': 'Missing dataset_id'
-            }), 400
-        
-        if not input_data:
-            return jsonify({
-                'success': False,
-                'error': 'Missing input_data'
-            }), 400
-        
-        # Check if model exists
-        if dataset_id not in predictors:
-            logger.warning(f"[PREDICT] Model not found for dataset {dataset_id}")
-            return jsonify({
-                'success': False,
-                'error': f'Model not found for dataset {dataset_id}. Train model first.'
-            }), 404
-        
-        logger.info(f"[PREDICT] Making predictions for dataset {dataset_id}")
-        
-        # Convert to DataFrame if needed
-        if isinstance(input_data, dict):
-            df_input = pd.DataFrame([input_data])
-        else:
-            df_input = pd.DataFrame(input_data)
-        
-        logger.info(f"[PREDICT] Input shape: {df_input.shape}")
-        
-        # Make predictions
-        predictor = predictors[dataset_id]
-        predictions = predictor.predict(df_input)
-        
-        response = {
-            'success': True,
-            'predictions': predictions.tolist(),
-            'count': len(predictions),
-            'timestamp': datetime.now().isoformat(),
-        }
-        
-        # Add probabilities if requested and available
-        if return_proba:
-            try:
-                proba = predictor.predict_proba(df_input)
-                if proba is not None:
-                    response['probabilities'] = proba.to_dict('records') if hasattr(proba, 'to_dict') else proba.tolist()
-            except Exception as e:
-                logger.warning(f"[PREDICT] Could not get probabilities: {e}")
-        
-        
-        logger.info(f"[PREDICT] ✅ Predictions made: {len(predictions)} rows")
-        
-        return jsonify(response)
-        
-    except Exception as e:
-        logger.error(f"[PREDICT] ❌ Error: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'error_type': type(e).__name__,
-        }), 500
-
-@app.route('/api/ml/feature-importance', methods=['POST'])
-def feature_importance():
-    """Get feature importance from trained model"""
-    try:
-        data = request.json
-        dataset_id = data.get('dataset_id')
-        
-        if not dataset_id or dataset_id not in predictors:
-            return jsonify({
-                'success': False,
-                'error': 'Model not found'
-            }), 404
-        
-        logger.info(f"[FEATURE-IMP] Getting importance for dataset {dataset_id}")
-        
-        predictor = predictors[dataset_id]
-        importance = predictor.feature_importance(None)
-        
-        logger.info(f"[FEATURE-IMP] ✅ Feature importance retrieved")
-        
-        return jsonify({
-            'success': True,
-            'importance': importance.to_dict(),
-            'timestamp': datetime.now().isoformat(),
+        total_cells = max(len(df) * max(len(columns), 1), 1)
+        missing_cells = sum(missing.values())
+        return _json_safe({
+            "rowCount": int(len(df)),
+            "columnCount": int(len(columns)),
+            "columns": [{"name": column, "type": str(df[column].dtype) if column in df else "unknown"} for column in columns],
+            "measures": measures,
+            "dimensions": dimensions,
+            "missingValues": missing,
+            "numericSummary": numeric.describe().to_dict() if not numeric.empty else {},
+            "categoricalSummary": {
+                column: {
+                    "unique": int(categorical[column].nunique(dropna=True)),
+                    "top": categorical[column].mode(dropna=True).iloc[0] if not categorical[column].mode(dropna=True).empty else None,
+                }
+                for column in categorical.columns
+            },
+            "dateSummary": dates,
+            "qualityScore": round(100 * (1 - missing_cells / total_cells), 2),
         })
-        
-    except Exception as e:
-        logger.error(f"[FEATURE-IMP] ❌ Error: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-        }), 500
 
-@app.route('/api/ml/models', methods=['GET'])
-def list_models():
-    """List all trained models"""
-    logger.info("[MODELS] Fetching model list")
-    
-    models = []
-    for dataset_id, predictor in predictors.items():
-        metadata = model_metadata.get(dataset_id, {})
-        
-        # Get model info
-        model_info = {
-            'dataset_id': dataset_id,
-            'metadata': metadata,
-            'problem_type': metadata.get('problem_type', 'unknown'),
-            'target_column': metadata.get('target_column', 'unknown'),
-            'trained_at': metadata.get('trained_at', 'unknown'),
-            'best_model': metadata.get('best_model', 'unknown'),
-            'best_score': metadata.get('best_score', 0.0),
+    return _cached("profile", payload, build)
+
+
+@app.post("/correlations")
+def correlations(payload: DatasetPayload):
+    def build(df: pd.DataFrame, _columns: list[str]):
+        numeric = df.select_dtypes(include=[np.number])
+        matrix_df = numeric.corr(method=payload.method or "pearson").fillna(0) if len(numeric.columns) else pd.DataFrame()
+        strong_pairs = []
+        for i, left in enumerate(matrix_df.columns):
+            for right in matrix_df.columns[i + 1:]:
+                coefficient = float(matrix_df.loc[left, right])
+                if abs(coefficient) >= 0.7:
+                    strong_pairs.append({"columnA": left, "columnB": right, "coefficient": round(coefficient, 4)})
+        return _json_safe({"method": payload.method or "pearson", "matrix": matrix_df.to_dict(), "strongPairs": strong_pairs})
+
+    return _cached("correlations", payload, build)
+
+
+@app.post("/anomalies")
+def anomalies(payload: DatasetPayload):
+    def build(df: pd.DataFrame, _columns: list[str]):
+        numeric_cols = _numeric_columns(df)
+        anomalies_found = []
+        method = payload.method or ("isolation_forest" if len(df) >= 20 and numeric_cols else "zscore")
+        if not numeric_cols:
+            return {"method": method, "anomalies": [], "summary": {"count": 0}}
+        numeric = df[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(df[numeric_cols].median(numeric_only=True))
+        if method == "isolation_forest" and len(numeric) >= 20:
+            model = IsolationForest(contamination="auto", random_state=42)
+            labels = model.fit_predict(numeric)
+            scores = model.decision_function(numeric)
+            for index, label in enumerate(labels):
+                if label == -1 and len(anomalies_found) < MAX_RESPONSE_ROWS:
+                    anomalies_found.append({"row": int(index), "score": float(scores[index]), "method": "isolation_forest"})
+        else:
+            zscores = ((numeric - numeric.mean()) / numeric.std(ddof=0)).replace([np.inf, -np.inf], np.nan).fillna(0)
+            for row_index, row in zscores.iterrows():
+                for column, zscore in row.items():
+                    if abs(float(zscore)) >= 3 and len(anomalies_found) < MAX_RESPONSE_ROWS:
+                        anomalies_found.append({"row": int(row_index), "column": column, "zScore": round(float(zscore), 4)})
+        return {"method": method, "anomalies": anomalies_found, "summary": {"count": len(anomalies_found), "numericColumns": numeric_cols}}
+
+    return _cached("anomalies", payload, build)
+
+
+@app.post("/feature-importance")
+def feature_importance(payload: DatasetPayload):
+    if not payload.target:
+        raise HTTPException(status_code=400, detail="target is required")
+
+    def build(df: pd.DataFrame, _columns: list[str]):
+        x, y, preprocessor, is_regression = _prepare_xy(df, payload.target)
+        model = RandomForestRegressor(n_estimators=80, random_state=42) if is_regression else RandomForestClassifier(n_estimators=80, random_state=42)
+        pipeline = make_pipeline(preprocessor, model)
+        pipeline.fit(x, y)
+        importances = pipeline.named_steps[random_forest_step_name(pipeline)].feature_importances_
+        features = [{"feature": f"feature_{index}", "importance": round(float(score), 6)} for index, score in enumerate(importances)]
+        features.sort(key=lambda item: item["importance"], reverse=True)
+        return {"target": payload.target, "features": features[:50]}
+
+    return _cached("feature-importance", payload, build)
+
+
+def random_forest_step_name(pipeline) -> str:
+    return list(pipeline.named_steps.keys())[-1]
+
+
+@app.post("/train-model")
+def train_model(payload: DatasetPayload):
+    if not payload.target:
+        raise HTTPException(status_code=400, detail="target is required")
+    df = _sample(_dataframe(payload.rows))
+    x, y, preprocessor, is_regression = _prepare_xy(df, payload.target)
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.25, random_state=42)
+    model = RandomForestRegressor(n_estimators=100, random_state=42) if is_regression else RandomForestClassifier(n_estimators=100, random_state=42)
+    pipeline = make_pipeline(preprocessor, model)
+    pipeline.fit(x_train, y_train)
+    predictions = pipeline.predict(x_test)
+    metrics = (
+        {
+            "r2": round(float(r2_score(y_test, predictions)), 4),
+            "rmse": round(float(mean_squared_error(y_test, predictions) ** 0.5), 4),
+            "mae": round(float(mean_absolute_error(y_test, predictions)), 4),
         }
-        
-        # Add model types if available
-        if hasattr(predictor, 'model_types'):
-            model_info['model_types'] = predictor.model_types
-        
-        models.append(model_info)
-    
-    
-    return jsonify({
-        'success': True,
-        'models': models,
-        'count': len(models),
-        'autogluon_available': AUTOGLUON_AVAILABLE
+        if is_regression
+        else {"accuracy": round(float(accuracy_score(y_test, predictions)), 4)}
+    )
+    model_id = hashlib.sha256(f"{payload.datasetId}:{payload.target}:{len(trained_models)}".encode("utf-8")).hexdigest()[:16]
+    trained_models[model_id] = {"model": pipeline, "target": payload.target, "modelType": "regression" if is_regression else "classification"}
+    return {"modelType": trained_models[model_id]["modelType"], "target": payload.target, "metrics": metrics, "modelId": model_id, "warnings": []}
+
+
+@app.post("/predict")
+def predict(payload: PredictPayload):
+    if not payload.modelId or payload.modelId not in trained_models:
+        raise HTTPException(status_code=404, detail="model not found")
+    model_info = trained_models[payload.modelId]
+    predictions = model_info["model"].predict(_dataframe(payload.rows)).tolist()
+    return {"modelId": payload.modelId, "predictions": _json_safe(predictions), "count": len(predictions)}
+
+
+@app.post("/compare-datasets")
+def compare_datasets(payload: ComparePayload):
+    left_df = _dataframe(payload.left.rows)
+    right_df = _dataframe(payload.right.rows)
+    left_cols = set(_column_names(payload.left, left_df))
+    right_cols = set(_column_names(payload.right, right_df))
+    common = sorted(left_cols & right_cols)
+    schema_drift = [
+        {"column": column, "leftType": str(left_df[column].dtype), "rightType": str(right_df[column].dtype)}
+        for column in common
+        if column in left_df and column in right_df and str(left_df[column].dtype) != str(right_df[column].dtype)
+    ]
+    return {
+        "sameSchema": left_cols == right_cols and not schema_drift,
+        "commonColumns": common,
+        "missingColumns": sorted(left_cols - right_cols),
+        "extraColumns": sorted(right_cols - left_cols),
+        "rowDifference": int(len(right_df) - len(left_df)),
+        "schemaDrift": schema_drift,
+    }
+
+
+@app.post("/clustering")
+def clustering(payload: DatasetPayload):
+    def build(df: pd.DataFrame, _columns: list[str]):
+        numeric_cols = _numeric_columns(df)
+        if not numeric_cols:
+            return {"method": "kmeans", "clusters": [], "summary": {"count": 0}}
+        numeric = df[numeric_cols].apply(pd.to_numeric, errors="coerce").fillna(df[numeric_cols].median(numeric_only=True))
+        n_clusters = min(max(int(payload.nClusters), 2), len(numeric))
+        labels = KMeans(n_clusters=n_clusters, random_state=42, n_init=10).fit_predict(numeric)
+        return {
+            "method": "kmeans",
+            "clusters": [{"row": int(index), "cluster": int(label)} for index, label in enumerate(labels[:MAX_RESPONSE_ROWS])],
+            "summary": {"count": int(n_clusters), "numericColumns": numeric_cols},
+        }
+
+    return _cached("clustering", payload, build)
+
+
+@app.post("/cluster")
+def cluster(payload: DatasetPayload):
+    return clustering(payload)
+
+
+@app.post("/rag-training-records")
+def rag_training_records(payload: RagTrainingPayload):
+    profile_result = profile(DatasetPayload(rows=payload.rows, columns=payload.columns, datasetId=payload.datasetId))
+    correlation_result = correlations(DatasetPayload(rows=payload.rows, columns=payload.columns, method="pearson"))
+
+    schema = {
+        "datasetName": payload.dataset_name,
+        "rowCount": profile_result.get("rowCount", 0),
+        "columnCount": profile_result.get("columnCount", 0),
+        "measures": profile_result.get("measures", []),
+        "dimensions": profile_result.get("dimensions", []),
+        "qualityScore": profile_result.get("qualityScore"),
+    }
+
+    templates = [
+        ("Profile this dataset", "Return schema, quality score, measures, dimensions, and missing values."),
+        ("Find data quality issues", "Return missing values, duplicates, constant columns, and recommendations."),
+        ("Recommend dashboard KPIs", "Return KPIs based only on numeric measures and valid dimensions."),
+        ("Find correlations", "Return strong correlation pairs and explain possible business meaning."),
+        ("Create chart plan", "Return chart types using existing columns only."),
+    ]
+
+    max_examples = max(1, min(int(payload.max_examples or 50), 200))
+    examples = []
+    for index in range(max_examples):
+        instruction, expected = templates[index % len(templates)]
+        examples.append({
+            "instruction": f"{instruction} for {payload.dataset_name}. Goal: {payload.goal}.",
+            "schema": schema,
+            "expectedOutput": expected,
+            "guardrail": "Do not hallucinate KPI values. Use deterministic analytics outputs only.",
+        })
+
+    column_names = ",".join(str(column.get("name")) for column in profile_result.get("columns", []))
+    fingerprint_src = f"{payload.dataset_name}|{schema['rowCount']}|{schema['columnCount']}|{column_names}"
+    fingerprint = hashlib.sha256(fingerprint_src.encode("utf-8")).hexdigest()
+    chunks = [
+        {
+            "id": f"{fingerprint}:schema",
+            "type": "schema_memory",
+            "text": (
+                f"Dataset {payload.dataset_name} has {schema['rowCount']} rows, "
+                f"{schema['columnCount']} columns, measures {schema['measures']}, "
+                f"dimensions {schema['dimensions']}, quality score {schema['qualityScore']}."
+            ),
+            "metadata": schema,
+        },
+        {
+            "id": f"{fingerprint}:correlations",
+            "type": "analytics_memory",
+            "text": f"Strong correlation pairs: {correlation_result.get('strongPairs', [])}",
+            "metadata": {"strongPairs": correlation_result.get("strongPairs", [])},
+        },
+    ]
+
+    return _json_safe({
+        "datasetFingerprint": fingerprint,
+        "ragChunks": chunks,
+        "fineTuneExamples": examples,
     })
-
-@app.route('/api/ml/models/<dataset_id>', methods=['GET'])
-def get_model_info(dataset_id):
-    """Get detailed information about a specific model"""
-    if dataset_id not in predictors:
-        return jsonify({
-            'success': False,
-            'error': 'Model not found'
-        }), 404
-    
-    predictor = predictors[dataset_id]
-    metadata = model_metadata.get(dataset_id, {})
-    
-    info = {
-        'success': True,
-        'dataset_id': dataset_id,
-        'metadata': metadata,
-        'problem_type': metadata.get('problem_type'),
-        'target_column': metadata.get('target_column'),
-    }
-    
-    # Add AutoGluon specific info
-    if AUTOGLUON_AVAILABLE and hasattr(predictor, 'model_types'):
-        info['model_types'] = predictor.model_types
-        info['model_paths'] = predictor.model_paths
-    
-    return jsonify(info)
-
-@app.route('/api/ml/models/<dataset_id>', methods=['DELETE'])
-def delete_model(dataset_id):
-    """Delete a trained model from memory and disk"""
-    try:
-        if dataset_id not in predictors:
-            return jsonify({
-                'success': False,
-                'error': 'Model not found'
-            }), 404
-        
-        # Remove from memory
-        del predictors[dataset_id]
-        del model_metadata[dataset_id]
-        
-        # Remove from disk
-        model_path = os.path.join(MODEL_BASE_PATH, dataset_id)
-        if os.path.exists(model_path):
-            shutil.rmtree(model_path)
-            logger.info(f"[DELETE] Removed model from disk: {model_path}")
-        
-        logger.info(f"[DELETE] ✅ Model deleted for dataset {dataset_id}")
-        return jsonify({
-            'success': True,
-            'message': f'Model for dataset {dataset_id} deleted from memory and disk'
-        })
-        
-    except Exception as e:
-        logger.error(f"[DELETE] ❌ Error: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-        }), 500
-
-if __name__ == '__main__':
-    port = os.environ.get('PORT', 5000)
-    logger.info(f"🚀 Starting ML service on port {port}")
-    app.run(host='0.0.0.0', port=int(port), debug=False)

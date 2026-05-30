@@ -11,6 +11,17 @@ type Relationship = {
   strength?: 'strong' | 'moderate' | 'weak' | string;
 };
 
+const getStrengthColor = (strength?: string) => {
+  switch (strength) {
+    case 'strong':
+      return 'bg-green-200 text-green-800';
+    case 'moderate':
+      return 'bg-yellow-200 text-yellow-800';
+    default:
+      return 'bg-gray-200 text-gray-800';
+  }
+};
+
 const RelationshipsPage = () => {
   const { dataset } = useData();
   const [relationships, setRelationships] = useState<Relationship[]>([]);
@@ -34,18 +45,7 @@ const RelationshipsPage = () => {
     loadRelationships();
   }, [dataset]);
 
-  if (loading) return <div className="p-4">Analyzing relationships...</div>;
-
-  const getStrengthColor = (strength?: string) => {
-    switch (strength) {
-      case 'strong':
-        return 'bg-green-200 text-green-800';
-      case 'moderate':
-        return 'bg-yellow-200 text-yellow-800';
-      default:
-        return 'bg-gray-200 text-gray-800';
-    }
-  };
+  if (loading) return <div className="p-4">Analyzing relationships…</div>;
 
   return (
     <div className="p-6">

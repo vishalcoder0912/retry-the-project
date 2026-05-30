@@ -1,4 +1,5 @@
 // Response utility functions
+import { gzipSync } from 'node:zlib';
 import { CONTENT_TYPES } from '../config/constants.js';
 
 /**
@@ -6,15 +7,25 @@ import { CONTENT_TYPES } from '../config/constants.js';
  */
 export function sendJson(response, statusCode, payload) {
   const jsonString = JSON.stringify(payload, null, 2);
+  const acceptsGzip = String(response.req?.headers?.['accept-encoding'] || '').includes('gzip');
+  const shouldCompress = acceptsGzip && Buffer.byteLength(jsonString, 'utf8') > 1024;
+  const body = shouldCompress ? gzipSync(jsonString) : jsonString;
   
-  response.writeHead(statusCode, {
+  const headers = {
     'Content-Type': `${CONTENT_TYPES.JSON}; charset=utf-8`,
-    'Content-Length': Buffer.byteLength(jsonString, 'utf8'),
+    'Content-Length': shouldCompress ? body.length : Buffer.byteLength(jsonString, 'utf8'),
     'Cache-Control': 'no-cache',
     'X-Content-Type-Options': 'nosniff'
-  });
+  };
+
+  if (shouldCompress) {
+    headers['Content-Encoding'] = 'gzip';
+    headers.Vary = 'Accept-Encoding';
+  }
+
+  response.writeHead(statusCode, headers);
   
-  response.end(jsonString);
+  response.end(body);
 }
 
 /**
@@ -29,6 +40,20 @@ export function sendSuccess(response, data = null, message = 'Success') {
   };
   
   sendJson(response, 200, payload);
+}
+
+/**
+ * Send created response (201)
+ */
+export function sendCreated(response, data = null, message = 'Created') {
+  const payload = {
+    success: true,
+    data,
+    message,
+    timestamp: new Date().toISOString()
+  };
+
+  sendJson(response, 201, payload);
 }
 
 /**
@@ -259,6 +284,7 @@ export function sendRateLimit(response, retryAfter = null) {
 export default {
   sendJson,
   sendSuccess,
+  sendCreated,
   sendError,
   sendPaginated,
   sendFile,

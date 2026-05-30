@@ -215,6 +215,68 @@ export function useDashboardAiController({
     setMessages((current) => [...current, { id: makeId(), role: "user", content: text }]);
 
     try {
+      if (/understand|explain schema|schema samjhao|data samjhao/i.test(text)) {
+        const result: any = await schemaAiClient.understandDatasetSchema(payload.id || "local-dataset", {
+          ...payload,
+        });
+
+        pushAssistant(result?.explanation || "Schema understanding generated.", {
+          type: "text",
+          provider: "smart-schema-understanding",
+        });
+        return;
+      }
+
+      if (/smart dashboard|best dashboard|rag dashboard/i.test(text)) {
+        const result: any = await schemaAiClient.generateSmartRagDashboard(payload.id || "local-dataset", {
+          ...payload,
+          useOllama: useLlm,
+        });
+
+        const dashboard = result?.dashboard;
+
+        if (dashboard) {
+          setDashboardSpecs({
+            kpis: (dashboard.kpis || []) as KpiSpec[],
+            charts: (dashboard.charts || []) as ChartSpec[],
+            source: dashboard.source,
+            domain: dashboard.domain,
+          });
+          setManualCharts([]);
+          setManualKpis([]);
+        }
+
+        if (result?.quality?.health) setDashboardHealth(result.quality.health);
+
+        pushAssistant(
+          result?.understanding?.userExplanation || "Smart RAG dashboard generated.",
+          {
+            type: "action",
+            provider: "smart-rag-dashboard",
+          },
+        );
+        return;
+      }
+
+      if (/remember|train this|save pattern|learn this dashboard/i.test(text)) {
+        const result: any = await schemaAiClient.trainSmartRagDashboard(payload.id || "local-dataset", {
+          ...payload,
+          acceptedDashboardPlan: allSpecs,
+          rating: "good",
+          notes: "User approved this dashboard from UI.",
+          useOllama: useLlm,
+        });
+
+        pushAssistant(
+          `I saved this dashboard pattern. RAG memory now has ${result?.stats?.total || "updated"} patterns.`,
+          {
+            type: "action",
+            provider: "smart-rag-training",
+          },
+        );
+        return;
+      }
+
       const command = await schemaAiClient.sendDashboardCommand(
         payload.id || "local-dataset",
         text,

@@ -855,6 +855,485 @@
     },
     "examplesSeen": 1,
     "createdAt": "2026-05-20T00:00:00.000Z",
-    "updatedAt": "2026-05-20T12:43:39.359Z"
+    "updatedAt": "2026-05-30T03:05:36.264Z"
+  },
+  {
+    "id": "6fa9fb9b-a9b3-405f-9a8f-599446ff8894",
+    "name": "Salary Small",
+    "domain": "workforce_salary",
+    "source": "user-feedback",
+    "rating": "good",
+    "notes": "",
+    "schemaProfile": {
+      "datasetName": "Salary Small",
+      "rowCount": 3,
+      "columnCount": 3,
+      "domain": "workforce_salary",
+      "signature": "ad0fb0bd45d4b24598b972e7",
+      "columns": [
+        {
+          "name": "country",
+          "normalizedName": "country",
+          "type": "category",
+          "role": "location",
+          "description": "",
+          "uniqueCount": 2,
+          "missingPct": 0,
+          "topValuesCount": 2
+        },
+        {
+          "name": "salary_usd",
+          "normalizedName": "salary_usd",
+          "type": "number",
+          "role": "money_metric",
+          "description": "",
+          "uniqueCount": 3,
+          "missingPct": 0,
+          "topValuesCount": 0
+        },
+        {
+          "name": "experience",
+          "normalizedName": "experience",
+          "type": "number",
+          "role": "continuous_metric",
+          "description": "",
+          "uniqueCount": 3,
+          "missingPct": 0,
+          "topValuesCount": 0
+        }
+      ]
+    },
+    "dashboardPlan": {
+      "kpis": [
+        {
+          "title": "Total Records",
+          "metric": "__row_count__",
+          "aggregation": "count"
+        }
+      ],
+      "charts": [
+        {
+          "title": "Average Salary by Country",
+          "type": "bar",
+          "xKey": "country",
+          "xRole": "location",
+          "yKey": "salary_usd",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 10
+        }
+      ]
+    },
+    "examplesSeen": 22,
+    "updatedAt": "2026-05-30T09:26:38.807Z",
+    "createdAt": "2026-05-21T05:11:57.020Z"
+  },
+  {
+    "id": "2c69dbaa-f6dd-4661-b061-1a2a65529a79",
+    "name": "sales-analytics-2024.csv",
+    "domain": "sales_commerce",
+    "source": "training-script",
+    "rating": "good",
+    "notes": "",
+    "schemaProfile": {
+      "datasetName": "sales-analytics-2024.csv",
+      "rowCount": 5,
+      "columnCount": 7,
+      "domain": "sales_commerce",
+      "signature": "ee00cea7954669689ab610cd",
+      "columns": [
+        {
+          "name": "month",
+          "normalizedName": "month",
+          "type": "string",
+          "role": "date",
+          "description": "",
+          "uniqueCount": 5,
+          "missingPct": 0,
+          "topValuesCount": 5
+        },
+        {
+          "name": "category",
+          "normalizedName": "category",
+          "type": "string",
+          "role": "category",
+          "description": "",
+          "uniqueCount": 3,
+          "missingPct": 0,
+          "topValuesCount": 3
+        },
+        {
+          "name": "region",
+          "normalizedName": "region",
+          "type": "string",
+          "role": "location",
+          "description": "",
+          "uniqueCount": 4,
+          "missingPct": 0,
+          "topValuesCount": 4
+        },
+        {
+          "name": "revenue",
+          "normalizedName": "revenue",
+          "type": "number",
+          "role": "money_metric",
+          "description": "",
+          "uniqueCount": 5,
+          "missingPct": 0,
+          "topValuesCount": 0
+        },
+        {
+          "name": "units_sold",
+          "normalizedName": "units_sold",
+          "type": "number",
+          "role": "count_metric",
+          "description": "",
+          "uniqueCount": 5,
+          "missingPct": 0,
+          "topValuesCount": 0
+        },
+        {
+          "name": "profit_margin",
+          "normalizedName": "profit_margin",
+          "type": "number",
+          "role": "money_metric",
+          "description": "",
+          "uniqueCount": 5,
+          "missingPct": 0,
+          "topValuesCount": 0
+        },
+        {
+          "name": "channel",
+          "normalizedName": "channel",
+          "type": "string",
+          "role": "text",
+          "description": "",
+          "uniqueCount": 3,
+          "missingPct": 0,
+          "topValuesCount": 3
+        }
+      ]
+    },
+    "dashboardPlan": {
+      "kpis": [
+        {
+          "title": "Total Records",
+          "metric": "__row_count__",
+          "aggregation": "count",
+          "format": "number"
+        },
+        {
+          "title": "Average Revenue",
+          "metric": "revenue",
+          "metricRole": "money_metric",
+          "aggregation": "avg",
+          "format": "currency"
+        },
+        {
+          "title": "Median Revenue",
+          "metric": "revenue",
+          "metricRole": "money_metric",
+          "aggregation": "median",
+          "format": "currency"
+        },
+        {
+          "title": "Highest Revenue",
+          "metric": "revenue",
+          "metricRole": "money_metric",
+          "aggregation": "max",
+          "format": "currency"
+        },
+        {
+          "title": "Region Count",
+          "metric": "region",
+          "metricRole": "location",
+          "aggregation": "count_unique",
+          "format": "number"
+        }
+      ],
+      "charts": [
+        {
+          "title": "Average Revenue by Region",
+          "type": "bar",
+          "xKey": "region",
+          "xRole": "location",
+          "yKey": "revenue",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 10
+        },
+        {
+          "title": "Revenue Distribution",
+          "type": "histogram",
+          "xKey": "revenue",
+          "xRole": "money_metric",
+          "yKey": "revenue",
+          "yRole": "money_metric",
+          "aggregation": "count",
+          "limit": 10
+        },
+        {
+          "title": "Region Distribution",
+          "type": "donut",
+          "xKey": "region",
+          "xRole": "location",
+          "yKey": "count",
+          "aggregation": "count",
+          "limit": 10
+        },
+        {
+          "title": "Revenue vs Units Sold",
+          "type": "scatter",
+          "xKey": "units_sold",
+          "xRole": "count_metric",
+          "yKey": "revenue",
+          "yRole": "money_metric",
+          "aggregation": "count",
+          "limit": 50
+        },
+        {
+          "title": "Revenue Trend",
+          "type": "line",
+          "xKey": "month",
+          "xRole": "date",
+          "yKey": "revenue",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 24
+        },
+        {
+          "title": "Average Revenue by Category",
+          "type": "bar",
+          "xKey": "category",
+          "xRole": "category",
+          "yKey": "revenue",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 10
+        }
+      ]
+    },
+    "examplesSeen": 1,
+    "updatedAt": "2026-05-25T07:30:49.155Z",
+    "createdAt": "2026-05-25T07:30:49.157Z"
+  },
+  {
+    "id": "233f77b6-6132-4b2a-9ee1-6303d2343a4b",
+    "name": "salary-training-example-50",
+    "domain": "workforce_salary",
+    "source": "bulk-api",
+    "rating": "good",
+    "notes": "",
+    "schemaProfile": {
+      "datasetName": "salary-training-example-50",
+      "rowCount": 200,
+      "columnCount": 7,
+      "domain": "workforce_salary",
+      "signature": "b2db2001e50e2bbd12068f1c",
+      "columns": [
+        {
+          "name": "experience",
+          "normalizedName": "experience",
+          "type": "number",
+          "role": "continuous_metric",
+          "description": "",
+          "uniqueCount": 41,
+          "missingPct": 0,
+          "topValuesCount": 0
+        },
+        {
+          "name": "country",
+          "normalizedName": "country",
+          "type": "string",
+          "role": "location",
+          "description": "",
+          "uniqueCount": 10,
+          "missingPct": 0,
+          "topValuesCount": 10
+        },
+        {
+          "name": "education",
+          "normalizedName": "education",
+          "type": "string",
+          "role": "category",
+          "description": "",
+          "uniqueCount": 5,
+          "missingPct": 0,
+          "topValuesCount": 5
+        },
+        {
+          "name": "languages",
+          "normalizedName": "languages",
+          "type": "string",
+          "role": "continuous_metric",
+          "description": "",
+          "uniqueCount": 87,
+          "missingPct": 0,
+          "topValuesCount": 10
+        },
+        {
+          "name": "frameworks",
+          "normalizedName": "frameworks",
+          "type": "string",
+          "role": "category",
+          "description": "",
+          "uniqueCount": 87,
+          "missingPct": 0,
+          "topValuesCount": 10
+        },
+        {
+          "name": "company_size",
+          "normalizedName": "company_size",
+          "type": "string",
+          "role": "category",
+          "description": "",
+          "uniqueCount": 6,
+          "missingPct": 0,
+          "topValuesCount": 6
+        },
+        {
+          "name": "salary_usd",
+          "normalizedName": "salary_usd",
+          "type": "number",
+          "role": "money_metric",
+          "description": "",
+          "uniqueCount": 199,
+          "missingPct": 0,
+          "topValuesCount": 0
+        }
+      ]
+    },
+    "dashboardPlan": {
+      "kpis": [
+        {
+          "title": "Total Records",
+          "metric": "__row_count__",
+          "aggregation": "count",
+          "format": "number"
+        },
+        {
+          "title": "Average Salary",
+          "metric": "salary_usd",
+          "metricRole": "money_metric",
+          "aggregation": "avg",
+          "format": "currency"
+        },
+        {
+          "title": "Median Salary",
+          "metric": "salary_usd",
+          "metricRole": "money_metric",
+          "aggregation": "median",
+          "format": "currency"
+        },
+        {
+          "title": "Highest Salary",
+          "metric": "salary_usd",
+          "metricRole": "money_metric",
+          "aggregation": "max",
+          "format": "currency"
+        },
+        {
+          "title": "Countries",
+          "metric": "country",
+          "metricRole": "location",
+          "aggregation": "count_unique",
+          "format": "number"
+        },
+        {
+          "title": "Average Salary Usd",
+          "metric": "salary_usd",
+          "metricRole": "money_metric",
+          "aggregation": "avg",
+          "format": "currency"
+        },
+        {
+          "title": "Total Columns",
+          "metric": "__column_count__",
+          "aggregation": "count",
+          "format": "number"
+        },
+        {
+          "title": "Median Salary Usd",
+          "metric": "salary_usd",
+          "metricRole": "money_metric",
+          "aggregation": "median",
+          "format": "currency"
+        }
+      ],
+      "charts": [
+        {
+          "title": "Average Salary by Country",
+          "type": "bar",
+          "xKey": "country",
+          "xRole": "location",
+          "yKey": "salary_usd",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 10
+        },
+        {
+          "title": "Salary Distribution",
+          "type": "histogram",
+          "xKey": "salary_usd",
+          "xRole": "money_metric",
+          "yKey": "salary_usd",
+          "yRole": "money_metric",
+          "aggregation": "count",
+          "limit": 12
+        },
+        {
+          "title": "Salary vs Experience",
+          "type": "scatter",
+          "xKey": "experience",
+          "xRole": "continuous_metric",
+          "yKey": "salary_usd",
+          "yRole": "money_metric",
+          "aggregation": "count",
+          "limit": 500
+        },
+        {
+          "title": "Education Distribution",
+          "type": "donut",
+          "xKey": "education",
+          "xRole": "category",
+          "yKey": "count",
+          "aggregation": "count",
+          "limit": 10
+        },
+        {
+          "title": "Average Salary by Company Size",
+          "type": "bar",
+          "xKey": "company_size",
+          "xRole": "category",
+          "yKey": "salary_usd",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 10
+        },
+        {
+          "title": "Average Salary by Language",
+          "type": "bar",
+          "xKey": "languages",
+          "xRole": "continuous_metric",
+          "yKey": "salary_usd",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 10
+        },
+        {
+          "title": "Average Salary by Framework",
+          "type": "bar",
+          "xKey": "frameworks",
+          "xRole": "category",
+          "yKey": "salary_usd",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 10
+        }
+      ]
+    },
+    "examplesSeen": 50,
+    "updatedAt": "2026-05-30T08:32:57.395Z",
+    "createdAt": "2026-05-30T08:32:57.010Z"
   }
 ]

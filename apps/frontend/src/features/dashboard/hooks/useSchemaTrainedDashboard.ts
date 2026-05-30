@@ -595,6 +595,76 @@ export function useSchemaTrainedDashboard({
       setMessages((current) => [...current, { role: "user", content: text }]);
 
       try {
+        if (/understand|explain schema|schema samjhao|data samjhao/i.test(text)) {
+          const response = await schemaTrainedApi.understandDatasetSchema(datasetId, {
+            name: datasetName,
+            rows: safeRows,
+            columns,
+            dictionaryRows,
+          } as any);
+
+          const result = response?.data || response;
+          setProfile(result?.profile || profile);
+          setMessages((current) => [
+            ...current,
+            {
+              role: "assistant",
+              content: result?.explanation || "Schema understanding generated.",
+            },
+          ]);
+          return;
+        }
+
+        if (/smart dashboard|best dashboard|rag dashboard/i.test(text)) {
+          const response = await schemaTrainedApi.generateSmartRagDashboard(datasetId, {
+            name: datasetName,
+            rows: safeRows,
+            columns,
+            dictionaryRows,
+            useOllama: true,
+          } as any);
+
+          const result = response?.data || response;
+          if (result?.dashboard) {
+            applyDashboardPlan(result.dashboard, "smart-rag-dashboard");
+          }
+          setProfile(result?.profile || profile);
+          setProvider("smart-rag-dashboard");
+          setMessages((current) => [
+            ...current,
+            {
+              role: "assistant",
+              content:
+                result?.understanding?.userExplanation ||
+                "Smart RAG dashboard generated.",
+            },
+          ]);
+          return;
+        }
+
+        if (/remember|train this|save pattern|learn this dashboard/i.test(text)) {
+          const response = await schemaTrainedApi.trainSmartRagDashboard(datasetId, {
+            name: datasetName,
+            rows: safeRows,
+            columns,
+            dictionaryRows,
+            acceptedDashboardPlan: currentDashboard,
+            rating: "good",
+            notes: "User approved this dashboard from UI.",
+            useOllama: true,
+          } as any);
+
+          const result = response?.data || response;
+          setMessages((current) => [
+            ...current,
+            {
+              role: "assistant",
+              content: `I saved this dashboard pattern. RAG memory now has ${result?.stats?.total || "updated"} patterns.`,
+            },
+          ]);
+          return;
+        }
+
         const response = await schemaTrainedApi.runDashboardCommand(datasetId, {
           query: text,
           currentDashboard,
@@ -653,6 +723,7 @@ export function useSchemaTrainedDashboard({
       datasetName,
       columns,
       dictionaryRows,
+      profile,
       applyCommand,
       applyDashboardPlan,
     ],

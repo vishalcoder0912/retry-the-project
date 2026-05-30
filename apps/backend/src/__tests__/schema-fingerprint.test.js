@@ -17,5 +17,20 @@ describe("schema fingerprint", () => {
     expect(["continuous_metric", "count_metric"]).toContain(experience.role);
     expect(JSON.stringify(packet)).not.toContain("\"rows\"");
     expect(JSON.stringify(packet)).not.toContain("50000");
+    expect(JSON.stringify(packet)).not.toContain("India");
+    expect(packet.columns.find((column) => column.name === "salary_usd")).not.toHaveProperty("stats");
+    expect(packet.columns.find((column) => column.name === "country")).not.toHaveProperty("topValues");
+    expect(packet.columns.find((column) => column.name === "country")).toHaveProperty("topValuesCount");
+  });
+
+  it("can explicitly include value-bearing metadata for trusted local-only callers", () => {
+    const profile = buildSchemaProfile(salaryDataset);
+    const packet = makeSchemaOnlyPacket(profile, {
+      includeStats: true,
+      includeTopValues: true,
+    });
+
+    expect(packet.columns.find((column) => column.name === "salary_usd")).toHaveProperty("stats");
+    expect(packet.columns.find((column) => column.name === "country").topValues).toContain("India");
   });
 });
