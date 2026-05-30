@@ -64,10 +64,10 @@ function downloadFile(fileName: string, content: string, mime: string) {
 function QualityRing({ score }: { score: number }) {
   return (
     <div
-      className="grid h-24 w-24 place-items-center rounded-full"
+      className="grid size-24 place-items-center rounded-full"
       style={{ background: `conic-gradient(#22c55e ${score * 3.6}deg, rgba(51,65,85,0.9) 0deg)` }}
     >
-      <div className="grid h-16 w-16 place-items-center rounded-full bg-slate-950 text-center">
+      <div className="grid size-16 place-items-center rounded-full bg-slate-950 text-center">
         <span className="text-xl font-bold text-white">{Math.round(score)}%</span>
       </div>
     </div>
@@ -116,6 +116,7 @@ export default function DataTablePage() {
   } = useData();
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sortCol, setSortCol] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [page, setPage] = useState(0);
@@ -146,6 +147,11 @@ export default function DataTablePage() {
     setPage(0);
   }, [dataset?.id]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 200);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const filteredRows = useMemo(() => {
     const tableFilters = activeTab === "flagged"
       ? {
@@ -162,13 +168,13 @@ export default function DataTablePage() {
       next = next.filter((row) => columns.some((column) => row[column] === null || row[column] === undefined || String(row[column]).trim() === ""));
     }
 
-    if (search.trim()) {
-      const query = search.trim().toLowerCase();
+    if (debouncedSearch.trim()) {
+      const query = debouncedSearch.trim().toLowerCase();
       next = next.filter((row) => columns.some((column) => String(row[column] ?? "").toLowerCase().includes(query)));
     }
 
     return next;
-  }, [activeTab, columns, filters, indexedRows, search]);
+  }, [activeTab, columns, filters, indexedRows, debouncedSearch]);
 
   const sortedRows = useMemo(() => {
     if (!sortCol) return filteredRows;
@@ -305,16 +311,16 @@ export default function DataTablePage() {
             <p className="mt-1 text-sm text-slate-400">Explore, clean, filter, and manage your data.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm hover:bg-slate-800">
-              <Sparkles className="mr-2 inline h-4 w-4" />
+            <button type="button" className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm hover:bg-slate-800">
+              <Sparkles className="mr-2 inline size-4" />
               Ask AI
             </button>
-            <button onClick={exportVisibleRows} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm hover:bg-slate-800">
-              <Download className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={exportVisibleRows} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm hover:bg-slate-800">
+              <Download className="mr-2 inline size-4" />
               Export
             </button>
-            <button className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2 hover:bg-slate-800">
-              <MoreVertical className="h-5 w-5" />
+            <button type="button" className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2 hover:bg-slate-800">
+              <MoreVertical className="size-5" />
             </button>
           </div>
         </header>
@@ -324,13 +330,13 @@ export default function DataTablePage() {
             <section className={`${CARD} p-5`}>
               <div className="grid gap-5 xl:grid-cols-[1fr_280px_120px] xl:items-center">
                 <div className="flex items-center gap-5">
-                  <div className="grid h-24 w-24 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600">
-                    <FileSpreadsheet className="h-11 w-11 text-white" />
+                  <div className="grid size-24 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600">
+                    <FileSpreadsheet className="size-11 text-white" />
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-3">
                       <h2 className="text-3xl font-semibold text-white">{dataset.name}</h2>
-                      <Pencil className="h-4 w-4 text-slate-400" />
+                      <Pencil className="size-4 text-slate-400" />
                       <span className="rounded-full bg-green-500/15 px-3 py-1 text-xs font-semibold text-green-300">Ready</span>
                     </div>
                     <p className="mt-2 text-sm text-slate-400">
@@ -381,7 +387,7 @@ export default function DataTablePage() {
                       <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
                     </div>
                     <div className={`rounded-2xl p-3 ${index === 4 ? "bg-red-500/20 text-red-300" : "bg-blue-500/20 text-blue-300"}`}>
-                      {index === 4 ? <AlertTriangle className="h-5 w-5" /> : <Table2 className="h-5 w-5" />}
+                      {index === 4 ? <AlertTriangle className="size-5" /> : <Table2 className="size-5" />}
                     </div>
                   </div>
                 </div>
@@ -397,7 +403,7 @@ export default function DataTablePage() {
                     ["cleaned", "Cleaned", cleanPreview?.rows.length || rows.length],
                     ["schema", "Schema", columns.length],
                   ].map(([key, label, count]) => (
-                    <button
+                    <button type="button"
                       key={String(key)}
                       onClick={() => setActiveTab(key as typeof activeTab)}
                       className={`rounded-xl px-4 py-2 text-sm transition ${
@@ -413,7 +419,7 @@ export default function DataTablePage() {
               <div className="space-y-3 border-b border-slate-700/60 p-4">
                 <div className="flex flex-wrap gap-2">
                   <div className="relative min-w-[260px] flex-1">
-                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-500" />
                     <input
                       value={search}
                       onChange={(event) => {
@@ -424,28 +430,28 @@ export default function DataTablePage() {
                       className="w-full rounded-xl border border-slate-700/60 bg-slate-950/70 py-2 pl-10 pr-4 text-sm text-white outline-none"
                     />
                   </div>
-                  <button onClick={() => setShowAdvancedFilter((current) => !current)} className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 text-sm hover:bg-slate-800">
-                    <Filter className="mr-2 inline h-4 w-4" />
+                  <button type="button" onClick={() => setShowAdvancedFilter((current) => !current)} className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 text-sm hover:bg-slate-800">
+                    <Filter className="mr-2 inline size-4" />
                     Advanced Filter
                   </button>
-                  <button onClick={() => setSort(columns[0] || "")} className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 text-sm hover:bg-slate-800">
-                    <ArrowUpDown className="mr-2 inline h-4 w-4" />
+                  <button type="button" onClick={() => setSort(columns[0] || "")} className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 text-sm hover:bg-slate-800">
+                    <ArrowUpDown className="mr-2 inline size-4" />
                     Sort
                   </button>
-                  <button onClick={() => setShowColumns((current) => !current)} className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 text-sm hover:bg-slate-800">
-                    <Columns3 className="mr-2 inline h-4 w-4" />
+                  <button type="button" onClick={() => setShowColumns((current) => !current)} className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 text-sm hover:bg-slate-800">
+                    <Columns3 className="mr-2 inline size-4" />
                     Columns
                   </button>
-                  <button onClick={() => setCleanPreview(cleanRowsForPreview(rows))} className="rounded-xl border border-violet-500/50 bg-violet-500/15 px-4 py-2 text-sm text-violet-100 hover:bg-violet-500/25">
-                    <Wand2 className="mr-2 inline h-4 w-4" />
+                  <button type="button" onClick={() => setCleanPreview(cleanRowsForPreview(rows))} className="rounded-xl border border-violet-500/50 bg-violet-500/15 px-4 py-2 text-sm text-violet-100 hover:bg-violet-500/25">
+                    <Wand2 className="mr-2 inline size-4" />
                     AI Clean / Enrich
                   </button>
-                  <button onClick={deleteSelectedRows} className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 hover:bg-red-500/20">
-                    <Trash2 className="mr-2 inline h-4 w-4" />
+                  <button type="button" onClick={deleteSelectedRows} className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 hover:bg-red-500/20">
+                    <Trash2 className="mr-2 inline size-4" />
                     Row Actions
                   </button>
-                  <button onClick={() => { setSearch(""); setFilters({ conditions: [] }); setSelectedRows(new Set()); setPage(0); }} className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 text-sm hover:bg-slate-800">
-                    <RefreshCw className="mr-2 inline h-4 w-4" />
+                  <button type="button" onClick={() => { setSearch(""); setFilters({ conditions: [] }); setSelectedRows(new Set()); setPage(0); }} className="rounded-xl border border-slate-700/60 bg-slate-950/70 px-4 py-2 text-sm hover:bg-slate-800">
+                    <RefreshCw className="mr-2 inline size-4" />
                     Reset
                   </button>
                 </div>
@@ -460,7 +466,7 @@ export default function DataTablePage() {
                       {OPERATORS.map((operator) => <option key={operator.value} value={operator.value}>{operator.label}</option>)}
                     </select>
                     <input value={filterDraft.value} onChange={(event) => setFilterDraft((current) => ({ ...current, value: event.target.value }))} placeholder="Value" className="rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm outline-none" />
-                    <button onClick={applyAdvancedFilter} className="rounded-xl bg-violet-600 px-4 py-2 text-sm">Apply</button>
+                    <button type="button" onClick={applyAdvancedFilter} className="rounded-xl bg-violet-600 px-4 py-2 text-sm">Apply</button>
                   </div>
                 )}
 
@@ -490,15 +496,15 @@ export default function DataTablePage() {
                   <span>Active Filters:</span>
                   {(filters.conditions || []).length ? (
                     filters.conditions?.map((condition) => (
-                      <button key={condition.id} onClick={() => removeCondition(condition.id)} className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-200">
+                      <button type="button" key={condition.id} onClick={() => removeCondition(condition.id)} className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs text-slate-200">
                         {condition.column} {condition.operator} {condition.value}
-                        <X className="ml-2 inline h-3 w-3" />
+                        <X className="ml-2 inline size-3" />
                       </button>
                     ))
                   ) : (
                     <span className="rounded-full border border-slate-700 bg-slate-950 px-3 py-1 text-xs">No filters applied</span>
                   )}
-                  <button onClick={() => setFilters({ conditions: [] })} className="rounded-full border border-violet-500/40 px-3 py-1 text-xs text-violet-200">Clear all</button>
+                  <button type="button" onClick={() => setFilters({ conditions: [] })} className="rounded-full border border-violet-500/40 px-3 py-1 text-xs text-violet-200">Clear all</button>
                 </div>
               </div>
 
@@ -552,10 +558,10 @@ export default function DataTablePage() {
                             const columnProfile = profile.columns.find((item) => item.name === column);
                             return (
                               <th key={column} className="px-4 py-3">
-                                <button onClick={() => setSort(column)} className="flex items-center gap-2 text-left">
+                                <button type="button" onClick={() => setSort(column)} className="flex items-center gap-2 text-left">
                                   {column}
                                   <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px]">{columnProfile?.type || "string"}</span>
-                                  {sortCol === column ? (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3" />}
+                                  {sortCol === column ? (sortDir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />) : <ArrowUpDown className="size-3" />}
                                 </button>
                               </th>
                             );
@@ -571,7 +577,7 @@ export default function DataTablePage() {
                             {visibleColumnList.map((column) => (
                               <td key={column} className="max-w-[240px] truncate px-4 py-3">{String(row[column] ?? "") || "-"}</td>
                             ))}
-                            <td className="px-4 py-3"><MoreVertical className="h-4 w-4 text-slate-500" /></td>
+                            <td className="px-4 py-3"><MoreVertical className="size-4 text-slate-500" /></td>
                           </tr>
                         ))}
                       </tbody>
@@ -586,9 +592,9 @@ export default function DataTablePage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-slate-400">Showing {sortedRows.length ? page * pageSize + 1 : 0} to {Math.min((page + 1) * pageSize, sortedRows.length)} of {sortedRows.length}</span>
-                      <button disabled={page === 0} onClick={() => setPage((current) => Math.max(current - 1, 0))} className="rounded-xl border border-slate-700 bg-slate-950 p-2 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+                      <button type="button" disabled={page === 0} onClick={() => setPage((current) => Math.max(current - 1, 0))} className="rounded-xl border border-slate-700 bg-slate-950 p-2 disabled:opacity-40"><ChevronLeft className="size-4" /></button>
                       <span className="rounded-xl bg-violet-600 px-3 py-2 text-sm">{page + 1}</span>
-                      <button disabled={page >= totalPages - 1} onClick={() => setPage((current) => Math.min(current + 1, totalPages - 1))} className="rounded-xl border border-slate-700 bg-slate-950 p-2 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+                      <button type="button" disabled={page >= totalPages - 1} onClick={() => setPage((current) => Math.min(current + 1, totalPages - 1))} className="rounded-xl border border-slate-700 bg-slate-950 p-2 disabled:opacity-40"><ChevronRight className="size-4" /></button>
                     </div>
                   </div>
                 </>
@@ -600,7 +606,7 @@ export default function DataTablePage() {
             <div className="mb-5 flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <Bot className="h-5 w-5 text-violet-300" />
+                  <Bot className="size-5 text-violet-300" />
                   <h2 className="text-lg font-semibold text-white">AI Table Assistant</h2>
                   <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] uppercase text-violet-200">Beta</span>
                 </div>
@@ -616,7 +622,7 @@ export default function DataTablePage() {
                 ["Create chart from selected rows", `${selectedRows.size} rows selected`],
                 ["Clean text values", "Trim and normalize whitespace"],
               ].map(([label, note]) => (
-                <button key={label} onClick={() => setAssistantNote(note)} className="w-full rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-3 text-left text-sm text-slate-200 hover:bg-slate-800">
+                <button type="button" key={label} onClick={() => setAssistantNote(note)} className="w-full rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-3 text-left text-sm text-slate-200 hover:bg-slate-800">
                   {label}
                 </button>
               ))}
@@ -625,7 +631,7 @@ export default function DataTablePage() {
             <div className="mt-5 space-y-3">
               <h3 className="text-sm font-semibold text-white">Quick Insights</h3>
               <div className="rounded-2xl border border-green-500/25 bg-green-500/10 p-4 text-sm text-green-100">
-                <CheckCircle2 className="mr-2 inline h-4 w-4" />
+                <CheckCircle2 className="mr-2 inline size-4" />
                 {quality.missingCells ? `${quality.missingCells} missing cells need review.` : "No missing values detected."}
               </div>
               <div className="rounded-2xl border border-blue-500/25 bg-blue-500/10 p-4 text-sm text-blue-100">
@@ -645,8 +651,8 @@ export default function DataTablePage() {
             </div>
 
             <div className="mt-8 flex items-center gap-2 rounded-2xl border border-slate-700/60 bg-slate-950/70 p-2">
-              <input placeholder="Ask anything about this table..." className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-slate-500" />
-              <button className="rounded-xl bg-violet-600 p-3"><Send className="h-4 w-4" /></button>
+              <input aria-label="Ask anything about this table..." placeholder="Ask anything about this table..." className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-slate-500" />
+              <button type="button" className="rounded-xl bg-violet-600 p-3"><Send className="size-4" /></button>
             </div>
             <p className="mt-4 text-center text-xs text-slate-500">AI can make mistakes. Verify important results.</p>
           </aside>
@@ -661,7 +667,7 @@ export default function DataTablePage() {
                 <h2 className="text-xl font-semibold text-white">Cleaning Preview</h2>
                 <p className="mt-1 text-sm text-slate-400">Review local cleaning operations before applying them.</p>
               </div>
-              <button onClick={() => setCleanPreview(null)} className="rounded-xl border border-slate-700 bg-slate-950 p-2"><X className="h-4 w-4" /></button>
+              <button type="button" onClick={() => setCleanPreview(null)} className="rounded-xl border border-slate-700 bg-slate-950 p-2"><X className="size-4" /></button>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4"><p className="text-sm text-slate-400">Trimmed cells</p><p className="mt-2 text-2xl font-semibold">{cleanPreview.trimmedCells}</p></div>
@@ -669,8 +675,8 @@ export default function DataTablePage() {
               <div className="rounded-2xl border border-slate-700 bg-slate-950 p-4"><p className="text-sm text-slate-400">Result rows</p><p className="mt-2 text-2xl font-semibold">{cleanPreview.rows.length}</p></div>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <button onClick={() => setCleanPreview(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm">Cancel</button>
-              <button onClick={applyCleanPreview} className="rounded-xl bg-violet-600 px-4 py-2 text-sm">Apply Cleaning</button>
+              <button type="button" onClick={() => setCleanPreview(null)} className="rounded-xl border border-slate-700 px-4 py-2 text-sm">Cancel</button>
+              <button type="button" onClick={applyCleanPreview} className="rounded-xl bg-violet-600 px-4 py-2 text-sm">Apply Cleaning</button>
             </div>
           </div>
         </div>

@@ -41,6 +41,7 @@ export interface ChartSpec {
   yKey: string;
   aggregation: Exclude<Aggregation, "count_unique">;
   limit?: number;
+  splitValues?: boolean;
 }
 
 export interface ChartConfig extends ChartSpec {

@@ -2,10 +2,37 @@ import { buildSchemaProfile, makeSchemaOnlyPacket, normalizeColumnName } from ".
 import { applyTrainedTemplates, buildRuleDashboardPlan, mergePlans, pickPrimaryCategory, pickPrimaryMetric, pickSecondaryMetric, sanitizeChartSpec, sanitizeKpiSpec } from "./dashboard-plan-engine.js";
 import { findBestSchemaMatch, trainSchemaExample } from "./schema-training-store.js";
 import { formatChatAnswerWithOllama, planCommandWithOllama, planDashboardWithOllama } from "./llm-schema-dashboard-planner.js";
+import { buildGuardianDashboardResponse } from "./dashboard-quality-guardian.js";
+import {
+  buildSchemaUnderstanding,
+} from "./schema-understanding-engine.js";
+import {
+  buildRagDashboardPlan,
+  retrieveSchemaRagMemories,
+  trainSchemaRagMemoryFromDataset,
+} from "./schema-rag-retriever.js";
 
 function findColumn(profile, text, preferredRoles = []) {
   const lower = normalizeColumnName(text);
-  return profile.columns.find((column) => lower.includes(column.normalizedName)) ||
+  const tokens = new Set(lower.split("_").filter(Boolean));
+  const scored = (profile.columns || [])
+    .map((column) => {
+      const name = column.normalizedName || normalizeColumnName(column.name);
+      const nameTokens = name.split("_").filter(Boolean);
+      let score = 0;
+
+      if (lower === name) score += 100;
+      if (tokens.has(name)) score += 80;
+      if (nameTokens.length && nameTokens.every((token) => tokens.has(token))) score += 60;
+      if (nameTokens.some((token) => tokens.has(token))) score += 20;
+      if (preferredRoles.includes(column.role)) score += 10;
+
+      return { column, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  return scored[0]?.column ||
     profile.columns.find((column) => preferredRoles.includes(column.role)) ||
     profile.columns.find((column) => ["money_metric", "score_metric", "continuous_metric", "count_metric"].includes(column.role)) ||
     profile.columns[0];
@@ -19,42 +46,138 @@ function findCategory(profile, text) {
 
 export async function generateSchemaDashboard(dataset, options = {}) {
   const profile = buildSchemaProfile(dataset);
-  const matchResult = findBestSchemaMatch(profile, { threshold: options.threshold ?? 0.35 });
+  const understanding = buildSchemaUnderstanding(profile);
+
+  const matchResult = findBestSchemaMatch(profile, {
+    threshold: options.threshold ?? 0.35,
+  });
+
+  const ragResult = await retrieveSchemaRagMemories(profile, {
+    threshold: options.ragThreshold ?? 0.55,
+    limit: options.ragLimit ?? 5,
+    useOllama: options.useRagEmbedding !== false,
+  });
+
+  const ragPlan = buildRagDashboardPlan(profile, ragResult.matches);
   const trainedPlan = applyTrainedTemplates(profile, matchResult.best);
   const rulePlan = buildRuleDashboardPlan(profile);
 
   let llmPlan = null;
+
   if (options.useLlm !== false) {
-    llmPlan = await planDashboardWithOllama(profile, matchResult.best);
+    llmPlan = await planDashboardWithOllama(profile, matchResult.best, {
+      ragMatches: ragResult.matches,
+      schemaUnderstanding: {
+        domain: understanding.domain,
+        roles: understanding.roles,
+        userExplanation: understanding.userExplanation,
+        kpiCandidates: understanding.kpiCandidates,
+        chartCandidates: understanding.chartCandidates,
+      },
+    });
   }
 
-  const dashboard = mergePlans(profile, trainedPlan, llmPlan?.charts?.length || llmPlan?.kpis?.length ? llmPlan : null, rulePlan);
+  const smartCandidatePlan = {
+    source: "schema-understanding-engine",
+    domain: understanding.domain.domain,
+    kpis: understanding.kpiCandidates,
+    charts: understanding.chartCandidates,
+  };
+
+  const mergedDashboard = mergePlans(
+    profile,
+    ragPlan,
+    trainedPlan,
+    smartCandidatePlan,
+    llmPlan?.charts?.length || llmPlan?.kpis?.length ? llmPlan : null,
+    rulePlan
+  );
+
+  const guarded = buildGuardianDashboardResponse(profile, mergedDashboard, {
+    maxCharts: options.maxCharts ?? 7,
+    maxKpis: options.maxKpis ?? 8,
+  });
 
   return {
     success: true,
     schemaOnly: true,
     profile: makeSchemaOnlyPacket(profile),
-    match: matchResult.best ? {
-      dataset: matchResult.best.entry.name,
-      domain: matchResult.best.entry.domain,
-      score: matchResult.best.score,
-    } : null,
+    understanding: {
+      domain: understanding.domain,
+      userExplanation: understanding.userExplanation,
+      primaryMetric: understanding.roles.primaryMetric,
+      primaryCategory: understanding.roles.primaryCategory,
+      recommendedKpis: understanding.kpiCandidates.slice(0, 6),
+      recommendedCharts: understanding.chartCandidates.slice(0, 7),
+    },
+    match: matchResult.best
+      ? {
+          dataset: matchResult.best.entry.name,
+          domain: matchResult.best.entry.domain,
+          score: matchResult.best.score,
+        }
+      : null,
     candidates: matchResult.candidates.map((candidate) => ({
       dataset: candidate.entry.name,
       domain: candidate.entry.domain,
       score: candidate.score,
     })),
-    dashboard,
-    llm: llmPlan ? {
-      source: llmPlan.source,
-      model: llmPlan.model,
-      error: llmPlan.error,
-    } : null,
+    rag: {
+      used: ragResult.used,
+      threshold: ragResult.threshold,
+      query: ragResult.query,
+      matches: ragResult.matches.map((match) => ({
+        id: match.entry.id,
+        name: match.entry.name,
+        domain: match.entry.domain,
+        score: match.score,
+      })),
+      stats: ragResult.stats,
+    },
+    dashboard: guarded.dashboard,
+    dashboardPlan: guarded.dashboard,
+    dashboardHealth: guarded.dashboardHealth,
+    provider: llmPlan?.source?.startsWith("ollama:") ? "ollama" : ragResult.used ? "rag+local" : "local",
+    model: llmPlan?.model || "local",
+    quality: {
+      score: guarded.qualityScore,
+      health: guarded.dashboardHealth,
+      warnings: guarded.warnings,
+      fixes: guarded.fixes,
+    },
+    llm: llmPlan
+      ? {
+          source: llmPlan.source,
+          model: llmPlan.model,
+          error: llmPlan.error,
+        }
+      : null,
   };
 }
 
 export function trainSchemaDashboard(dataset, { dashboardPlan, rating = "good", notes = "", source = "upload-feedback" } = {}) {
   return trainSchemaExample({ dataset, dashboardPlan, rating, notes, source });
+}
+
+export async function trainSchemaRagDashboard(
+  dataset,
+  {
+    dashboardPlan,
+    acceptedDashboardPlan,
+    rating = "good",
+    notes = "",
+    source = "user-feedback",
+    useOllama,
+  } = {}
+) {
+  return trainSchemaRagMemoryFromDataset({
+    dataset,
+    acceptedDashboardPlan: acceptedDashboardPlan || dashboardPlan,
+    rating,
+    notes,
+    source,
+    useOllama,
+  });
 }
 
 function localCommand(profile, query) {
@@ -71,6 +194,27 @@ function localCommand(profile, query) {
     return { action: "DELETE_CHART", message: "Removed the selected chart.", schemaOnly: true };
   }
 
+  if (
+    /fix|repair|validate|correct|regenerate/.test(lower) &&
+    /dashboard|chart|charts|kpi|broken|wrong|invalid/.test(lower)
+  ) {
+    return {
+      action: "FIX_DASHBOARD",
+      message: "I checked the dashboard and prepared a schema-safe repair plan.",
+      dashboardPlan: buildRuleDashboardPlan(profile),
+      schemaOnly: true,
+    };
+  }
+
+  if (/best dashboard|generate dashboard|build dashboard|create dashboard/.test(lower)) {
+    return {
+      action: "GENERATE_DASHBOARD",
+      message: "Generated the best schema-safe dashboard.",
+      dashboardPlan: buildRuleDashboardPlan(profile),
+      schemaOnly: true,
+    };
+  }
+
   const filterMatch = lower.match(/filter\s+([a-z0-9_\s]+)\s*(=|to|is)\s*([\w\s.-]+)/i);
   if (filterMatch) {
     const column = findCategory(profile, filterMatch[1]) || category;
@@ -84,9 +228,9 @@ function localCommand(profile, query) {
   }
 
   if (/kpi|card|metric/.test(lower)) {
-    const aggregation = /highest|max|top/.test(lower) ? "max" : /median/.test(lower) ? "median" : /sum|total/.test(lower) ? "sum" : /average|avg|mean/.test(lower) ? "avg" : "count";
-    const target = aggregation === "count" && /record|row/.test(lower) ? { name: "__row_count__", title: "Records" } : findColumn(profile, lower, ["money_metric", "score_metric", "continuous_metric", "count_metric"]);
-    const title = aggregation === "count" && target.name === "__row_count__" ? "Total Records" : `${aggregation === "avg" ? "Average" : aggregation === "max" ? "Highest" : aggregation === "sum" ? "Total" : aggregation === "median" ? "Median" : "Count"} ${target?.title || target?.name}`;
+    const aggregation = /highest|max|top/.test(lower) ? "max" : /median/.test(lower) ? "median" : /sum|total/.test(lower) ? "sum" : /average|avg|mean/.test(lower) ? "avg" : /unique|distinct/.test(lower) ? "count_unique" : "count";
+    const target = aggregation === "count" && /record|row/.test(lower) ? { name: "__row_count__", title: "Records" } : findColumn(profile, lower, ["money_metric", "score_metric", "continuous_metric", "count_metric", "location", "category"]);
+    const title = aggregation === "count" && target.name === "__row_count__" ? "Total Records" : `${aggregation === "avg" ? "Average" : aggregation === "max" ? "Highest" : aggregation === "sum" ? "Total" : aggregation === "median" ? "Median" : aggregation === "count_unique" ? "Unique" : "Count"} ${target?.title || target?.name}`;
     return {
       action: "GENERATE_KPI",
       message: `Added KPI: ${title}.`,
@@ -157,17 +301,35 @@ function localCommand(profile, query) {
 export async function runDashboardCommand({ dataset, query, currentDashboard = {}, useLlm = true }) {
   const profile = buildSchemaProfile(dataset);
   const matchResult = findBestSchemaMatch(profile, { threshold: 0.35 });
+  const ragResult = await retrieveSchemaRagMemories(profile, {
+    threshold: 0.55,
+    limit: 5,
+  });
 
   const deterministic = localCommand(profile, query);
   const shouldUseLlm = useLlm && deterministic.action === "ANSWER";
+  const rag = {
+    used: ragResult.used,
+    matches: ragResult.matches.map((match) => ({
+      id: match.entry.id,
+      domain: match.entry.domain,
+      score: match.score,
+    })),
+  };
 
   if (shouldUseLlm) {
-    const planned = await planCommandWithOllama({ query, schemaProfile: profile, memoryMatch: matchResult.best, currentDashboard });
-    if (planned && planned.action !== "ANSWER") return planned;
-    return { ...deterministic, aiFallback: planned?.aiError || null, model: planned?.model, provider: planned?.provider };
+    const planned = await planCommandWithOllama({
+      query,
+      schemaProfile: profile,
+      memoryMatch: matchResult.best,
+      ragMatches: ragResult.matches,
+      currentDashboard,
+    });
+    if (planned && planned.action !== "ANSWER") return { ...planned, rag };
+    return { ...deterministic, aiFallback: planned?.aiError || null, model: planned?.model, provider: planned?.provider, rag };
   }
 
-  return deterministic;
+  return { ...deterministic, rag };
 }
 
 function computeLocalAnswer(profile, query) {

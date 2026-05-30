@@ -4,6 +4,7 @@ import { HTTP_STATUS, ERROR_CODES } from '../config/constants.js';
 import { updateAnalysis } from './state.js';
 import { getDatasetById } from '../database/dataset-repository.js';
 import { buildSchemaPacketAsync } from '../services/schema-packet-builder.js';
+import MLClient from '../services/ml-client.js';
 
 function getRouteDataset(pathname) {
   const datasetId = pathname.split('/')[3];
@@ -23,8 +24,10 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
         return true;
       }
       
-      // Calculate correlations
-      const correlations = calculateCorrelations(dataset);
+      const correlations = await MLClient.correlations(
+        dataset,
+        () => ({ method: 'pearson', matrix: [], strongPairs: calculateCorrelations(dataset) }),
+      );
       
       sendSuccess(response, {
         correlations,
@@ -49,7 +52,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
         return true;
       }
       
-      const profile = generateDataProfile(dataset);
+      const profile = await MLClient.profile(dataset, () => generateDataProfile(dataset));
       
       sendSuccess(response, { profile }, 'Profile generated');
       return true;
@@ -70,7 +73,10 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
         return true;
       }
       
-      const anomalies = detectAnomalies(dataset);
+      const anomalies = await MLClient.anomalies(
+        dataset,
+        () => ({ method: 'zscore', anomalies: detectAnomalies(dataset), summary: {} }),
+      );
       
       sendSuccess(response, { anomalies }, 'Anomalies detected');
       return true;
@@ -133,7 +139,7 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
         return true;
       }
       
-      const analysis = analyzeDataset(dataset);
+      const analysis = await MLClient.profile(dataset, () => analyzeDataset(dataset));
       updateAnalysis(analysis);
       
       sendSuccess(response, { analysis }, 'Dataset analyzed');

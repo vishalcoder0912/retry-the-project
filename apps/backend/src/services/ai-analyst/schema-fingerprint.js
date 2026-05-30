@@ -105,7 +105,7 @@ function inferRole(name, type, uniqueCount, rowCount) {
   if (/^(id|uuid|row_id|index|sr_no|serial|customer_code|user_id|student_id)$/.test(n) || n.endsWith("_id")) return "id";
   if (type === "date" || /date|time|year|month|day|created|updated|timestamp/.test(n)) return "date";
   if (/country|state|city|region|location|address|market|territory/.test(n)) return "location";
-  if (/salary|revenue|sales|amount|price|cost|profit|income|spend|budget|value|gmv|arr|mrr/.test(n)) return "money_metric";
+  if (/salary|revenue|sales|amount|price|cost|profit|income|spend|budget|value|gmv|arr|mrr/.test(n) && !/rate|ratio|percent|margin/.test(n)) return "money_metric";
   if (/score|rating|marks|grade|performance|level|index|rank|gpa/.test(n)) return "score_metric";
   if (/age|experience|years|tenure|duration/.test(n)) return "continuous_metric";
   if (/quantity|qty|units|orders|count|visits|clicks|sessions/.test(n)) return "count_metric";
@@ -240,7 +240,10 @@ export function schemaSimilarity(a, b) {
   return Math.round((nameScore * 0.5 + roleScore * 0.35 + domainScore * 0.15) * 1000) / 1000;
 }
 
-export function makeSchemaOnlyPacket(profile) {
+export function makeSchemaOnlyPacket(profile, options = {}) {
+  const includeTopValues = options.includeTopValues === true;
+  const includeStats = options.includeStats === true;
+
   return {
     datasetName: profile.datasetName,
     rowCount: profile.rowCount,
@@ -255,8 +258,18 @@ export function makeSchemaOnlyPacket(profile) {
       description: column.description,
       uniqueCount: column.uniqueCount,
       missingPct: column.missingPct,
-      topValues: column.topValues?.slice(0, 10)?.map((item) => item.value) || [],
-      stats: column.stats,
+      ...(includeTopValues
+        ? {
+            topValues: column.topValues?.slice(0, 10)?.map((item) => item.value) || [],
+          }
+        : {
+            topValuesCount: column.topValues?.length || 0,
+          }),
+      ...(includeStats && column.stats
+        ? {
+            stats: column.stats,
+          }
+        : {}),
     })),
   };
 }

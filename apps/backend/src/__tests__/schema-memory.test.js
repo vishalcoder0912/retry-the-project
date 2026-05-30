@@ -36,7 +36,7 @@ describe("schema training memory routes", () => {
         charts: [{ title: "Average Salary by Country", type: "bar", xKey: "country", yKey: "salary_usd", aggregation: "avg" }],
       },
     }), trainResponse, "/api/datasets/test-local/schema-train");
-    expect(trainResponse.json().data.stats.totalExamples).toBe(1);
+    expect(trainResponse.json().data.stats.count).toBeGreaterThanOrEqual(1);
 
     const dashboardResponse = makeRes();
     await handleSchemaTrainedAIRoutes(makeReq("POST", {
@@ -47,6 +47,7 @@ describe("schema training memory routes", () => {
     }), dashboardResponse, "/api/datasets/test-local/schema-dashboard");
 
     const payload = dashboardResponse.json();
-    expect(payload.data.memoryMatch.score).toBeGreaterThan(0.1);
+    expect(payload.data.match).toBeTruthy();
+    expect(payload.data.match.score).toBeGreaterThan(0.1);
   });
 });

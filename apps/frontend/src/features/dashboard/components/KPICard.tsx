@@ -70,15 +70,15 @@ const KPICard = ({ kpi, index }: KPICardProps) => {
       )}
     >
       <div className="flex items-start justify-between">
-        <div className={cn('flex h-10 w-10 items-center justify-center rounded-lg', scheme.bg)}>
-          <Icon className={cn('h-5 w-5', scheme.icon)} />
+        <div className={cn('flex size-10 items-center justify-center rounded-lg', scheme.bg)}>
+          <Icon className={cn('size-5', scheme.icon)} />
         </div>
         {kpi.change !== undefined && (
           <div className={cn('flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium', scheme.trendBg, scheme.trend)}>
             {isPositive ? (
-              <ArrowUpRight className="h-3 w-3" />
+              <ArrowUpRight className="size-3" />
             ) : (
-              <ArrowDownRight className="h-3 w-3" />
+              <ArrowDownRight className="size-3" />
             )}
             <span>{Math.abs(kpi.change ?? 0)}%</span>
           </div>

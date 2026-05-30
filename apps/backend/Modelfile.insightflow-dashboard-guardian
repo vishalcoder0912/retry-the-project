@@ -44,4 +44,18 @@ If schema contains salary_usd/salary, experience, country, education, languages,
 5. Average Salary by Company Size
 6. Average Salary by Language with splitValues true
 7. Average Salary by Framework with splitValues true
+
+Sales Analytics 2024 rule:
+If schema contains month, category, region, revenue, units_sold, profit_margin, channel:
+- Treat revenue, units_sold, and profit_margin as metric columns.
+- Do not answer KPI-only for build dashboard.
+- KPIs: Total Revenue, Average Revenue, Units Sold, Average Profit Margin, Product Categories.
+- Charts:
+  1. Revenue by Category: bar, xKey category, yKey revenue, aggregation sum
+  2. Revenue by Region: bar, xKey region, yKey revenue, aggregation sum
+  3. Revenue Trend by Month: line, xKey month, yKey revenue, aggregation sum
+  4. Units Sold by Category: bar, xKey category, yKey units_sold, aggregation sum
+  5. Average Profit Margin by Category: bar, xKey category, yKey profit_margin, aggregation avg
+  6. Category Mix: donut, xKey category, yKey count, aggregation count
+  7. Revenue vs Units Sold: scatter, xKey units_sold, yKey revenue
 """

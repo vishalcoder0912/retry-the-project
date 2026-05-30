@@ -131,4 +131,91 @@ export const schemaAiClient = {
       method: "POST",
       body: JSON.stringify({ ...safeDatasetBody(dataset), dashboardPlan, rating }),
     }),
+
+  getSchemaRagMemory: () => request("/api/ai/schema-rag-memory"),
+
+  retrieveSchemaRagMemory: (payload: Record<string, unknown>) =>
+    request("/api/ai/schema-rag/retrieve", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  trainSchemaRagMemory: (payload: Record<string, unknown>) =>
+    request("/api/ai/schema-rag/train", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  trainCurrentDashboardPattern: (datasetId: string, payload: Record<string, unknown>) =>
+    request(`/api/datasets/${encodeURIComponent(datasetId)}/schema-rag-train`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  understandDatasetSchema: (datasetId: string, payload: Record<string, unknown>) =>
+    request(`/api/datasets/${encodeURIComponent(datasetId)}/schema-understand`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  generateSmartRagDashboard: (datasetId: string, payload: Record<string, unknown>) =>
+    request(`/api/datasets/${encodeURIComponent(datasetId)}/smart-rag-dashboard`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  trainSmartRagDashboard: (datasetId: string, payload: Record<string, unknown>) =>
+    request(`/api/datasets/${encodeURIComponent(datasetId)}/smart-rag-train`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
+
+export function getSchemaRagMemory() {
+  return schemaAiClient.getSchemaRagMemory();
+}
+
+export function retrieveSchemaRagMemory(payload: Record<string, unknown>) {
+  return schemaAiClient.retrieveSchemaRagMemory(payload);
+}
+
+export function trainSchemaRagMemory(payload: Record<string, unknown>) {
+  return schemaAiClient.trainSchemaRagMemory(payload);
+}
+
+export function trainCurrentDashboardPattern(datasetId: string, payload: Record<string, unknown>) {
+  return schemaAiClient.trainCurrentDashboardPattern(datasetId, payload);
+}
+
+export function understandDatasetSchema(datasetId: string, payload: Record<string, unknown>) {
+  return schemaAiClient.understandDatasetSchema(datasetId, payload);
+}
+
+export function generateSmartRagDashboard(datasetId: string, payload: Record<string, unknown>) {
+  return schemaAiClient.generateSmartRagDashboard(datasetId, payload);
+}
+
+export function trainSmartRagDashboard(datasetId: string, payload: Record<string, unknown>) {
+  return schemaAiClient.trainSmartRagDashboard(datasetId, payload);
+}
+
+export function generateSchemaDashboard(datasetId: string, payload: Record<string, unknown>) {
+  return request(`/api/datasets/${encodeURIComponent(datasetId)}/schema-dashboard`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runDashboardCommand(datasetId: string, payload: Record<string, unknown>) {
+  return request(`/api/datasets/${encodeURIComponent(datasetId)}/dashboard-command`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runSchemaChat(datasetId: string, payload: Record<string, unknown>) {
+  return request(`/api/datasets/${encodeURIComponent(datasetId)}/schema-chat`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

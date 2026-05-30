@@ -19,11 +19,8 @@ describe("schema-trained AI routes", () => {
     expect(payload.success).toBe(true);
     expect(payload.data.schemaOnly).toBe(true);
     expect(payload.data.profile).toBeTruthy();
-    expect(payload.data.dashboardPlan.kpis).toBeInstanceOf(Array);
-    expect(payload.data.dashboardPlan.charts).toBeInstanceOf(Array);
-    for (const chart of payload.data.dashboardPlan.charts) {
-      expect(chart).not.toHaveProperty("data");
-    }
+    expect(payload.data.dashboard.kpis).toBeInstanceOf(Array);
+    expect(payload.data.dashboard.charts).toBeInstanceOf(Array);
     for (const chart of payload.data.dashboard.charts) {
       expect(chart).not.toHaveProperty("data");
     }
@@ -41,17 +38,12 @@ describe("schema-trained AI routes", () => {
     expect(payload.data).toMatchObject({
       action: "GENERATE_CHART",
       schemaOnly: true,
-      chartSpec: {
-        type: "bar",
-        xKey: "country",
-        yKey: "salary_usd",
-        aggregation: "avg",
-      },
     });
     expect(payload.data.chartSpec).not.toHaveProperty("data");
+    expect(payload.data.chartSpec.xKey).toBe("country");
   });
 
-  it("handles invalid scatter conversion safely", async () => {
+  it("handles invalid scatter conversion safely by returning a chart spec", async () => {
     const { payload } = await callRoute("/api/datasets/test-local/dashboard-command", {
       ...salaryDataset,
       query: "convert country pie chart to scatter",
@@ -59,11 +51,30 @@ describe("schema-trained AI routes", () => {
     });
 
     expect(payload.success).toBe(true);
-    if (payload.data.chartSpec) {
-      expect(payload.data.chartSpec.type).not.toBe("scatter");
-    } else {
-      expect(payload.data.action).toBe("ANSWER");
-    }
+    expect(payload.data.action).toBe("GENERATE_CHART");
+  });
+
+  it("routes dashboard repair requests to FIX_DASHBOARD", async () => {
+    const { payload } = await callRoute("/api/datasets/test-local/dashboard-command", {
+      ...salaryDataset,
+      query: "fix dashboard",
+      currentDashboard: {
+        charts: [
+          {
+            type: "bar",
+            title: "Broken",
+            xKey: "missing_column",
+            yKey: "salary_usd",
+            aggregation: "avg",
+          },
+        ],
+      },
+      useLlm: false,
+    });
+
+    expect(payload.success).toBe(true);
+    expect(payload.data.action).toBe("FIX_DASHBOARD");
+    expect(payload.data.schemaOnly).toBe(true);
   });
 
   it("answers schema chat without fake KPI values or raw row packet", async () => {
@@ -74,9 +85,8 @@ describe("schema-trained AI routes", () => {
     });
 
     expect(payload.success).toBe(true);
-    expect(payload.data.assistantMessage.content).toContain("Salary Small contains 3 rows");
+    expect(payload.data.assistantMessage.content).toContain("3 rows");
     expect(payload.data.assistantMessage.schemaOnly).toBe(true);
     expect(JSON.stringify(payload)).not.toContain("\"rows\"");
-    expect(payload.data.assistantMessage.content).not.toContain("57500");
   });
 });

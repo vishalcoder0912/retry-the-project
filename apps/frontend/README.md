@@ -2,6 +2,9 @@
 
 Path: `apps/frontend`
 
+Local development runs on port `5173`. API requests should use relative `/api/*`
+paths so Vite can proxy them to the backend on port `3001`.
+
 ## Key Folders
 
 ```text

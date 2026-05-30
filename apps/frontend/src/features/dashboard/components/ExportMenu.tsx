@@ -52,22 +52,22 @@ export function ExportMenu({ dataset, charts, insights, disabled }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" disabled={disabled || exporting !== null}>
-          {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+          {exporting ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Download className="mr-2 size-4" />}
           Export
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => exportToFormat('html')}>
-          <FileText className="mr-2 h-4 w-4" />
+          <FileText className="mr-2 size-4" />
           HTML Report
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => exportToFormat('pdf')}>
-          <FileText className="mr-2 h-4 w-4" />
+          <FileText className="mr-2 size-4" />
           PDF Document
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => exportToFormat('excel')}>
-          <FileSpreadsheet className="mr-2 h-4 w-4" />
+          <FileSpreadsheet className="mr-2 size-4" />
           Excel Spreadsheet
         </DropdownMenuItem>
       </DropdownMenuContent>

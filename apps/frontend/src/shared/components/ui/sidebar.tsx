@@ -226,7 +226,7 @@ const SidebarTrigger = React.forwardRef<React.ElementRef<typeof Button>, React.C
         data-sidebar="trigger"
         variant="ghost"
         size="icon"
-        className={cn("h-7 w-7", className)}
+        className={cn("size-7", className)}
         onClick={(event) => {
           onClick?.(event);
           toggleSidebar();
@@ -246,7 +246,7 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<"bu
     const { toggleSidebar } = useSidebar();
 
     return (
-      <button
+      <button type="button"
         ref={ref}
         data-sidebar="rail"
         aria-label="Toggle Sidebar"

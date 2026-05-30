@@ -35,42 +35,38 @@ interface InsightData {
   comparisons?: string[];
 }
 
+const DEFAULT_ANALYTICS_MESSAGES: ChatMessage[] = [
+  {
+    id: '1',
+    role: 'assistant',
+    content: `Hi! I'm your AI analytics assistant with full dashboard control. I use neural-chat:7b when available and can:
+
+Chart Commands:
+- "Create a bar chart for salary by country"
+- "Change chart to line"
+- "Show scatter plot"
+- "Delete last chart"
+
+Data Commands:
+- "Filter by country = USA"
+- "Show only senior roles"
+- "Clear all filters"
+
+Analysis Commands:
+- "Show top 5 by revenue"
+- "Compare metrics"
+- "What are the trends?"
+
+What would you like to do?`,
+    type: 'text',
+  },
+];
+
 const AnalyticsSidebar = ({ isOpen, onClose, dataset, charts: _charts, onAddChart, onReplaceLatestChart, onRemoveLatestChart, onFilterChange }: AnalyticsSidebarProps) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(DEFAULT_ANALYTICS_MESSAGES);
   const [input, setInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      setMessages([
-        {
-          id: '1',
-          role: 'assistant',
-          content: `Hi! I'm your AI analytics assistant with full dashboard control. I use neural-chat:7b when available and can:
-
-**Chart Commands:**
-• "Create a bar chart for salary by country"
-• "Change chart to line"
-• "Show scatter plot"
-• "Delete last chart"
-
-**Data Commands:**
-• "Filter by country = USA"
-• "Show only senior roles"
-• "Clear all filters"
-
-**Analysis Commands:**
-• "Show top 5 by revenue"
-• "Compare metrics"
-• "What are the trends?"
-
-What would you like to do?`,
-          type: 'text'
-        }
-      ]);
-    }
-  }, [isOpen, messages.length]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -187,22 +183,22 @@ What would you like to do?`,
     >
       <div className="flex items-center justify-between border-b border-border/50 p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10">
-            <Bot className="h-5 w-5 text-primary" />
+          <div className="flex size-9 items-center justify-center rounded-full bg-primary/10">
+            <Bot className="size-5 text-primary" />
           </div>
           <div>
             <p className="text-sm font-semibold text-foreground">AI Assistant</p>
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="size-2 rounded-full bg-green-500 animate-pulse"></span>
               <p className="text-xs text-muted-foreground">Online</p>
             </div>
           </div>
         </div>
-        <button
+        <button type="button"
           onClick={onClose}
           className="rounded-full p-2 text-muted-foreground hover:text-foreground hover:bg-muted transition-all"
         >
-          <X className="h-5 w-5" />
+          <X className="size-5" />
         </button>
       </div>
 
@@ -215,8 +211,8 @@ What would you like to do?`,
             className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             {msg.role === 'assistant' && (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
-                <Bot className="h-4 w-4 text-primary" />
+              <div className="flex size-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                <Bot className="size-4 text-primary" />
               </div>
             )}
             <div
@@ -230,7 +226,7 @@ What would you like to do?`,
               {msg.chartConfig && (
                 <div className="mt-2 pt-2 border-t border-border/30">
                   <div className="flex items-center gap-2 text-xs text-primary">
-                    <BarChart3 className="h-3 w-3" />
+                    <BarChart3 className="size-3" />
                     Chart generated
                   </div>
                 </div>
@@ -242,7 +238,7 @@ What would you like to do?`,
               )}
             </div>
             {msg.role === 'user' && (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted shrink-0">
+              <div className="flex size-8 items-center justify-center rounded-full bg-muted shrink-0">
                 <span className="text-xs font-medium text-muted-foreground">You</span>
               </div>
             )}
@@ -251,12 +247,12 @@ What would you like to do?`,
         
         {isProcessing && (
           <div className="flex gap-3 justify-start">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-              <Bot className="h-4 w-4 text-primary" />
+            <div className="flex size-8 items-center justify-center rounded-full bg-primary/10">
+              <Bot className="size-4 text-primary" />
             </div>
             <div className="border border-border/50 bg-muted/30 rounded-2xl px-4 py-3">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="size-4 animate-spin" />
                 Processing...
               </div>
             </div>
@@ -277,50 +273,50 @@ What would you like to do?`,
             className="flex-1 bg-muted/50 border border-border/50 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all"
             disabled={isProcessing}
           />
-          <button
+          <button type="button"
             onClick={handleQuery}
             disabled={!input.trim() || isProcessing || !dataset}
-            className="rounded-full w-10 h-10 bg-primary flex items-center justify-center text-white hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded-full size-10 bg-primary flex items-center justify-center text-white hover:bg-primary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isProcessing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
             ) : (
-              <Send className="h-4 w-4" />
+              <Send className="size-4" />
             )}
           </button>
         </div>
         
         {dataset && (
           <div className="mt-3 flex flex-wrap gap-2">
-            <button
+            <button type="button"
               onClick={() => setInput('Create bar chart')}
               className="text-xs text-muted-foreground hover:text-foreground bg-muted/50 px-2 py-1 rounded-full transition-colors flex items-center gap-1"
             >
-              <BarIcon className="h-3 w-3" /> Bar
+              <BarIcon className="size-3" /> Bar
             </button>
-            <button
+            <button type="button"
               onClick={() => setInput('Create line chart')}
               className="text-xs text-muted-foreground hover:text-foreground bg-muted/50 px-2 py-1 rounded-full transition-colors flex items-center gap-1"
             >
-              <LineChart className="h-3 w-3" /> Line
+              <LineChart className="size-3" /> Line
             </button>
-            <button
+            <button type="button"
               onClick={() => setInput('Create pie chart')}
               className="text-xs text-muted-foreground hover:text-foreground bg-muted/50 px-2 py-1 rounded-full transition-colors flex items-center gap-1"
             >
-              <PieChart className="h-3 w-3" /> Pie
+              <PieChart className="size-3" /> Pie
             </button>
-            <button
+            <button type="button"
               onClick={() => setInput('Filter by country = USA')}
               className="text-xs text-muted-foreground hover:text-foreground bg-muted/50 px-2 py-1 rounded-full transition-colors flex items-center gap-1"
             >
-              <Filter className="h-3 w-3" /> Filter
+              <Filter className="size-3" /> Filter
             </button>
-            <button
+            <button type="button"
               onClick={() => setInput('Clear filters')}
               className="text-xs text-muted-foreground hover:text-foreground bg-muted/50 px-2 py-1 rounded-full transition-colors flex items-center gap-1"
             >
-              <RefreshCw className="h-3 w-3" /> Clear
+              <RefreshCw className="size-3" /> Clear
             </button>
           </div>
         )}

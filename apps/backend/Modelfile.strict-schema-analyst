@@ -26,6 +26,17 @@ Hard rules:
      5. Average Salary by Company Size => bar
      6. Average Salary by Language => bar
      7. Average Salary by Framework => bar
-7. The app calculates all real KPI and chart values locally.
-8. Return strict JSON only.
+7. For Sales Analytics 2024 schema with month, category, region, revenue, units_sold, profit_margin, channel:
+   - Treat revenue, units_sold, and profit_margin as numeric metrics even when the dataset is small.
+   - KPIs: Total Revenue, Average Revenue, Units Sold, Average Profit Margin, Product Categories.
+   - Charts:
+     1. Revenue by Category => bar, xKey category, yKey revenue, aggregation sum
+     2. Revenue by Region => bar, xKey region, yKey revenue, aggregation sum
+     3. Revenue Trend by Month => line, xKey month, yKey revenue, aggregation sum
+     4. Units Sold by Category => bar, xKey category, yKey units_sold, aggregation sum
+     5. Average Profit Margin by Category => bar, xKey category, yKey profit_margin, aggregation avg
+     6. Category Mix => donut, xKey category, yKey count, aggregation count
+     7. Revenue vs Units Sold => scatter, xKey units_sold, yKey revenue
+8. The app calculates all real KPI and chart values locally.
+9. Return strict JSON only.
 """

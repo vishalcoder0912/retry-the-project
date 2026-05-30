@@ -56,10 +56,10 @@ function formatNumber(value: number) {
 function Gauge({ score }: { score: number }) {
   return (
     <div
-      className="grid h-44 w-44 place-items-center rounded-full"
+      className="grid size-44 place-items-center rounded-full"
       style={{ background: `conic-gradient(#22c55e ${score * 3.6}deg, rgba(51,65,85,0.9) 0deg)` }}
     >
-      <div className="grid h-32 w-32 place-items-center rounded-full bg-slate-950 text-center">
+      <div className="grid size-32 place-items-center rounded-full bg-slate-950 text-center">
         <div>
           <p className="text-4xl font-semibold text-white">{Math.round(score)}%</p>
           <p className="text-sm text-slate-400">Excellent</p>
@@ -289,17 +289,17 @@ export default function AnalyticsPage() {
             )}
             {profile.dateColumn && (
               <div className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm">
-                <Calendar className="h-4 w-4 text-slate-400" />
+                <Calendar className="size-4 text-slate-400" />
                 <input type="date" value={String(filters.dateStart || "")} onChange={(event) => setFilters((current) => ({ ...current, dateStart: event.target.value }))} className="bg-transparent outline-none" />
                 <input type="date" value={String(filters.dateEnd || "")} onChange={(event) => setFilters((current) => ({ ...current, dateEnd: event.target.value }))} className="bg-transparent outline-none" />
               </div>
             )}
-            <button onClick={exportReport} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm hover:bg-slate-800">
-              <Download className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={exportReport} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm hover:bg-slate-800">
+              <Download className="mr-2 inline size-4" />
               Export
             </button>
-            <button onClick={() => setShowAi((current) => !current)} className="rounded-xl bg-violet-600 px-4 py-2 text-sm hover:bg-violet-500">
-              <Bot className="mr-2 inline h-4 w-4" />
+            <button type="button" onClick={() => setShowAi((current) => !current)} className="rounded-xl bg-violet-600 px-4 py-2 text-sm hover:bg-violet-500">
+              <Bot className="mr-2 inline size-4" />
               AI Chat
             </button>
           </div>
@@ -308,13 +308,13 @@ export default function AnalyticsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             {["Overview", "Trends", "Segments", "Correlation", profile.locationColumn ? "Geography" : "Data Quality", "Data Quality"].filter((item, index, list) => list.indexOf(item) === index).map((tab) => (
-              <button key={tab} onClick={() => setActiveTab(tab)} className={`rounded-xl px-4 py-2 text-sm ${activeTab === tab ? "bg-violet-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
+              <button type="button" key={tab} onClick={() => setActiveTab(tab)} className={`rounded-xl px-4 py-2 text-sm ${activeTab === tab ? "bg-violet-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}>
                 {tab}
               </button>
             ))}
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-300">
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className="size-4" />
             Auto refresh
             <input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} />
           </label>
@@ -330,7 +330,7 @@ export default function AnalyticsPage() {
                   <p className="mt-1 text-xs text-slate-500">{kpi.sub}</p>
                 </div>
                 <div className="rounded-2xl bg-violet-500/20 p-3 text-violet-200">
-                  <kpi.icon className="h-5 w-5" />
+                  <kpi.icon className="size-5" />
                 </div>
               </div>
               <Sparkline values={kpi.spark.length ? kpi.spark : [1]} />
@@ -355,7 +355,7 @@ export default function AnalyticsPage() {
                     ["Timeliness", quality.timeliness],
                   ].map(([label, value]) => (
                     <div key={String(label)} className="flex items-center justify-between">
-                      <span><CheckCircle2 className="mr-2 inline h-4 w-4 text-green-400" />{label}</span>
+                      <span><CheckCircle2 className="mr-2 inline size-4 text-green-400" />{label}</span>
                       <span>{value}%</span>
                     </div>
                   ))}
