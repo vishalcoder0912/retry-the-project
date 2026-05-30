@@ -207,7 +207,7 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
     }
   };
 
-  const renderedChart = useMemo(() => renderChart(), [renderChart]);
+  const renderedChart = renderChart();
 
   if (!renderedChart || !chartData || chartData.length === 0) {
     return (
@@ -255,7 +255,7 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
                 className="flex items-center gap-2 rounded-lg p-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
                 title="Customize chart"
               >
-                <SlidersHorizontal className="h-4 w-4" />
+                <SlidersHorizontal className="size-4" />
               </button>
             </SheetTrigger>
             <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
@@ -303,7 +303,7 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
                       >
                         <span className="flex gap-1">
                           {PALETTES[key].slice(0, 3).map((color) => (
-                            <span key={color} className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+                            <span key={color} className="size-3 rounded-full" style={{ backgroundColor: color }} />
                           ))}
                         </span>
                         <span className="capitalize">{key}</span>
@@ -358,7 +358,7 @@ const AnalyticsChart = ({ config, index }: AnalyticsChartProps) => {
             className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
             title="Download as PNG"
           >
-            <Download className="h-4 w-4" />
+            <Download className="size-4" />
           </button>
         </div>
       </div>

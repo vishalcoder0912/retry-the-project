@@ -33,7 +33,7 @@ const AnomalyDetectionPage = () => {
     loadAnomalies();
   }, [dataset]);
 
-  if (loading) return <div className="p-4">Analyzing for anomalies...</div>;
+  if (loading) return <div className="p-4">Analyzing for anomalies…</div>;
 
   return (
     <div className="p-6">
@@ -51,7 +51,7 @@ const AnomalyDetectionPage = () => {
               className={`border rounded p-4 ${anomaly.severity === 'high' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'}`}
             >
               <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 mt-1" />
+                <AlertTriangle className="size-5 mt-1" />
                 <div className="flex-1">
                   <div className="font-semibold">{anomaly.column || 'Dataset'}</div>
                   <div className="text-sm text-gray-600">{anomaly.explanation}</div>

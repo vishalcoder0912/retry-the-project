@@ -88,7 +88,7 @@ export function LlamaQueryBuilder({ dataset, className }) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Zap className="h-5 w-5 text-purple-500" />
+                <Zap className="size-5 text-purple-500" />
                 Llama 3.2 Query
               </CardTitle>
               <CardDescription>
@@ -106,7 +106,7 @@ export function LlamaQueryBuilder({ dataset, className }) {
         <CardContent className="space-y-4">
           {!llamaStatus?.ollama_running && (
             <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircle className="size-4" />
               <AlertTitle>Llama 3.2 not available</AlertTitle>
               <AlertDescription>
                 Install Ollama from https://ollama.ai then run: ollama pull llama3.2
@@ -130,12 +130,12 @@ export function LlamaQueryBuilder({ dataset, className }) {
               >
                 {loading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 size-4 animate-spin" />
                     Processing...
                   </>
                 ) : (
                   <>
-                    <Send className="mr-2 h-4 w-4" />
+                    <Send className="mr-2 size-4" />
                     Analyze
                   </>
                 )}
@@ -170,7 +170,7 @@ export function LlamaQueryBuilder({ dataset, className }) {
 
           {error && (
             <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
+              <AlertCircle className="size-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -196,7 +196,7 @@ export function LlamaQueryBuilder({ dataset, className }) {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
-                      <BarChart3 className="h-4 w-4" />
+                      <BarChart3 className="size-4" />
                       {result.chart.title}
                     </CardTitle>
                   </CardHeader>

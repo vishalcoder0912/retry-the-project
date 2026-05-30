@@ -55,66 +55,177 @@ async function callOllama({ model, prompt, temperature = 0.1 }) {
   }
 }
 
-function buildDashboardPrompt(schemaProfile, memoryMatch) {
+function safeRagMatchesForPrompt(ragMatches = []) {
+  return (ragMatches || []).slice(0, 5).map((match) => {
+    const entry = match.entry || match;
+
+    return {
+      id: entry.id,
+      name: entry.name,
+      domain: entry.domain,
+      score: match.score,
+      schemaSignature: entry.schemaSignature,
+      dashboardPlan: entry.dashboardPlan,
+      notes: entry.notes,
+    };
+  });
+}
+
+function stripUnsafeSpec(spec = {}) {
+  const {
+    data,
+    rows,
+    rawRows,
+    sampleRows,
+    calculatedValues,
+    chartData,
+    value,
+    values,
+    result,
+    results,
+    ...safe
+  } = spec || {};
+
+  return safe;
+}
+
+function sanitizeDashboardPlan(plan = {}, schemaProfile) {
+  return {
+    kpis: Array.isArray(plan.kpis)
+      ? plan.kpis.map((item) => sanitizeKpiSpec(stripUnsafeSpec(item), schemaProfile)).filter(Boolean)
+      : [],
+    charts: Array.isArray(plan.charts)
+      ? plan.charts.map((item) => sanitizeChartSpec(stripUnsafeSpec(item), schemaProfile)).filter(Boolean)
+      : [],
+  };
+}
+
+function buildDashboardPrompt(schemaProfile, memoryMatch, options = {}) {
   const packet = makeSchemaOnlyPacket(schemaProfile);
-  const memoryHint = memoryMatch?.entry ? {
-    matchedDataset: memoryMatch.entry.name,
-    matchScore: memoryMatch.score,
-    trainedDashboardPlan: memoryMatch.entry.dashboardPlan,
-  } : null;
 
-  return `You are InsightFlow's dashboard planning model.
+  const legacyMemory = memoryMatch?.entry
+    ? {
+        matchedDataset: memoryMatch.entry.name,
+        matchScore: memoryMatch.score,
+        trainedDashboardPlan: memoryMatch.entry.dashboardPlan,
+      }
+    : null;
 
-Rules:
-- You receive schema metadata only, never raw dataset rows.
-- Return strict JSON only. No markdown.
-- Do not include chart.data or KPI values.
-- Use only column names that exist in the schema.
-- Prefer useful business/data analyst KPIs and charts.
-- Allowed chart types: bar, line, area, pie, donut, histogram, scatter, radar, composed, heatmap.
-- Allowed aggregations: count, sum, avg, min, max, median.
+  const retrievedRagMemories = safeRagMatchesForPrompt(options.ragMatches);
+  const smartUnderstanding = options.schemaUnderstanding || null;
 
-Schema packet:
+  return `You are InsightFlow's senior data analyst and schema-only dashboard planner.
+
+YOUR JOB:
+Understand the dataset schema and create the best dashboard plan.
+
+VERY IMPORTANT:
+You do NOT see raw data rows.
+You only see schema metadata, profile stats, role detection, and RAG memory.
+You must return dashboard specifications only.
+The local analytics engine will calculate real values later.
+
+NEVER RETURN:
+- raw rows
+- chart.data
+- KPI values
+- fake numbers
+- sample records
+- SQL over private rows
+
+ALLOWED OUTPUT:
+- action
+- message
+- kpis
+- charts
+- schemaOnly
+
+ALLOWED CHART TYPES:
+bar, line, area, pie, donut, histogram, scatter, radar, composed, heatmap
+
+ALLOWED AGGREGATIONS:
+count, sum, avg, min, max, median, count_unique
+
+DASHBOARD QUALITY RULES:
+1. Always include Total Records KPI.
+2. Prefer 3 to 6 useful KPIs.
+3. Prefer 4 to 7 useful charts.
+4. Use bar chart for metric by category.
+5. Use histogram for numeric distribution.
+6. Use scatter for metric vs metric.
+7. Use line chart for metric by date.
+8. Use donut/pie only for category distribution.
+9. Use count_unique for unique category count.
+10. For language/framework/skill/tag columns, add splitValues: true.
+11. Use only existing column names from the current schema.
+
+CURRENT SCHEMA PACKET:
 ${JSON.stringify(packet, null, 2)}
 
-Similar trained schema memory:
-${JSON.stringify(memoryHint, null, 2)}
+SMART SCHEMA UNDERSTANDING:
+${JSON.stringify(smartUnderstanding, null, 2)}
 
-Return this exact structure:
+LEGACY TRAINED MEMORY:
+${JSON.stringify(legacyMemory, null, 2)}
+
+RETRIEVED RAG MEMORIES:
+${JSON.stringify(retrievedRagMemories, null, 2)}
+
+RETURN STRICT JSON ONLY:
 {
   "action": "GENERATE_DASHBOARD",
-  "message": "short explanation",
+  "message": "short explanation for the user",
   "kpis": [
-    {"title":"Total Records","metric":"__row_count__","aggregation":"count","format":"number"}
+    {
+      "title": "Total Records",
+      "metric": "__row_count__",
+      "aggregation": "count",
+      "format": "number"
+    }
   ],
   "charts": [
-    {"type":"bar","title":"Average Revenue by Region","xKey":"Region","yKey":"Revenue","aggregation":"avg","limit":10}
+    {
+      "type": "bar",
+      "title": "Average Salary by Country",
+      "xKey": "country",
+      "yKey": "salary_usd",
+      "aggregation": "avg",
+      "limit": 10
+    }
   ],
   "schemaOnly": true
 }`;
 }
 
-function buildCommandPrompt(query, schemaProfile, memoryMatch, currentDashboard) {
+function buildCommandPrompt(query, schemaProfile, memoryMatch, currentDashboard, options = {}) {
   const packet = makeSchemaOnlyPacket(schemaProfile);
+  const retrievedRagMemories = safeRagMatchesForPrompt(options.ragMatches);
+
   return `You are InsightFlow's schema-only dashboard command router.
 
 Rules:
 - Return strict JSON only.
-- Never include raw data rows or chart.data.
+- Never include raw data rows.
+- Never include chart.data.
+- Never include KPI values.
 - Use only schema column names.
+- RAG memories are examples only, not real values.
 - If user asks a normal question, return action ANSWER with a short answer.
 - If user asks chart/KPI/filter change, return action and spec.
 
 Allowed actions:
-GENERATE_CHART, MODIFY_CHART, DELETE_CHART, GENERATE_KPI, FILTER, CLEAR_FILTERS, ANSWER
+GENERATE_CHART, MODIFY_CHART, DELETE_CHART, GENERATE_KPI, FILTER, CLEAR_FILTERS, GENERATE_DASHBOARD, FIX_DASHBOARD, ANSWER
 
-Schema:
+Current schema:
 ${JSON.stringify(packet, null, 2)}
 
-Trained memory:
+Legacy trained memory:
 ${JSON.stringify(memoryMatch?.entry?.dashboardPlan || null, null, 2)}
 
-Current dashboard:
+Retrieved RAG memories:
+${JSON.stringify(retrievedRagMemories, null, 2)}
+
+Current dashboard specs:
 ${JSON.stringify(currentDashboard || {}, null, 2)}
 
 User command:
@@ -124,17 +235,21 @@ Return example:
 {"action":"GENERATE_CHART","message":"Created chart.","chartSpec":{"type":"scatter","title":"Salary vs Experience","xKey":"experience","yKey":"salary_usd","aggregation":"count","limit":500},"schemaOnly":true}`;
 }
 
-export async function planDashboardWithOllama(schemaProfile, memoryMatch) {
+export async function planDashboardWithOllama(schemaProfile, memoryMatch, options = {}) {
   try {
-    const text = await callOllama({ model: DASHBOARD_MODEL, prompt: buildDashboardPrompt(schemaProfile, memoryMatch) });
+    const text = await callOllama({
+      model: DASHBOARD_MODEL,
+      prompt: buildDashboardPrompt(schemaProfile, memoryMatch, options),
+      temperature: 0.1,
+    });
     const json = extractJson(text);
     if (!json) return null;
 
     return {
       source: `ollama:${DASHBOARD_MODEL}`,
       message: json.message || "Dashboard plan generated.",
-      kpis: (json.kpis || []).map((item) => sanitizeKpiSpec(item, schemaProfile)).slice(0, 8),
-      charts: (json.charts || json.chartSpecs || []).map((item) => sanitizeChartSpec(item, schemaProfile)).slice(0, 10),
+      kpis: (json.kpis || []).map((item) => sanitizeKpiSpec(stripUnsafeSpec(item), schemaProfile)).slice(0, 8),
+      charts: (json.charts || json.chartSpecs || []).map((item) => sanitizeChartSpec(stripUnsafeSpec(item), schemaProfile)).slice(0, 10),
       schemaOnly: true,
       model: DASHBOARD_MODEL,
     };
@@ -150,18 +265,29 @@ export async function planDashboardWithOllama(schemaProfile, memoryMatch) {
   }
 }
 
-export async function planCommandWithOllama({ query, schemaProfile, memoryMatch, currentDashboard }) {
+export async function planCommandWithOllama({
+  query,
+  schemaProfile,
+  memoryMatch,
+  ragMatches = [],
+  currentDashboard,
+}) {
   try {
-    const text = await callOllama({ model: DASHBOARD_MODEL, prompt: buildCommandPrompt(query, schemaProfile, memoryMatch, currentDashboard) });
+    const text = await callOllama({ model: DASHBOARD_MODEL, prompt: buildCommandPrompt(query, schemaProfile, memoryMatch, currentDashboard, {
+      ragMatches,
+    }) });
     const json = extractJson(text);
     if (!json) return null;
 
     return {
       action: json.action || "ANSWER",
       message: json.message || "Command processed.",
-      chartSpec: json.chartSpec ? sanitizeChartSpec(json.chartSpec, schemaProfile) : undefined,
-      kpiSpec: json.kpiSpec ? sanitizeKpiSpec(json.kpiSpec, schemaProfile) : undefined,
+      chartSpec: json.chartSpec ? sanitizeChartSpec(stripUnsafeSpec(json.chartSpec), schemaProfile) : undefined,
+      kpiSpec: json.kpiSpec ? sanitizeKpiSpec(stripUnsafeSpec(json.kpiSpec), schemaProfile) : undefined,
       filters: json.filters,
+      dashboardPlan: json.dashboardPlan
+        ? sanitizeDashboardPlan(json.dashboardPlan, schemaProfile)
+        : undefined,
       schemaOnly: true,
       provider: "ollama",
       model: DASHBOARD_MODEL,

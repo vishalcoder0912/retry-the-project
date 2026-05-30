@@ -246,6 +246,21 @@ export interface PdfAskResult {
   }>;
 }
 
+export interface AgenticConfigResponse {
+  provider: string;
+  ollamaHost: string;
+  useCloudDeepReasoner: boolean;
+  roles: Record<string, string>;
+}
+
+export interface AgenticHealthResponse {
+  checks: Array<{
+    model: string;
+    installed: boolean;
+  }>;
+}
+
+
 type ApiEnvelope<T> = {
   success?: boolean;
   data?: T;
@@ -622,6 +637,15 @@ export const api = {
         }),
       }
     ),
+  getAgenticConfig: () =>
+    request<AgenticConfigResponse>("/api/agentic-models/config"),
+  getAgenticHealth: () =>
+    request<AgenticHealthResponse>("/api/agentic-models/health"),
+  runAgenticAnalysis: (datasetId: string, goal: string) =>
+    request<any>(`/api/agentic-models/datasets/${datasetId}/analyze`, {
+      method: "POST",
+      body: JSON.stringify({ goal }),
+    }),
 };
 
 async function postDashboardAi<T>(path: string, body: unknown): Promise<T> {

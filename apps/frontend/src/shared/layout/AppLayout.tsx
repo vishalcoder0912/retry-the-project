@@ -22,7 +22,7 @@ export default function AppLayout() {
           onClick={() => setSidebarOpen(true)}
           className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2 text-slate-100"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="size-5" />
         </button>
 
         <div className="text-center">
@@ -32,7 +32,7 @@ export default function AppLayout() {
           </p>
         </div>
 
-        <div className="h-9 w-9" />
+        <div className="size-9" />
       </div>
 
       {sidebarOpen && (
@@ -50,7 +50,7 @@ export default function AppLayout() {
                 onClick={() => setSidebarOpen(false)}
                 className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-2 text-slate-100"
               >
-                <X className="h-5 w-5" />
+                <X className="size-5" />
               </button>
             </div>
             <AppSidebar onNavigate={() => setSidebarOpen(false)} />

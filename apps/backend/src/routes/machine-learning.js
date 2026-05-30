@@ -2,7 +2,16 @@
  * ML Routes - AutoML endpoint handlers
  */
 import { automlService } from '../services/ml/automl-service.js';
+import MLClient from '../services/ml-client.js';
 import { sendJson } from '../utils/response-utils.js';
+
+async function readJson(request) {
+  let body = '';
+  for await (const chunk of request) {
+    body += chunk;
+  }
+  return body ? JSON.parse(body) : {};
+}
 
 export async function handleMLRoutes(request, response, pathname) {
   const url = new URL(pathname, `http://${request.headers.host}`);
@@ -10,12 +19,43 @@ export async function handleMLRoutes(request, response, pathname) {
 
   // GET /api/ml/health
   if (pathname === '/api/ml/health' && request.method === 'GET') {
+    const python = await MLClient.health();
     return sendJson(response, 200, {
       success: true,
       status: 'ready',
-      message: 'AutoML service is running locally (no external service needed)',
+      message: 'Node ML gateway is ready',
+      python,
       availableModels: automlService.listModels().length
     });
+  }
+
+  const gatewayEndpoints = {
+    '/api/ml/profile': (data) => MLClient.profile(data),
+    '/api/ml/correlations': (data) => MLClient.correlations(data, null, data.method || 'pearson'),
+    '/api/ml/anomalies': (data) => MLClient.anomalies(data, null, data.method),
+    '/api/ml/feature-importance': (data) => MLClient.featureImportance(data, data.target || data.target_column),
+    '/api/ml/train-model': (data) => MLClient.trainModel(data, data.target || data.target_column, data),
+    '/api/ml/predict': (data) => MLClient.predict(data.modelId || data.model_id, data.rows || data.input_data || []),
+  };
+
+  if (gatewayEndpoints[pathname] && request.method === 'POST') {
+    try {
+      const data = await readJson(request);
+      const result = await gatewayEndpoints[pathname](data);
+      return sendJson(response, result.success === false ? 503 : 200, result);
+    } catch (error) {
+      return sendJson(response, 500, { success: false, error: error.message });
+    }
+  }
+
+  if (pathname === '/api/ml/compare-datasets' && request.method === 'POST') {
+    try {
+      const data = await readJson(request);
+      const result = await MLClient.compareDatasets(data.left, data.right);
+      return sendJson(response, 200, { success: true, ...result });
+    } catch (error) {
+      return sendJson(response, 500, { success: false, error: error.message });
+    }
   }
 
   // POST /api/ml/train - Train a model

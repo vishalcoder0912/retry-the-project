@@ -186,7 +186,7 @@ const MLPage = () => {
           )}
 
           {/* Train Button */}
-          <button
+          <button type="button"
             onClick={handleTrain}
             disabled={loading || !targetColumn}
             className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
@@ -258,7 +258,7 @@ const MLPage = () => {
             ))}
           </div>
 
-          <button
+          <button type="button"
             onClick={handlePredict}
             className="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
           >

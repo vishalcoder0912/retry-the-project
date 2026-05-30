@@ -10,7 +10,8 @@
     "build": "node --check src/index.js",
     "kill-port": "node kill-port.js",
     "test": "vitest",
-    "test:run": "vitest run"
+    "test:run": "vitest run",
+    "rag:seed": "node scripts/train-smart-rag-seeds.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",
@@ -28,7 +29,12 @@
     "ml-random-forest": "^2.1.0",
     "node-cron": "^3.0.3",
     "openai": "^4.28.4",
+    "papaparse": "^5.4.1",
     "pdfkit": "^0.15.2",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   }
 }

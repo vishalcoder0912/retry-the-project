@@ -117,7 +117,11 @@ const METRIC_HINTS = [
   "anxiety",
   "rating",
   "profit",
+  "margin",
   "sales",
+  "sold",
+  "units",
+  "quantity",
   "cost",
   "price",
   "income",
@@ -274,7 +278,8 @@ export function inferColumnRoles(
       } else if (type === "boolean") {
         role = "boolean";
       } else if (type === "number") {
-        role = uniqueCount <= Math.max(12, totalRows * 0.04) ? "category" : "metric";
+        const hasMetricHint = METRIC_HINTS.some((hint) => normalized.includes(hint));
+        role = hasMetricHint || uniqueCount > Math.max(12, totalRows * 0.04) ? "metric" : "category";
       } else if (uniqueCount <= Math.max(30, totalRows * 0.2)) {
         role = "category";
       }
@@ -723,6 +728,25 @@ function buildRowIndexRows(rows: Row[]) {
   }));
 }
 
+function expandMultiValueRows(rows: Row[], xKey: string) {
+  const expanded: Row[] = [];
+  for (const row of rows) {
+    const raw = row[xKey];
+    const parts = String(raw ?? "")
+      .split(/[;,|]/g)
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (parts.length > 1) {
+      for (const part of parts) {
+        expanded.push({ ...row, [xKey]: part });
+      }
+    } else {
+      expanded.push(row);
+    }
+  }
+  return expanded;
+}
+
 function makeChart(spec: ChartSpec, data: Array<Record<string, string | number>>, warning?: string): DashboardChart {
   return {
     id: crypto.randomUUID(),
@@ -743,31 +767,33 @@ export function buildChartFromSpec(rows: Row[], chartSpec: ChartSpec): Dashboard
     return makeChart(chartSpec, [], "Not enough data to render this chart.");
   }
 
+  const chartRows = chartSpec.splitValues ? expandMultiValueRows(withIndex, xKey) : withIndex;
+
   if (chartSpec.type === "histogram") {
     return makeChart(
       { ...chartSpec, xKey: "range", yKey: "count" },
-      buildHistogram(withIndex, yKey === "count" ? xKey : yKey),
+      buildHistogram(chartRows, yKey === "count" ? xKey : yKey),
       undefined,
     );
   }
 
   if (chartSpec.type === "scatter") {
-    return makeChart(chartSpec, buildScatterData(withIndex, xKey, yKey, 240));
+    return makeChart(chartSpec, buildScatterData(chartRows, xKey, yKey, 240));
   }
 
   if (chartSpec.type === "heatmap") {
-    return makeChart(chartSpec, buildCorrelationMatrix(withIndex));
+    return makeChart(chartSpec, buildCorrelationMatrix(chartRows));
   }
 
   if (chartSpec.type === "line" || chartSpec.type === "area") {
     const resolvedXKey = xKey === "__row_index__" ? "__row_index__" : xKey;
-    const trendRows = buildTrendData(withIndex, resolvedXKey, yKey, chartSpec.aggregation);
+    const trendRows = buildTrendData(chartRows, resolvedXKey, yKey, chartSpec.aggregation);
     return makeChart({ ...chartSpec, xKey: resolvedXKey }, trendRows);
   }
 
   return makeChart(
     chartSpec,
-    groupByAggregate(withIndex, xKey, yKey === "count" ? xKey : yKey, chartSpec.aggregation, limit),
+    groupByAggregate(chartRows, xKey, yKey === "count" ? xKey : yKey, chartSpec.aggregation, limit),
   );
 }
 

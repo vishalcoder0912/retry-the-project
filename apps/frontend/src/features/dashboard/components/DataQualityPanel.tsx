@@ -13,10 +13,10 @@ const DataQualityPanel = ({ qualityReport }: DataQualityPanelProps) => {
 
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
-      case 'critical': return <XCircle className="h-4 w-4 text-red-500" />;
-      case 'high': return <AlertCircle className="h-4 w-4 text-amber-500" />;
-      case 'medium': return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      default: return <AlertCircle className="h-4 w-4 text-muted-foreground" />;
+      case 'critical': return <XCircle className="size-4 text-red-500" />;
+      case 'high': return <AlertCircle className="size-4 text-amber-500" />;
+      case 'medium': return <AlertTriangle className="size-4 text-yellow-500" />;
+      default: return <AlertCircle className="size-4 text-muted-foreground" />;
     }
   };
 
@@ -27,9 +27,9 @@ const DataQualityPanel = ({ qualityReport }: DataQualityPanelProps) => {
   };
 
   const getScoreIcon = (score: number) => {
-    if (score >= 90) return <ShieldCheck className="h-5 w-5 text-green-600" />;
-    if (score >= 70) return <ShieldAlert className="h-5 w-5 text-amber-600" />;
-    return <ShieldX className="h-5 w-5 text-red-600" />;
+    if (score >= 90) return <ShieldCheck className="size-5 text-green-600" />;
+    if (score >= 70) return <ShieldAlert className="size-5 text-amber-600" />;
+    return <ShieldX className="size-5 text-red-600" />;
   };
 
   return (

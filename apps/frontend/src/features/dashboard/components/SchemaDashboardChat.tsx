@@ -151,8 +151,8 @@ export default function SchemaDashboardChat({
     <aside className="sticky top-5 h-fit rounded-2xl border border-slate-700/70 bg-slate-950/90 shadow-2xl shadow-black/30 backdrop-blur">
       <div className="border-b border-slate-800 p-4">
         <div className="flex items-start gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-600/20 text-violet-200">
-            <Bot className="h-5 w-5" />
+          <div className="grid size-11 place-items-center rounded-2xl bg-violet-600/20 text-violet-200">
+            <Bot className="size-5" />
           </div>
 
           <div className="min-w-0 flex-1">
@@ -183,7 +183,7 @@ export default function SchemaDashboardChat({
                     : "border-slate-700 bg-slate-900 text-slate-300 hover:border-violet-500/60"
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className="size-3.5" />
                 {mode.id}
               </button>
             );
@@ -193,7 +193,7 @@ export default function SchemaDashboardChat({
 
       <div className="border-b border-slate-800 p-4">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-300">
-          <Sparkles className="h-3.5 w-3.5 text-violet-300" />
+          <Sparkles className="size-3.5 text-violet-300" />
           Trained prompts
         </div>
 
@@ -245,7 +245,7 @@ export default function SchemaDashboardChat({
 
         {loading && (
           <div className="mr-6 flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="size-4 animate-spin" />
             Processing schema-safe command...
           </div>
         )}
@@ -270,9 +270,9 @@ export default function SchemaDashboardChat({
             type="submit"
             aria-label="Send dashboard command"
             disabled={loading || !input.trim()}
-            className="grid h-10 w-10 place-items-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-500 disabled:opacity-50"
+            className="grid size-10 place-items-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-500 disabled:opacity-50"
           >
-            <Send className="h-4 w-4" />
+            <Send className="size-4" />
           </button>
         </form>
 
@@ -282,7 +282,7 @@ export default function SchemaDashboardChat({
         </div>
 
         <div className="mt-2 flex items-center gap-1 text-[11px] text-emerald-300">
-          <ShieldCheck className="h-3.5 w-3.5" />
+          <ShieldCheck className="size-3.5" />
           Schema-only AI enabled
         </div>
       </div>

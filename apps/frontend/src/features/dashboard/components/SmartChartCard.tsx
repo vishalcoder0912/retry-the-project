@@ -208,26 +208,26 @@ export default function SmartChartCard({
               <Button
                 variant="outline"
                 size="icon"
-                className="h-9 w-9 rounded-xl border-slate-700/60 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                className="size-9 rounded-xl border-slate-700/60 bg-slate-950 text-slate-300 hover:bg-slate-800"
               >
-                <MoreHorizontal className="h-4 w-4" />
+                <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="border-slate-700 bg-slate-950 text-slate-200">
               <DropdownMenuItem onClick={() => downloadSvgOrPng(rootRef.current, fileName, "png")}>
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="mr-2 size-4" />
                 Download PNG
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => downloadSvgOrPng(rootRef.current, fileName, "svg")}>
-                <Download className="mr-2 h-4 w-4" />
+                <Download className="mr-2 size-4" />
                 Download SVG
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onDuplicate}>
-                <Copy className="mr-2 h-4 w-4" />
+                <Copy className="mr-2 size-4" />
                 Duplicate chart
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onRemove} className="text-red-300 focus:text-red-200">
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="mr-2 size-4" />
                 Remove chart
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -237,7 +237,7 @@ export default function SmartChartCard({
 
       {chart.warning && (
         <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          <AlertCircle className="h-4 w-4" />
+          <AlertCircle className="size-4" />
           {chart.warning}
         </div>
       )}

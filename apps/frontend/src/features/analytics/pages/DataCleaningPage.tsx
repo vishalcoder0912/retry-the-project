@@ -33,7 +33,7 @@ const DataCleaningPage = () => {
     loadSuggestions();
   }, [dataset]);
 
-  if (loading) return <div className="p-4">Generating cleaning suggestions...</div>;
+  if (loading) return <div className="p-4">Generating cleaning suggestions…</div>;
 
   const priorityColor = {
     high: 'text-red-600 bg-red-50 border-red-200',
@@ -47,7 +47,7 @@ const DataCleaningPage = () => {
       
       {suggestions.length === 0 ? (
         <div className="bg-green-50 border border-green-200 p-4 rounded flex items-center gap-3">
-          <CheckCircle className="w-5 h-5 text-green-600" />
+          <CheckCircle className="size-5 text-green-600" />
           <div>Your dataset looks clean!</div>
         </div>
       ) : (
@@ -55,7 +55,7 @@ const DataCleaningPage = () => {
           {suggestions.map((sug, i) => (
             <div key={i} className={`border rounded p-4 ${priorityColor[sug.priority || 'low']}`}>
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 mt-1" />
+                <AlertCircle className="size-5 mt-1" />
                 <div className="flex-1">
                   <div className="font-semibold">{sug.column || 'Dataset'}</div>
                   <div className="text-sm mt-1">{sug.description || 'Review this data quality suggestion.'}</div>

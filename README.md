@@ -2,6 +2,15 @@
 
 A modern analytics dashboard with local AI-style insights and dataset exploration.
 
+## Canonical Architecture
+
+The demo/interview runtime is the Node HTTP backend plus the Vite frontend:
+
+- Backend: `apps/backend/src/index.js -> src/core/server.js -> src/routes/index.js` on port `3001`.
+- Frontend: `apps/frontend` on port `5173`.
+- Local API calls use Vite's `/api` proxy from `5173` to `3001`.
+- Legacy route and serverless/Express experiments are archived under `apps/backend/src/legacy/` and `apps/backend/legacy/`.
+
 ## 📁 Project Structure
 
 ```
@@ -66,7 +75,7 @@ npm install
 # Run both frontend and backend
 npm run dev
 
-# Run frontend only (port 8080)
+# Run frontend only (port 5173)
 npm run dev:frontend
 
 # Run backend only (port 3001)
@@ -97,8 +106,7 @@ npm run build:frontend
 
 ### Backend
 - **Node.js** - Runtime
-- **sql.js** - SQLite database
-- **Vercel** - Serverless deployment
+- **node:sqlite** - SQLite-backed dataset and chat persistence
 
 ## 🌐 Deployment
 

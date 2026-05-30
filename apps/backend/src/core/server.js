@@ -22,7 +22,7 @@ export function createHttpServer() {
   }
 
   // Create HTTP server
-  const server = createServer((request, response) => {
+  const server = createServer(async (request, response) => {
     // Request start time for logging
     request.startTime = Date.now();
 
@@ -34,8 +34,8 @@ export function createHttpServer() {
       if (request.method === 'OPTIONS') {
         response.writeHead(204, {
           'Access-Control-Allow-Origin': config.cors.origin,
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
           'Access-Control-Max-Age': '86400'
         });
         response.end();
@@ -51,7 +51,7 @@ export function createHttpServer() {
       requestLogger(request, response);
 
       // Setup routes
-      setupRoutes(request, response);
+      await setupRoutes(request, response);
 
     } catch (error) {
       // Handle any unexpected errors

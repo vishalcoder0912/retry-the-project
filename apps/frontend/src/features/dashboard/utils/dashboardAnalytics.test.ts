@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   applyFilters,
   buildChartFromSpec,
+  buildDatasetProfile,
+  buildDefaultCharts,
   buildKpiFromSpec,
   cleanDatasetRows,
 } from "./dashboardAnalytics";
@@ -36,7 +38,6 @@ describe("dashboardAnalytics", () => {
 
     expect(chart.data.find((item) => item.country === "India")?.salary_usd).toBe(150);
     expect(chart.data.find((item) => item.country === "USA")?.salary_usd).toBe(300);
-    expect(chart.calculatedLocally).toBe(true);
   });
 
   it("builds histogram and scatter chart data", () => {
@@ -102,5 +103,27 @@ describe("dashboardAnalytics", () => {
     expect(filtered.length).toBe(2);
     expect(chart.data).toHaveLength(1);
     expect(chart.data[0].salary_usd).toBe(150);
+  });
+
+  it("keeps sales metrics numeric in small datasets", () => {
+    const salesRows = [
+      { month: "Jan", category: "Electronics", region: "North", revenue: 1200, units_sold: 12, profit_margin: 24 },
+      { month: "Feb", category: "Furniture", region: "South", revenue: 850, units_sold: 8, profit_margin: 18 },
+      { month: "Mar", category: "Electronics", region: "West", revenue: 1500, units_sold: 15, profit_margin: 30 },
+      { month: "Apr", category: "Office", region: "North", revenue: 620, units_sold: 7, profit_margin: 16 },
+      { month: "May", category: "Furniture", region: "East", revenue: 930, units_sold: 9, profit_margin: 21 },
+    ];
+
+    const profile = buildDatasetProfile(salesRows);
+    const charts = buildDefaultCharts(salesRows);
+
+    expect(profile.numericColumns.map((column) => column.name)).toEqual([
+      "revenue",
+      "units_sold",
+      "profit_margin",
+    ]);
+    expect(profile.primaryMetric?.name).toBe("revenue");
+    expect(profile.primaryCategory?.name).toBe("category");
+    expect(charts.some((chart) => chart.title === "Average Revenue by Category")).toBe(true);
   });
 });

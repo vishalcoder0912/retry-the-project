@@ -190,7 +190,7 @@ const DashboardPage = () => {
             <div className="flex items-center gap-3 mb-1">
               {analysis && (
                 <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                  <Sparkles className="h-3 w-3" />
+                  <Sparkles className="size-3" />
                   AI Insights
                 </span>
               )}
@@ -201,7 +201,7 @@ const DashboardPage = () => {
             <p className="text-sm text-muted-foreground mt-0.5">
               {analysis ? (
                 <span className="flex items-center gap-2">
-                  <Layers className="h-4 w-4" />
+                  <Layers className="size-4" />
                   {analysis.dataTypeLabel} • {filteredDataset.rowCount.toLocaleString()} records
                 </span>
               ) : (
@@ -211,20 +211,20 @@ const DashboardPage = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button
+          <button type="button"
             onClick={() => exportDatasetCSV(filteredDataset)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border/50 hover:border-primary/30 hover:bg-muted/50 transition-all text-sm font-medium text-muted-foreground"
           >
-            <Download className="h-4 w-4" />
+            <Download className="size-4" />
             Export
           </button>
-          <button
+          <button type="button"
             onClick={() => {
               void resetAppState();
             }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-card border border-border/50 hover:border-primary/30 hover:bg-muted/50 transition-all text-sm font-medium text-muted-foreground"
           >
-            <RotateCcw className="h-4 w-4" />
+            <RotateCcw className="size-4" />
             Reset
           </button>
         </div>
@@ -281,9 +281,9 @@ const DashboardPage = () => {
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={() => setShowSidebar(true)}
-          className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all"
+          className="fixed bottom-6 right-6 z-40 flex size-12 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all"
         >
-          <MessageSquare className="h-5 w-5" />
+          <MessageSquare className="size-5" />
         </motion.button>
       )}
     </div>
