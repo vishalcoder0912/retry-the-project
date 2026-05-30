@@ -7,6 +7,7 @@ import { handleAIRoutes } from './ai.js';
 import { handleHealthRoutes } from './health.js';
 import { handleExportRoutes } from './export.js';
 import { handleMLRoutes } from './machine-learning.js';
+import { handleMlAnalyticsRoutes } from './ml-analytics.js';
 import { handleStateRoutes } from './state.js';
 import { handleQrUploadRoutes } from './qr-upload.js';
 import { handlePlaybookAnalysisRoutes } from './playbook-analysis.js';
@@ -100,6 +101,11 @@ export async function setupRoutes(request, response) {
 
     // Analytics routes
     if (await handleAnalyticsRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Python-backed deterministic analytics routes
+    if (await handleMlAnalyticsRoutes(request, response, pathname)) {
       return;
     }
 

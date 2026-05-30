@@ -23,6 +23,7 @@ export function createHttpServer() {
 
   // Create HTTP server
   const server = createServer(async (request, response) => {
+    response.req = request;
     // Request start time for logging
     request.startTime = Date.now();
 
