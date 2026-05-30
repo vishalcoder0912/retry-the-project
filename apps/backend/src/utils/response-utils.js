@@ -32,6 +32,20 @@ export function sendSuccess(response, data = null, message = 'Success') {
 }
 
 /**
+ * Send created response (201)
+ */
+export function sendCreated(response, data = null, message = 'Created') {
+  const payload = {
+    success: true,
+    data,
+    message,
+    timestamp: new Date().toISOString()
+  };
+
+  sendJson(response, 201, payload);
+}
+
+/**
  * Send error response
  */
 export function sendError(response, statusCode, message, errorCode = null) {
@@ -259,6 +273,7 @@ export function sendRateLimit(response, retryAfter = null) {
 export default {
   sendJson,
   sendSuccess,
+  sendCreated,
   sendError,
   sendPaginated,
   sendFile,

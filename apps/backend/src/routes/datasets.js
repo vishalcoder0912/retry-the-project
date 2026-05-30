@@ -1,5 +1,5 @@
 // Dataset-related routes
-import { sendSuccess, sendError } from '../utils/response-utils.js';
+import { sendSuccess, sendCreated, sendError } from '../utils/response-utils.js';
 import { HTTP_STATUS, ERROR_CODES } from '../config/constants.js';
 import { updateDataset } from './state.js';
 import {
@@ -96,7 +96,7 @@ export async function handleDatasetRoutes(request, response, pathname) {
       updateDataset(demoDataset);
       const analysis = await runFullAutoAnalysis(demoDataset);
       
-      sendSuccess(response, {
+      sendCreated(response, {
         dataset: demoDataset,
         chatMessages: [],
         analysis
@@ -143,7 +143,7 @@ export async function handleDatasetRoutes(request, response, pathname) {
 
       const analysis = await runFullAutoAnalysis(dataset);
 
-      sendSuccess(response, {
+      sendCreated(response, {
         dataset,
         chatMessages: [],
         analysis,

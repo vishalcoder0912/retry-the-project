@@ -1,7 +1,15 @@
 import { humanize, normalizeColumnName } from "./schema-fingerprint.js";
 
 const CHART_TYPES = new Set(["bar", "line", "area", "pie", "donut", "histogram", "scatter", "radar", "composed", "heatmap"]);
-const AGGREGATIONS = new Set(["count", "sum", "avg", "min", "max", "median"]);
+const AGGREGATIONS = new Set([
+  "count",
+  "sum",
+  "avg",
+  "min",
+  "max",
+  "median",
+  "count_unique",
+]);
 
 function byPriority(profile, roles, nameHints = []) {
   const columns = profile.columns || [];
@@ -85,6 +93,14 @@ export function sanitizeChartSpec(spec = {}, profile) {
 
   if (safe.type === "histogram") {
     safe.aggregation = "count";
+  }
+
+  if (spec.splitValues === true) {
+    safe.splitValues = true;
+  }
+
+  if (Number.isFinite(Number(spec.bins))) {
+    safe.bins = Math.max(2, Math.min(50, Number(spec.bins)));
   }
 
   return safe;

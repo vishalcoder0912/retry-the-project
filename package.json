@@ -18,10 +18,15 @@
     "build:frontend": "npm run build -w apps/frontend",
     "build:backend": "npm run build -w apps/backend",
     "export:ai-safe": "node scripts/export-ai-safe.js",
+    "export:onefile": "node scripts/export-full-codebase-one-file.js",
+    "export:codebase": "node scripts/generate-codebase-export.mjs",
     "lint": "npm run lint -w apps/frontend",
-    "test": "npm run test -w apps/frontend"
+    "test": "npm run test -w apps/frontend",
+    "test:insightflow-api": "node scripts/verify-insightflow-backend.mjs",
+    "doctor": "npx react-doctor@latest"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "react-doctor": "^0.2.13"
   }
 }

@@ -3,8 +3,8 @@ import { buildSchemaProfile } from "../services/ai-analyst/schema-fingerprint.js
 import {
   buildRuleDashboardPlan,
   sanitizeChartSpec,
-  validateChartCompatibility,
 } from "../services/ai-analyst/dashboard-plan-engine.js";
+import { validateChartCombination } from "../services/ai-analyst/dashboard-quality-guardian.js";
 import { salaryDataset } from "./test-helpers.js";
 
 describe("dashboard plan engine", () => {
@@ -25,14 +25,14 @@ describe("dashboard plan engine", () => {
   });
 
   it("rejects invalid scatter and unknown columns", () => {
-    expect(validateChartCompatibility(
-      { type: "scatter", title: "Bad", xKey: "country", yKey: "salary_usd", aggregation: "count" },
-      profile
+    expect(validateChartCombination(
+      profile,
+      { type: "scatter", title: "Bad", xKey: "country", yKey: "salary_usd", aggregation: "count" }
     ).ok).toBe(false);
 
-    expect(validateChartCompatibility(
-      { type: "bar", title: "Missing", xKey: "missing", yKey: "salary_usd", aggregation: "avg" },
-      profile
+    expect(validateChartCombination(
+      profile,
+      { type: "bar", title: "Missing", xKey: "missing", yKey: "salary_usd", aggregation: "avg" }
     ).ok).toBe(false);
   });
 

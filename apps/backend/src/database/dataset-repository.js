@@ -205,15 +205,69 @@ export const createDataset = ({ name, fileName = null, columns, rows, sourceType
   });
 };
 
-export const getDatasetById = (datasetId) => mapDataset(getDatasetRecord.get(datasetId));
+export const getDatasetById = (datasetId) => {
+  const sqliteDataset = mapDataset(getDatasetRecord.get(datasetId));
+  if (sqliteDataset) return sqliteDataset;
 
-export const listDatasets = () => listDatasetRecords.all().map(mapDataset);
+  const e2eStore = globalThis.__INSIGHTFLOW_E2E_STORE__;
+  if (e2eStore && e2eStore.datasets && e2eStore.datasets.has(datasetId)) {
+    return e2eStore.datasets.get(datasetId);
+  }
+  return null;
+};
+
+const mapDatasetLight = (datasetRecord) => {
+  if (!datasetRecord) return null;
+  return {
+    id: datasetRecord.id,
+    name: datasetRecord.name,
+    uploadedAt: datasetRecord.uploaded_at,
+    rowCount: datasetRecord.row_count,
+    columnCount: datasetRecord.column_count,
+    sourceType: datasetRecord.source_type,
+    fileName: datasetRecord.file_name,
+  };
+};
+
+export const listDatasets = () => {
+  const persisted = listDatasetRecords.all().map(mapDatasetLight);
+
+  const e2eStore = globalThis.__INSIGHTFLOW_E2E_STORE__;
+  if (e2eStore && e2eStore.datasets) {
+    const e2eList = Array.from(e2eStore.datasets.values()).map(d => ({
+      id: d.id,
+      name: d.name,
+      uploadedAt: d.createdAt || d.uploadedAt,
+      rowCount: d.rowCount || d.rows?.length || 0,
+      columnCount: d.columnCount || d.columns?.length || 0,
+      sourceType: d.sourceType,
+      fileName: d.fileName,
+    }));
+    for (const d of e2eList) {
+      if (!persisted.some(p => p.id === d.id)) {
+        persisted.push(d);
+      }
+    }
+  }
+
+  return persisted;
+};
 
 export const getCurrentDatasetId = () => getMeta.get("current_dataset_id")?.value ?? null;
 
 export const getCurrentDataset = () => {
   const currentDatasetId = getCurrentDatasetId();
-  return currentDatasetId ? getDatasetById(currentDatasetId) : null;
+  if (currentDatasetId) {
+    const d = getDatasetById(currentDatasetId);
+    if (d) return d;
+  }
+
+  const e2eStore = globalThis.__INSIGHTFLOW_E2E_STORE__;
+  if (e2eStore && e2eStore.currentDatasetId) {
+    return getDatasetById(e2eStore.currentDatasetId);
+  }
+
+  return null;
 };
 
 export const getChatMessages = (datasetId) =>

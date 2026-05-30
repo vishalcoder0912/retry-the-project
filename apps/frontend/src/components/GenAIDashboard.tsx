@@ -164,7 +164,7 @@ export default function GenAIDashboard() {
         <Card className="p-6 mb-8">
           <h2 className="text-2xl font-semibold mb-4">Conversational Analytics</h2>
           <div className="flex gap-2">
-            <input
+            <input aria-label="Ask a question about your data..."
               type="text"
               placeholder="Ask a question about your data..."
               value={query}

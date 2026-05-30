@@ -73,13 +73,13 @@ cd apps/frontend
 npm run dev
 ```
 
-Frontend: http://localhost:8080
+Frontend: http://localhost:5173
 Backend: http://localhost:3001
 
 ## Tech Stack
 - **Frontend**: React 18 + Vite + TailwindCSS + Axios
-- **Backend**: Node.js Serverless Functions (Vercel)
+- **Backend**: Node.js HTTP server
 
 ## Notes
-- Backend uses in-memory storage (data resets on cold start)
-- For production, consider Vercel Postgres for persistence
+- Backend stores datasets and chat history in SQLite via `node:sqlite`.
+- The archived serverless adapter is preserved under `apps/backend/legacy/` and is not the canonical local runtime.

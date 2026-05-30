@@ -39,10 +39,10 @@ const LocalAIChatInterface = () => {
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 border border-success bg-success/10 px-4 py-3 text-sm uppercase tracking-[0.08em] text-success">
-            <Shield className="h-4 w-4" />
+            <Shield className="size-4" />
             <span>Data Never Leaves Your System</span>
           </div>
-          <Settings className="h-5 w-5 text-muted-foreground" />
+          <Settings className="size-5 text-muted-foreground" />
         </div>
       </div>
 
@@ -60,7 +60,7 @@ const LocalAIChatInterface = () => {
             {localDataset && (
               <div className="flex flex-wrap gap-2 justify-center max-w-lg">
                 {suggestedQueries.map((query) => (
-                  <button
+                  <button type="button"
                     key={query}
                     onClick={() => {
                       void sendLocalQuery(query);
@@ -104,8 +104,8 @@ const LocalAIChatInterface = () => {
                 )}
               </div>
               {msg.role === 'user' && (
-                <div className="mt-1 flex h-7 w-7 flex-shrink-0 items-center justify-center border border-border bg-secondary">
-                  <User className="w-3.5 h-3.5 text-secondary-foreground" />
+                <div className="mt-1 flex size-7 flex-shrink-0 items-center justify-center border border-border bg-secondary">
+                  <User className="size-3.5 text-secondary-foreground" />
                 </div>
               )}
             </motion.div>
@@ -120,9 +120,9 @@ const LocalAIChatInterface = () => {
           >
             <div className="border border-border bg-secondary px-4 py-2.5">
               <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="size-1.5 rounded-full bg-muted-foreground animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </motion.div>
@@ -145,7 +145,7 @@ const LocalAIChatInterface = () => {
             disabled={!input.trim() || !localDataset || isProcessing}
             className="flex h-14 w-16 items-center justify-center border border-border bg-primary text-primary-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground disabled:opacity-50"
           >
-            <Send className="w-4 h-4" />
+            <Send className="size-4" />
           </button>
         </div>
         <div className="mt-4 flex items-center justify-between text-xs uppercase tracking-[0.08em] text-muted-foreground">

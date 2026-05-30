@@ -113,7 +113,7 @@ After restart, verify:
    ```
 
 3. **Frontend Loading**
-   - Open http://localhost:8080
+   - Open http://localhost:5173
    - Check browser console for errors
    - Should load without 500 errors
 

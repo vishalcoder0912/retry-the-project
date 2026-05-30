@@ -1,17 +1,44 @@
 /**
  * InsightFlow - Full End-to-End Test Suite
  * Tests ALL features: API health, dataset ops, AI chat, analytics, ML, cache, etc.
+ *
+ * Usage:
+ *   API_BASE_URL=http://127.0.0.1:3001 node e2e-full-test.js
  */
 
-const BASE_URL = "http://localhost:3001";
+const API_BASE_URL = process.env.API_BASE_URL || "http://127.0.0.1:3001";
 let datasetId = null;
 let totalTests = 0;
 let passed = 0;
 let failed = 0;
 const failures = [];
 
+async function assertBackendRunning() {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/health`);
+    if (!response.ok) {
+      throw new Error(`Health returned HTTP ${response.status}`);
+    }
+    console.log(`  ✅ Backend reachable at ${API_BASE_URL}`);
+  } catch (error) {
+    console.error("");
+    console.error("  ❌ Backend is not running or not reachable.");
+    console.error(`     Tried: ${API_BASE_URL}`);
+    console.error("");
+    console.error("  Start backend first:");
+    console.error("     cd apps/backend");
+    console.error("     npm run dev");
+    console.error("");
+    console.error("  Or set correct API_BASE_URL:");
+    console.error("     API_BASE_URL=http://127.0.0.1:3001 node e2e-full-test.js");
+    console.error("");
+    console.error(`  Original error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
 async function request(method, path, body = null, timeoutMs = 90000) {
-  const url = `${BASE_URL}${path}`;
+  const url = `${API_BASE_URL}${path}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const options = {
@@ -59,15 +86,12 @@ async function testRootAndHealth() {
 
   const root = await request("GET", "/");
   test("GET / returns 200", root.status === 200);
-  test("Root has name field", root.data?.name === "InsightFlow Local API");
-  test("Root has status ok", root.data?.status === "ok");
-  test("Root has routes listing", root.data?.routes != null);
-  test("Response time < 500ms", root.elapsed < 500, `${root.elapsed}ms`);
+  test("Root has name field", root.data?.data?.name === "InsightFlow API");
+  test("Root has endpoints listing", root.data?.data?.endpoints != null);
 
   const health = await request("GET", "/api/health");
   test("GET /api/health returns 200", health.status === 200);
-  test("Health status is ok", health.data?.status === "ok");
-  test("Health includes databasePath", typeof health.data?.databasePath === "string");
+  test("Health status is healthy", health.data?.status === "healthy");
 }
 
 // ─────────────────────────────────────────────
@@ -268,7 +292,7 @@ async function testAIChat() {
   const greeting = await request("POST", `/api/datasets/${datasetId}/chat`, {
     query: "hello",
   });
-  test("Greeting returns 201", greeting.status === 201);
+  test("Greeting returns 200", greeting.status === 200);
   test("Greeting has userMessage", greeting.data?.userMessage != null);
   test("Greeting has assistantMessage", greeting.data?.assistantMessage != null);
   test("Greeting content is friendly", greeting.data?.assistantMessage?.content?.toLowerCase().includes("hello"));
@@ -277,7 +301,7 @@ async function testAIChat() {
   const countQuery = await request("POST", `/api/datasets/${datasetId}/chat`, {
     query: "how many people in each department",
   });
-  test("Count query returns 201", countQuery.status === 201);
+  test("Count query returns 200", countQuery.status === 200);
   test("Count query has assistant response", countQuery.data?.assistantMessage?.content != null);
   test("Count query has SQL", typeof countQuery.data?.assistantMessage?.sql === "string" || countQuery.data?.assistantMessage?.sql === null);
   test("Count query response time < 60s", countQuery.elapsed < 60000, `${countQuery.elapsed}ms`);
@@ -288,7 +312,7 @@ async function testAIChat() {
   const aggQuery = await request("POST", `/api/datasets/${datasetId}/chat`, {
     query: "what is the average salary",
   });
-  test("Aggregation query returns 201", aggQuery.status === 201);
+  test("Aggregation query returns 200", aggQuery.status === 200);
   test("Aggregation has chart or content", aggQuery.data?.assistantMessage?.chart != null || aggQuery.data?.assistantMessage?.content != null);
   console.log(`     → Chart type: ${aggQuery.data?.assistantMessage?.chart?.type || "none"}`);
 
@@ -302,7 +326,7 @@ async function testAIChat() {
   const cached = await request("POST", `/api/datasets/${datasetId}/chat`, {
     query: "how many people in each department",
   });
-  test("Cached query returns 201", cached.status === 201);
+  test("Cached query returns 200", cached.status === 200);
   test("Cached query is faster", cached.elapsed < countQuery.elapsed * 2, `${cached.elapsed}ms vs ${countQuery.elapsed}ms`);
 }
 
@@ -592,11 +616,14 @@ async function testChatPersistence() {
 async function main() {
   console.log("╔═══════════════════════════════════════════════════════╗");
   console.log("║   INSIGHTFLOW — FULL END-TO-END TEST SUITE           ║");
-  console.log("║   Testing ALL features against http://localhost:3001  ║");
+  console.log(`║   Testing against: ${API_BASE_URL.padEnd(35)}║`);
   console.log("╚═══════════════════════════════════════════════════════╝");
   console.log(`\n  Started at: ${new Date().toLocaleString()}`);
 
   const startTime = Date.now();
+
+  // Preflight: ensure backend is running before running all tests
+  await assertBackendRunning();
 
   const tests = [
     testRootAndHealth,

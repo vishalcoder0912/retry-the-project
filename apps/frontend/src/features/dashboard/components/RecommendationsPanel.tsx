@@ -48,12 +48,12 @@ export function RecommendationsPanel() {
 
   const getIcon = (type) => {
     switch (type) {
-      case 'outlier': return <AlertTriangle className="h-4 w-4 text-amber-500" />;
-      case 'distribution': return <BarChart3 className="h-4 w-4 text-blue-500" />;
-      case 'data_quality': return <AlertTriangle className="h-4 w-4 text-red-500" />;
-      case 'correlation': return <TrendingUp className="h-4 w-4 text-green-500" />;
-      case 'missing_data': return <AlertTriangle className="h-4 w-4 text-orange-500" />;
-      default: return <Lightbulb className="h-4 w-4 text-yellow-500" />;
+      case 'outlier': return <AlertTriangle className="size-4 text-amber-500" />;
+      case 'distribution': return <BarChart3 className="size-4 text-blue-500" />;
+      case 'data_quality': return <AlertTriangle className="size-4 text-red-500" />;
+      case 'correlation': return <TrendingUp className="size-4 text-green-500" />;
+      case 'missing_data': return <AlertTriangle className="size-4 text-orange-500" />;
+      default: return <Lightbulb className="size-4 text-yellow-500" />;
     }
   };
 
@@ -70,7 +70,7 @@ export function RecommendationsPanel() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Lightbulb className="h-5 w-5" />
+            <Lightbulb className="size-5" />
             Recommendations
           </CardTitle>
         </CardHeader>
@@ -85,17 +85,17 @@ export function RecommendationsPanel() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Lightbulb className="h-5 w-5" />
+          <Lightbulb className="size-5" />
           AI Recommendations
         </CardTitle>
         <Button variant="ghost" size="sm" onClick={fetchRecommendations} disabled={loading}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
         </Button>
       </CardHeader>
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <Loader2 className="size-6 animate-spin text-muted-foreground" />
           </div>
         ) : recommendations.length === 0 ? (
           <p className="text-muted-foreground text-sm">No recommendations available.</p>

@@ -16,6 +16,8 @@ import { handleSchemaTrainedAIRoutes } from './schema-trained-ai.routes.js';
 import { handleDashboardQualityRoutes } from './dashboard-quality.js';
 import { handleDashboardAiRoutes } from './dashboardAiRoutes.js';
 import { handleAgenticModelRoutes } from './agentic-models.js';
+import { handleMlAnalyticsRoutes } from './ml-analytics.js';
+import { handleAgenticDataScienceRoutes } from './agentic-data-science.js';
 import {
   handleE2ECompatRoutes,
   handleE2ENotFound,
@@ -27,6 +29,16 @@ export async function setupRoutes(request, response) {
   const { method, pathname } = request;
 
   try {
+    // Python ML gateway and agentic data science routes should run before
+    // compatibility routes because the E2E shim owns a few legacy /api/ml paths.
+    if (await handleMlAnalyticsRoutes(request, response, pathname)) {
+      return;
+    }
+
+    if (await handleAgenticDataScienceRoutes(request, response, pathname)) {
+      return;
+    }
+
     if (await handleE2ECompatRoutes(request, response, pathname)) {
       return;
     }

@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import genaiRoutes from "./routes/genaiRoutes.js";
+import genaiRoutes from "../routes/genaiRoutes.js";
 
 dotenv.config();
 
