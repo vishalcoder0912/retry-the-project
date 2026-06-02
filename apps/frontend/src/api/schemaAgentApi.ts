@@ -2,11 +2,25 @@ export type SchemaTrainResponse = {
   ok: boolean;
   profile: any;
   dashboardSpec: any;
+  agentPlan?: any;
+  agentTools?: string[];
+  ontologyMapping?: {
+    inferredDomain: string;
+    canonicalTerms: string[];
+    mapping: Record<string, string>;
+  };
+  critic?: {
+    score: number;
+    status: string;
+    issues: string[];
+    improvements: string[];
+  };
   guardian: {
     valid: boolean;
     errors: string[];
     warnings: string[];
   };
+  calculatedDashboard?: any;
   memoryRecordId?: string;
   trainingExamplesCount?: number;
   message?: string;
