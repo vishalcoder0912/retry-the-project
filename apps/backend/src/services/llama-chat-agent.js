@@ -3,6 +3,7 @@ import {
   OLLAMA_MODELS,
 } from './ollama/ollama-dual-model-service.js';
 import { buildDatasetFacts } from './ollama/dataset-schema-summary.js';
+import { retrieveLearningMemory } from './ai-analyst/self-learning-memory.js';
 
 function fallbackAnswer(query, facts) {
   const text = String(query || '').toLowerCase();
@@ -41,6 +42,12 @@ export async function runLlamaDatasetChat(dataset, query) {
     },
   };
 
+  const memories = retrieveLearningMemory({
+    userQuestion: query,
+    schemaColumns: facts.schema.columns.map((c) => c.name || c.normalizedName).filter(Boolean),
+    domain: facts.schema.domain || dataset.domain || "generic",
+  });
+
   const prompt = `
 You are InsightFlow AI Chat.
 
@@ -52,6 +59,12 @@ Important rules:
 - Do not invent exact values beyond provided facts.
 - If a value is not present in the facts, say it needs local calculation.
 - Keep the answer useful and concise.
+
+Use these learned corrections before answering:
+${JSON.stringify(memories, null, 2)}
+
+If a correction rule matches the user question, follow it.
+Do not repeat previous mistakes.
 
 User question:
 ${query}

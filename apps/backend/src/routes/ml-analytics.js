@@ -177,8 +177,18 @@ async function handlePredict(request, response, datasetId) {
 export async function handleMlAnalyticsRoutes(request, response, pathname) {
   try {
     if (request.method === 'GET' && pathname === '/api/ml/health') {
-      const result = await mlClient.health();
-      sendJson(response, 200, { ok: true, result });
+      try {
+        const result = await mlClient.health();
+        sendJson(response, 200, { ok: true, success: true, status: 'ready', result });
+      } catch (error) {
+        sendJson(response, 200, {
+          ok: true,
+          success: true,
+          status: 'unavailable',
+          error: error.message,
+          result: { success: false, status: 'unavailable', error: error.message }
+        });
+      }
       return true;
     }
 

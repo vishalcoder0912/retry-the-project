@@ -298,7 +298,7 @@ export default function DataTablePage() {
   };
 
   return (
-    <div className="min-h-screen px-4 py-6 text-white lg:px-6">
+    <div className="min-h-screen min-w-0 overflow-hidden px-4 py-6 text-white lg:px-6">
       <div className="mx-auto max-w-[1800px] space-y-5">
         <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -326,7 +326,7 @@ export default function DataTablePage() {
         </header>
 
         <div className="grid gap-5 2xl:grid-cols-[1fr_350px]">
-          <main className="space-y-5">
+          <main className="space-y-5 min-w-0">
             <section className={`${CARD} p-5`}>
               <div className="grid gap-5 xl:grid-cols-[1fr_280px_120px] xl:items-center">
                 <div className="flex items-center gap-5">
@@ -509,8 +509,8 @@ export default function DataTablePage() {
               </div>
 
               {activeTab === "schema" ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[800px] text-left text-sm">
+                <div className="w-full max-w-full overflow-x-auto rounded-2xl border border-slate-800">
+                  <table className="min-w-[900px] table-fixed text-left text-sm">
                     <thead className="sticky top-0 bg-slate-950 text-xs text-slate-400">
                       <tr>
                         <th className="px-4 py-3">Column</th>
@@ -524,12 +524,12 @@ export default function DataTablePage() {
                     <tbody>
                       {profile.columns.map((column) => (
                         <tr key={column.name} className="border-t border-slate-800 text-slate-200">
-                          <td className="px-4 py-3 font-medium">{column.name}</td>
-                          <td className="px-4 py-3">{column.type}</td>
-                          <td className="px-4 py-3">{column.role}</td>
-                          <td className="px-4 py-3">{column.missingPct}%</td>
-                          <td className="px-4 py-3">{column.uniqueCount}</td>
-                          <td className="px-4 py-3 text-slate-400">{column.sampleValues.join(", ") || "-"}</td>
+                          <td className="max-w-[220px] truncate px-4 py-3 font-medium">{column.name}</td>
+                          <td className="max-w-[220px] truncate px-4 py-3">{column.type}</td>
+                          <td className="max-w-[220px] truncate px-4 py-3">{column.role}</td>
+                          <td className="max-w-[220px] truncate px-4 py-3">{column.missingPct}%</td>
+                          <td className="max-w-[220px] truncate px-4 py-3">{column.uniqueCount}</td>
+                          <td className="max-w-[220px] truncate px-4 py-3 text-slate-400">{column.sampleValues.join(", ") || "-"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -548,8 +548,8 @@ export default function DataTablePage() {
                     </label>
                     <span>{sortedRows.length.toLocaleString()} rows - {visibleColumnList.length} columns</span>
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[900px] text-left text-sm">
+                  <div className="max-h-[600px] w-full max-w-full overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/40">
+                    <table className="min-w-[900px] table-fixed text-left text-sm">
                       <thead className="sticky top-0 bg-slate-950 text-xs text-slate-400">
                         <tr>
                           <th className="px-4 py-3"></th>
@@ -575,7 +575,7 @@ export default function DataTablePage() {
                             <td className="px-4 py-3"><input type="checkbox" checked={selectedRows.has(rowKey(row))} onChange={() => toggleSelect(row)} /></td>
                             <td className="px-4 py-3 text-slate-500">{String(row.__displayIndex)}</td>
                             {visibleColumnList.map((column) => (
-                              <td key={column} className="max-w-[240px] truncate px-4 py-3">{String(row[column] ?? "") || "-"}</td>
+                              <td key={column} className="max-w-[220px] truncate px-4 py-3 text-slate-200">{String(row[column] ?? "") || "-"}</td>
                             ))}
                             <td className="px-4 py-3"><MoreVertical className="size-4 text-slate-500" /></td>
                           </tr>

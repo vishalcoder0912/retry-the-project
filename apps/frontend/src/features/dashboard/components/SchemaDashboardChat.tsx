@@ -61,23 +61,7 @@ export default function SchemaDashboardChat({
 
   const suggestions = useMemo(() => {
     const dynamic = generateDynamicQuestionSuggestions(dataset as any, 8);
-
-    const fixed = [
-      "Build dashboard automatically",
-      "fix dashboard and generate 7 useful charts",
-      "Show average salary_usd by country",
-      "Create pie chart of education",
-      "Show salary_usd distribution",
-      "Add KPI for highest salary_usd",
-      "Show salary_usd vs experience as scatter",
-      "Filter country = USA",
-    ];
-
-    const averageAlreadySuggested = dynamic.some((prompt) => /show average/i.test(prompt));
-    const merged = [
-      ...(dynamic || []),
-      ...fixed.filter((prompt) => !(averageAlreadySuggested && /show average/i.test(prompt))),
-    ];
+    const merged = [...(dynamic || []), "Build dashboard automatically", "fix dashboard and generate useful charts"];
 
     return [...new Set(merged)].slice(0, 10);
   }, [dataset]);
@@ -108,11 +92,37 @@ export default function SchemaDashboardChat({
         }
       } else {
         onSend?.(query);
+        const safeDatasetId = dataset?.id || dataset?.name || "local-dataset";
+        const safeDatasetPayload = {
+          id: safeDatasetId,
+          name: dataset?.name || "Uploaded Dataset",
+          rows: Array.isArray(dataset?.rows) ? dataset.rows : [],
+          columns: Array.isArray(dataset?.columns) ? dataset.columns : [],
+        };
+
+        if (!safeDatasetPayload.rows.length && !safeDatasetPayload.columns.length) {
+          setMessages((current) => [
+            ...current,
+            {
+              role: "assistant",
+              content:
+                "I can see no active dataset context. Please upload or select a dataset first.",
+            },
+          ]);
+          setLocalLoading(false);
+          return;
+        }
+
         const command = await api.sendDashboardCommand(
-          dataset?.id || "local-dataset",
+          safeDatasetId,
           query,
           currentDashboard,
-          { rows: dataset?.rows || [], columns: dataset?.columns || [] },
+          {
+            rows: safeDatasetPayload.rows,
+            columns: safeDatasetPayload.columns,
+            pageContext: "premium-agentic-dashboard",
+            dashboardChartCount,
+          },
         );
         setProvider(command.provider || "schema-safe");
         onCommand(command);
@@ -262,7 +272,7 @@ export default function SchemaDashboardChat({
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="Ask: build the strict salary dashboard"
+            placeholder="Ask: build dashboard, add KPI, or analyze data..."
             className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-violet-500"
           />
 

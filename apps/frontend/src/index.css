@@ -94,6 +94,9 @@
   html {
     @apply dark;
     min-height: 100%;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     background: #07111f;
   }
 
@@ -101,11 +104,17 @@
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, sans-serif;
     min-height: 100%;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     background: #07111f;
   }
 
   #root {
     min-height: 100%;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
     background: #07111f;
   }
 

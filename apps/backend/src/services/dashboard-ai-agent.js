@@ -199,7 +199,9 @@ function fallbackPlan(query, schema) {
         ? 'line'
         : /histogram|distribution/.test(text)
           ? 'histogram'
-          : 'bar';
+          : /scatter| vs /.test(text)
+            ? 'scatter'
+            : 'bar';
 
   const metric =
     findColumn(schema, ['salary', 'salary_usd', 'revenue', 'sales', 'amount', 'score'], 'metric') ||

@@ -8,7 +8,7 @@ test("dashboard upload flow renders dataset, KPIs, charts, and assistant entry p
 
   await page.locator('input[type="file"]:not([multiple])').setInputFiles(path.resolve("tests/fixtures/salary-small.csv"));
 
-  await page.goto("/dashboard");
+  await page.goto("/elite-dashboard");
 
   await expect(page.getByRole("heading", { name: /salary-small/i })).toBeVisible();
   await expect(page.getByText(/3 records|3 rows/i).filter({ visible: true }).first()).toBeVisible();

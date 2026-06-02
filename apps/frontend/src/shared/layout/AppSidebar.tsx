@@ -45,7 +45,6 @@ export default function AppSidebar({ onNavigate, className }: Props) {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-white">InsightFlow</h1>
-            <p className="text-xs text-slate-400">Analytics Platform</p>
           </div>
         </Link>
       </div>

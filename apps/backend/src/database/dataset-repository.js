@@ -169,12 +169,13 @@ const mapDataset = (datasetRecord) => {
   };
 };
 
-export const createDataset = ({ name, fileName = null, columns, rows, sourceType = "upload" }) => {
-  const datasetId = randomUUID();
+export const createDataset = ({ id = null, name, fileName = null, columns, rows, sourceType = "upload", rowCount = null, isLocal = false, localDatasetId = null }) => {
+  const datasetId = id || randomUUID();
   const uploadedAt = new Date().toISOString();
   const cleanRows = rows.map((row) =>
     Object.fromEntries(Object.entries(row).filter(([key]) => key !== "__rowId")),
   );
+  const finalRowCount = rowCount !== null ? rowCount : cleanRows.length;
 
   return withTransaction(() => {
     insertDataset.run(
@@ -183,9 +184,18 @@ export const createDataset = ({ name, fileName = null, columns, rows, sourceType
       sourceType,
       fileName,
       uploadedAt,
-      cleanRows.length,
+      finalRowCount,
       columns.length,
     );
+
+    // Save extra local fields if table supports them
+    try {
+      if (isLocal) {
+        db.prepare("UPDATE datasets SET is_local = 1, local_dataset_id = ? WHERE id = ?").run(localDatasetId || datasetId, datasetId);
+      }
+    } catch (e) {
+      // Ignore if table columns do not exist
+    }
 
     columns.forEach((column) => {
       insertDatasetColumn.run(

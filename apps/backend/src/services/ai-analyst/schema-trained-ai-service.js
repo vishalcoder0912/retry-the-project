@@ -6,11 +6,18 @@ import { buildGuardianDashboardResponse } from "./dashboard-quality-guardian.js"
 import {
   buildSchemaUnderstanding,
 } from "./schema-understanding-engine.js";
+import { findAnalystTrainingForDomain } from "./analyst-training-memory.js";
 import {
   buildRagDashboardPlan,
   retrieveSchemaRagMemories,
   trainSchemaRagMemoryFromDataset,
 } from "./schema-rag-retriever.js";
+import { buildExcelAnalystPlan } from "./excel-analyst-brain.js";
+import { executeExcelAnalysis } from "./excel-calculation-engine.js";
+import { profileLargeDataset } from "./large-data-profiler.js";
+import { buildSeniorAnalystPlan } from "./senior-analyst-brain.js";
+import { selectSeniorKpis } from "./senior-kpi-selector.js";
+import { buildSeniorDashboardPlan, calculateSeniorCharts } from "./senior-dashboard-planner.js";
 
 function findColumn(profile, text, preferredRoles = []) {
   const lower = normalizeColumnName(text);
@@ -47,6 +54,7 @@ function findCategory(profile, text) {
 export async function generateSchemaDashboard(dataset, options = {}) {
   const profile = buildSchemaProfile(dataset);
   const understanding = buildSchemaUnderstanding(profile);
+  const analystTraining = findAnalystTrainingForDomain(profile.domain);
 
   const matchResult = findBestSchemaMatch(profile, {
     threshold: options.threshold ?? 0.35,
@@ -110,6 +118,11 @@ export async function generateSchemaDashboard(dataset, options = {}) {
       recommendedKpis: understanding.kpiCandidates.slice(0, 6),
       recommendedCharts: understanding.chartCandidates.slice(0, 7),
     },
+    analystThinking: analystTraining?.analystThinking || null,
+    dashboardGoal:
+      analystTraining?.analystThinking?.businessQuestion ||
+      understanding.domain?.goal ||
+      "Create useful decision-making analytics.",
     match: matchResult.best
       ? {
           dataset: matchResult.best.entry.name,
@@ -332,6 +345,141 @@ export async function runDashboardCommand({ dataset, query, currentDashboard = {
   return { ...deterministic, rag };
 }
 
+export async function generateSeniorAnalystDashboard({ dataset, currentDashboard = {}, options = {} } = {}) {
+  const dataProfile = profileLargeDataset(dataset, {
+    sampleSize: options.sampleSize || 5000,
+  });
+  const seniorPlanResult = buildSeniorAnalystPlan(dataProfile, options);
+  const seniorAnalysisPlan = seniorPlanResult.seniorAnalysisPlan;
+
+  const ragResult = await retrieveSchemaRagMemories(dataProfile, {
+    threshold: options.ragThreshold ?? 0.5,
+    limit: options.ragLimit ?? 5,
+    useOllama: options.useRagEmbedding !== false,
+  });
+
+  const ragPlan = buildRagDashboardPlan(dataProfile, ragResult.matches);
+  const rulePlan = buildRuleDashboardPlan(dataProfile);
+  const seniorDashboardPlan = buildSeniorDashboardPlan({
+    profile: dataProfile,
+    seniorAnalysisPlan,
+    maxCharts: options.maxCharts ?? 10,
+  });
+
+  const selectedKpis = selectSeniorKpis({
+    dataset,
+    profile: dataProfile,
+    seniorAnalysisPlan,
+    maxKpis: options.maxKpis ?? 8,
+  });
+
+  const mergedPlan = mergePlans(
+    dataProfile,
+    ragPlan,
+    {
+      ...seniorDashboardPlan,
+      kpis: selectedKpis.map(({ value, ...spec }) => spec),
+    },
+    rulePlan,
+    currentDashboard?.kpis || currentDashboard?.charts
+      ? {
+          source: "current-dashboard-context",
+          domain: dataProfile.domain,
+          kpis: currentDashboard.kpis || [],
+          charts: currentDashboard.charts || [],
+        }
+      : null
+  );
+
+  const guarded = buildGuardianDashboardResponse(dataProfile, mergedPlan, {
+    maxCharts: options.maxCharts ?? 10,
+    maxKpis: options.maxKpis ?? 8,
+  });
+
+  const allowedKpiKeys = new Set(selectedKpis.map((kpi) => `${kpi.title}-${kpi.metric}-${kpi.aggregation}`));
+  const finalKpis = selectedKpis
+    .filter((kpi) => allowedKpiKeys.has(`${kpi.title}-${kpi.metric}-${kpi.aggregation}`))
+    .slice(0, options.maxKpis ?? 8);
+
+  const qualityCharts = seniorDashboardPlan.charts.filter((chart) => chart.section === "Data quality");
+  const chartSpecsForCalculation = [
+    ...guarded.dashboard.charts,
+    ...qualityCharts.filter((chart) => !guarded.dashboard.charts.some((safeChart) => safeChart.id === chart.id)),
+  ];
+
+  const calculatedCharts = calculateSeniorCharts({
+    dataset,
+    profile: dataProfile,
+    charts: chartSpecsForCalculation,
+  });
+
+  const dashboard = {
+    ...guarded.dashboard,
+    source: "senior-analyst-brain+rag+local-calculation+quality-guardian",
+    layout: seniorDashboardPlan.layout,
+    kpis: finalKpis,
+    charts: calculatedCharts.slice(0, options.maxCharts ?? 10),
+    schemaOnly: false,
+    valuesCalculatedLocally: true,
+  };
+
+  const warnings = [
+    ...(dataProfile.warnings || []),
+    ...(seniorAnalysisPlan.warnings || []),
+    ...(guarded.dashboardHealth?.warnings || []).map((warning) => warning.message || String(warning)),
+    finalKpis.length === 0 ? "No meaningful KPIs could be calculated from available columns." : null,
+    calculatedCharts.length === 0 ? "No meaningful chart data could be calculated from available columns." : null,
+  ].filter(Boolean);
+
+  const confidence = Math.round(
+    Math.min(
+      0.98,
+      0.35 +
+        (finalKpis.length ? 0.2 : 0) +
+        (calculatedCharts.length ? 0.2 : 0) +
+        (ragResult.used ? 0.1 : 0) +
+        (dataProfile.dataQualityScore || 0) / 100 * 0.13
+    ) * 100
+  ) / 100;
+
+  return {
+    success: true,
+    schemaOnly: false,
+    seniorAnalysisPlan,
+    profile: makeSchemaOnlyPacket(dataProfile, { includeStats: true, includeTopValues: true }),
+    dataQuality: {
+      score: dataProfile.dataQualityScore,
+      duplicateEstimate: dataProfile.duplicateEstimate,
+      sampling: dataProfile.sampling,
+      warnings: dataProfile.warnings,
+    },
+    rag: {
+      used: ragResult.used,
+      matches: ragResult.matches.map((match) => ({
+        id: match.entry.id,
+        name: match.entry.name,
+        domain: match.entry.domain,
+        score: match.score,
+      })),
+      stats: ragResult.stats,
+    },
+    dashboard,
+    dashboardPlan: guarded.dashboard,
+    KPIs: finalKpis,
+    kpis: finalKpis,
+    charts: dashboard.charts,
+    warnings,
+    quality: {
+      score: guarded.qualityScore,
+      health: guarded.dashboardHealth,
+      guardian: guarded.dashboard.guardian,
+    },
+    confidence,
+    provider: ragResult.used ? "rag+local" : "local",
+    model: "senior-analyst-local-rules",
+  };
+}
+
 function computeLocalAnswer(profile, query) {
   const lower = String(query || "").toLowerCase();
   const metric = findColumn(profile, lower, ["money_metric", "score_metric", "continuous_metric", "count_metric"]);
@@ -364,4 +512,132 @@ export async function runSchemaChat({ dataset, query, useLlm = true }) {
   if (!useLlm) return { answer: localAnswer, model: "local", provider: "local", schemaOnly: true };
   const formatted = await formatChatAnswerWithOllama({ query, schemaProfile: profile, localAnswer });
   return { ...formatted, schemaOnly: true };
+}
+
+export async function runExcelAnalystChat({
+  dataset,
+  query,
+  currentDashboard = {},
+  useLlm = true,
+} = {}) {
+  const plan = await buildExcelAnalystPlan({
+    dataset,
+    query,
+    currentDashboard,
+    options: { useOllama: useLlm },
+  });
+
+  const calculation = executeExcelAnalysis({
+    rows: dataset?.rows || [],
+    plan,
+  });
+
+  const message = buildExcelAnswerMessage(query, plan, calculation);
+  const warnings = [
+    ...(plan.quality?.warnings || []),
+    ...(calculation.ok ? [] : [calculation.warning]),
+  ].filter(Boolean);
+
+  return {
+    schemaOnly: true,
+    provider: "excel-analyst-rag",
+    model: useLlm ? "rag-plus-local-calculation" : "local-calculation",
+    query,
+    intent: plan.intent,
+    answer: message,
+    plan: plan.executionPlan,
+    calculation,
+    suggestedCharts: plan.recommendedDashboard?.charts || [],
+    suggestedKpis: plan.recommendedDashboard?.kpis || [],
+    recommendedDashboard: plan.recommendedDashboard,
+    confidence: buildExcelConfidence(plan, calculation),
+    warnings,
+    rag: plan.rag,
+    quality: plan.quality,
+    profile: plan.publicProfile,
+  };
+}
+
+function buildExcelConfidence(plan, calculation) {
+  let score = 0.45;
+  if (plan.executionPlan?.metric) score += 0.2;
+  if (plan.executionPlan?.dimension || plan.executionPlan?.dateColumn) score += 0.15;
+  if (plan.rag?.used) score += 0.1;
+  if (calculation?.ok) score += 0.1;
+  return Math.round(Math.min(score, 0.98) * 100) / 100;
+}
+
+function formatMetricLocal(value, metricKey) {
+  if (typeof value !== "number") return String(value);
+  if (/salary|amount|revenue|sales|profit|price|cost|usd/i.test(metricKey)) {
+    return `$${Math.round(value).toLocaleString()}`;
+  }
+  return value.toLocaleString();
+}
+
+function labelLocal(text) {
+  if (!text) return "";
+  return String(text).replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function buildExcelAnswerMessage(query, plan, calculation) {
+  if (!calculation.ok) {
+    return `I could not complete the analysis because: ${calculation.warning}`;
+  }
+
+  const p = plan.executionPlan || {};
+
+  if (Array.isArray(calculation.result) && calculation.result.length > 0) {
+    const sorted = [...calculation.result].sort((left, right) => (right.value ?? right.count ?? 0) - (left.value ?? left.count ?? 0));
+    const highest = sorted[0];
+    const second = sorted[1];
+    
+    const highestLabel = highest.name || highest.period || highest.label || `Row ${highest.rowIndex || 1}`;
+    const highestValue = highest.value ?? highest.count ?? highest.zScore ?? 0;
+    const formattedHighest = formatMetricLocal(highestValue, p.metric || "value");
+
+    let summaryText = "";
+    if (plan.intent === "TREND") {
+      summaryText = `Trend analysis over time shows key movements in the data. The highest peak occurred at ${highestLabel} with a value of ${formattedHighest}.`;
+    } else {
+      summaryText = `${labelLocal(p.dimension || "Category")}-wise ${labelLocal(p.metric || "metric")} analysis shows that ${highestLabel} has the highest contribution of ${formattedHighest}`;
+      if (second) {
+        const secondLabel = second.name || second.period || second.label || `Row ${second.rowIndex || 2}`;
+        const secondValue = second.value ?? second.count ?? second.zScore ?? 0;
+        const formattedSecond = formatMetricLocal(secondValue, p.metric || "value");
+        summaryText += `, followed closely by ${secondLabel} with ${formattedSecond}`;
+      }
+      summaryText += `. This indicates a notable compensation or performance concentration in these categories.`;
+    }
+
+    const rowsText = calculation.result.slice(0, 5)
+      .map((item, index) => {
+        const labelStr = item.name || item.period || item.label || `Row ${item.rowIndex}`;
+        const val = item.value ?? item.count ?? item.zScore;
+        const formatted = formatMetricLocal(val, p.metric || "value");
+        return `• ${labelStr}: ${formatted}`;
+      })
+      .join("\n");
+
+    return [
+      summaryText,
+      "",
+      "Breakdown Details:",
+      rowsText
+    ].join("\n");
+  }
+
+  if (typeof calculation.result === "number") {
+    const formatted = formatMetricLocal(calculation.result, p.metric || "value");
+    return `Analysis of the dataset shows that the calculated aggregate ${labelLocal(p.metric || "metric")} is ${formatted}. This value represents the total sum or count of points satisfying the query conditions.`;
+  }
+
+  return [
+    "I analyzed your dataset like a senior business analyst.",
+    `Intent detected: ${plan.intent}.`,
+    p.metric ? `Metric used: ${labelLocal(p.metric)}.` : null,
+    p.dimension ? `Dimension used: ${labelLocal(p.dimension)}.` : null,
+    "",
+    "The analysis calculation completed successfully.",
+  ].filter((line) => line !== null).join("\n");
 }

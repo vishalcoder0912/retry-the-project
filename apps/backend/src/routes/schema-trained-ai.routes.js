@@ -1,5 +1,7 @@
 import {
   generateSchemaDashboard,
+  generateSeniorAnalystDashboard,
+  runExcelAnalystChat,
   runDashboardCommand,
   runSchemaChat,
   trainSchemaDashboard,
@@ -21,6 +23,8 @@ import {
   explainDatasetSchemaForUser,
   trainSmartRagFromApprovedDashboard,
 } from "../services/ai-analyst/smart-rag-training-service.js";
+import { trainExcelAnalystRagSeeds } from "../../scripts/train-excel-analyst-rag.js";
+import { trainSeniorAnalystSeeds } from "../../scripts/train-senior-analyst-rag.js";
 
 async function readJsonBody(request) {
   try {
@@ -189,6 +193,36 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
     }
   }
 
+  if (method === "POST" && pathname === "/api/ai/excel-rag/train-seeds") {
+    try {
+      const body = await readJsonBody(request);
+      const result = await trainExcelAnalystRagSeeds({
+        useOllama: body.useOllama !== false,
+      });
+
+      ok(response, result, "Excel Analyst RAG seeds trained");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Excel Analyst RAG seed training failed");
+      return true;
+    }
+  }
+
+  if (method === "POST" && pathname === "/api/ai/senior-analyst/train-seeds") {
+    try {
+      const body = await readJsonBody(request);
+      const result = await trainSeniorAnalystSeeds({
+        useOllama: body.useOllama === true,
+      });
+
+      ok(response, result, "Senior analyst RAG seeds trained");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Senior analyst RAG seed training failed");
+      return true;
+    }
+  }
+
   const understandMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema-understand$/);
   if (method === "POST" && understandMatch) {
     try {
@@ -349,6 +383,100 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
       return true;
     } catch (error) {
       fail(response, 500, error.message || "AI chat failed");
+      return true;
+    }
+  }
+
+  const seniorDashboardMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/senior-dashboard$/);
+  if (method === "POST" && seniorDashboardMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(seniorDashboardMatch[1], body);
+      if (!dataset) return fail(response, 404, "Dataset not found. Pass {rows, columns} in body or check dataset repository integration.");
+
+      const result = await generateSeniorAnalystDashboard({
+        dataset,
+        currentDashboard: body.currentDashboard || {},
+        options: {
+          sampleSize: body.sampleSize,
+          maxCharts: body.maxCharts ?? 10,
+          maxKpis: body.maxKpis ?? 8,
+          ragThreshold: body.ragThreshold,
+          ragLimit: body.ragLimit,
+          useRagEmbedding: body.useRagEmbedding !== false,
+          domain: body.domain,
+          objective: body.objective,
+        },
+      });
+
+      ok(response, result, "Senior analyst dashboard generated");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Senior analyst dashboard failed");
+      return true;
+    }
+  }
+
+  const excelChatMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/excel-chat$/);
+  if (method === "POST" && excelChatMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(excelChatMatch[1], body);
+
+      if (!dataset) return fail(response, 404, "Dataset not found");
+
+      const query = String(body.query || body.message || "").trim();
+      if (!query) return fail(response, 400, "query is required");
+
+      const result = await runExcelAnalystChat({
+        dataset,
+        query,
+        currentDashboard: body.currentDashboard || {},
+        useLlm: body.useLlm !== false,
+      });
+
+      ok(response, {
+        userMessage: {
+          role: "user",
+          content: query,
+          timestamp: new Date().toISOString(),
+        },
+        assistantMessage: {
+          role: "assistant",
+          content: result.answer,
+          model: result.model,
+          provider: result.provider,
+          schemaOnly: true,
+          timestamp: new Date().toISOString(),
+        },
+        analysis: result,
+      }, "Excel analyst response generated");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Excel analyst chat failed");
+      return true;
+    }
+  }
+
+  const excelAnalyzeMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/excel-analyze$/);
+  if (method === "POST" && excelAnalyzeMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(excelAnalyzeMatch[1], body);
+
+      if (!dataset) return fail(response, 404, "Dataset not found");
+
+      const result = await runExcelAnalystChat({
+        dataset,
+        query: body.query || "Analyze this dataset like an Excel expert",
+        currentDashboard: body.currentDashboard || {},
+        useLlm: body.useLlm !== false,
+      });
+
+      ok(response, result, "Excel analysis generated");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Excel analysis failed");
       return true;
     }
   }

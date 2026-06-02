@@ -21,7 +21,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Build frontend
         run: npm run build
@@ -49,8 +49,7 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        run: npm ci
-        working-directory: apps/backend
+        run: npm ci --legacy-peer-deps
 
       - name: Deploy to Vercel
         uses: amondnet/vercel-action@v25
@@ -59,4 +58,3 @@ jobs:
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_BACKEND_PROJECT_ID }}
           vercel-args: "--prod"
-          working-directory: apps/backend

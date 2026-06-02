@@ -89,4 +89,21 @@ describe("schema-trained AI routes", () => {
     expect(payload.data.assistantMessage.schemaOnly).toBe(true);
     expect(JSON.stringify(payload)).not.toContain("\"rows\"");
   });
+
+  it("answers Excel analyst chat with local calculations", async () => {
+    const { payload } = await callRoute("/api/datasets/test-local/excel-chat", {
+      ...salaryDataset,
+      query: "Compare average salary by country",
+      useLlm: false,
+    });
+
+    expect(payload.success).toBe(true);
+    expect(payload.data.assistantMessage.schemaOnly).toBe(true);
+    expect(payload.data.analysis.provider).toBe("excel-analyst-rag");
+    expect(payload.data.analysis.calculation.ok).toBe(true);
+    expect(payload.data.analysis.calculation.result).toEqual([
+      { name: "USA", value: 90000, count: 1 },
+      { name: "India", value: 57500, count: 2 },
+    ]);
+  });
 });

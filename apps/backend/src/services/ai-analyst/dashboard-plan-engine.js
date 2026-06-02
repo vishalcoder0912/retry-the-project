@@ -115,6 +115,7 @@ export function sanitizeKpiSpec(spec = {}, profile) {
     aggregation: AGGREGATIONS.has(spec.aggregation) ? spec.aggregation : "count",
     format: spec.format || undefined,
     description: spec.description || "",
+    reason: spec.reason || spec.description || "",
   };
 }
 
@@ -250,6 +251,7 @@ export function templatePlanForStorage(plan = {}, profile) {
         metricRole: column?.role,
         aggregation: item.aggregation || "count",
         format: item.format,
+        reason: item.reason || item.description,
       };
     }),
     charts: (plan.charts || []).map((item) => {
@@ -264,6 +266,7 @@ export function templatePlanForStorage(plan = {}, profile) {
         yRole: y?.role,
         aggregation: item.aggregation || "count",
         limit: item.limit || 10,
+        reason: item.reason,
       };
     }),
   };

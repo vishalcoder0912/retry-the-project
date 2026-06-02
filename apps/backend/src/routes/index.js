@@ -19,6 +19,7 @@ import { handleDashboardAiRoutes } from './dashboardAiRoutes.js';
 import { handleAgenticModelRoutes } from './agentic-models.js';
 import { handleAgenticDataScienceRoutes } from './agentic-data-science.js';
 import { handleSchemaAgentRoutes } from './schema-agent.js';
+import { handleDeepAgenticTrainingRoutes } from './deep-agentic-training.js';
 import {
   handleE2ECompatRoutes,
   handleE2ENotFound,
@@ -71,6 +72,11 @@ export async function setupRoutes(request, response) {
 
     // Schema Agent: schema profiling, memory/RAG, dashboard planning, deterministic calculation
     if (await handleSchemaAgentRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Deep agentic analytics training
+    if (await handleDeepAgenticTrainingRoutes(request, response, pathname)) {
       return;
     }
 

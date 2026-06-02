@@ -1,4 +1,11 @@
 import { randomUUID } from "node:crypto";
+import {
+  createDataset as dbCreateDataset,
+  getDatasetById as dbGetDatasetById,
+  getCurrentDataset as dbGetCurrentDataset,
+  getChatMessages as dbGetChatMessages,
+  saveChatMessages as dbSaveChatMessages,
+} from "../database/dataset-repository.js";
 
 const store = globalThis.__INSIGHTFLOW_E2E_STORE__ || {
   datasets: new Map(),
@@ -196,6 +203,7 @@ function createDataset(input = {}) {
     dataset.localDatasetId = dataset.id;
   }
 
+  // Persist in memory store for session compatibility
   store.datasets.set(dataset.id, dataset);
   store.currentDatasetId = dataset.id;
 
@@ -203,24 +211,54 @@ function createDataset(input = {}) {
     store.chatMessages.set(dataset.id, []);
   }
 
+  // Persist in SQLite database
+  try {
+    dbCreateDataset({
+      id: dataset.id,
+      name: dataset.name,
+      fileName: dataset.fileName,
+      columns: dataset.columns,
+      rows: dataset.rows,
+      sourceType: dataset.sourceType,
+      isLocal: dataset.isLocal,
+      localDatasetId: dataset.localDatasetId,
+    });
+  } catch (e) {
+    console.error("[E2E-Compat] Failed to persist dataset to SQLite:", e);
+  }
+
   return dataset;
 }
 
 function getDataset(datasetId) {
-  return store.datasets.get(datasetId) || null;
+  return store.datasets.get(datasetId) || dbGetDatasetById(datasetId) || null;
 }
 
 function getCurrentDataset() {
-  if (!store.currentDatasetId) return null;
+  if (!store.currentDatasetId) {
+    const dbCurrent = dbGetCurrentDataset();
+    if (dbCurrent) {
+      store.currentDatasetId = dbCurrent.id;
+      return dbCurrent;
+    }
+    return null;
+  }
   return getDataset(store.currentDatasetId);
 }
 
 function getChatMessages(datasetId) {
-  return store.chatMessages.get(datasetId) || [];
+  const mem = store.chatMessages.get(datasetId);
+  if (mem && mem.length > 0) return mem;
+  return dbGetChatMessages(datasetId) || [];
 }
 
 function saveChatMessages(datasetId, messages) {
   store.chatMessages.set(datasetId, messages);
+  try {
+    dbSaveChatMessages(datasetId, messages);
+  } catch (e) {
+    console.error("[E2E-Compat] Failed to persist chat messages to DB:", e);
+  }
 }
 
 function getNumericColumns(dataset) {
@@ -635,11 +673,212 @@ function buildSchemaOnlySql(schema, query) {
   return "SELECT COUNT(*) AS count FROM dataset;";
 }
 
+function schemaColumns(schemaProfile = {}) {
+  if (Array.isArray(schemaProfile.columns)) return schemaProfile.columns;
+  if (Array.isArray(schemaProfile.schema?.columns)) return schemaProfile.schema.columns;
+  if (Array.isArray(schemaProfile.datasets)) {
+    return schemaProfile.datasets.flatMap((dataset) => schemaColumns(dataset.schema));
+  }
+  return [];
+}
+
+function pickMetric(columns = []) {
+  return columns.find((column) =>
+    column.type === "number" ||
+    column.role === "metric" ||
+    /sales|revenue|profit|salary|amount|quantity|experience/i.test(column.name || "")
+  ) || columns[0] || { name: "count", type: "number", role: "metric" };
+}
+
+function pickDimension(columns = []) {
+  return columns.find((column) =>
+    column.type !== "number" &&
+    column.role !== "metric" &&
+    !/date/i.test(column.name || "")
+  ) || columns[0] || { name: "category", type: "string", role: "dimension" };
+}
+
+function buildCompatDashboard(schemaProfile = {}) {
+  const columns = schemaColumns(schemaProfile);
+  const metric = pickMetric(columns);
+  const dimension = pickDimension(columns);
+  const date = columns.find((column) => column.type === "date" || /date|month|year/i.test(column.name || ""));
+
+  return {
+    domain: /salary|experience|education/i.test(JSON.stringify(schemaProfile))
+      ? "salary"
+      : /sales|revenue|profit|quantity/i.test(JSON.stringify(schemaProfile))
+        ? "sales"
+        : "generic",
+    dashboardTitle: "Agentic AI Analytics Dashboard",
+    kpis: [
+      {
+        title: `Total ${metric.name}`,
+        metric: metric.name,
+        aggregation: "sum",
+        reason: `${metric.name} is a measurable analytics field.`,
+      },
+      {
+        title: `Average ${metric.name}`,
+        metric: metric.name,
+        aggregation: "avg",
+        reason: `Average ${metric.name} is useful for KPI comparison.`,
+      },
+    ],
+    charts: [
+      {
+        title: `${metric.name} by ${dimension.name}`,
+        type: "bar",
+        xKey: dimension.name,
+        yKey: metric.name,
+        aggregation: "sum",
+        reason: `${dimension.name} is a dimension and ${metric.name} is a measure.`,
+      },
+      date
+        ? {
+            title: `${metric.name} over ${date.name}`,
+            type: "line",
+            xKey: date.name,
+            yKey: metric.name,
+            aggregation: "sum",
+            reason: `${date.name} can show a time trend.`,
+          }
+        : null,
+    ].filter(Boolean),
+    warnings: [],
+  };
+}
+
+function buildCompatDashboardCommand({ message = "", schemaProfile = {}, currentDashboard = {} }) {
+  const lower = String(message).toLowerCase();
+  const columns = schemaColumns(schemaProfile);
+  const columnNames = new Set(columns.map((column) => String(column.name || "").toLowerCase()));
+  const metric = pickMetric(columns);
+  const dimension = pickDimension(columns);
+
+  const missingColumn = [...String(message).matchAll(/\b([a-z][a-z0-9_]{2,})\b/gi)]
+    .map((match) => match[1].toLowerCase())
+    .find((token) => token.includes("_") && !columnNames.has(token));
+
+  if (missingColumn) {
+    return {
+      intent: "general_answer",
+      action: {},
+      answer: `I cannot create that chart because ${missingColumn} is not available in the schema.`,
+      reason: `Missing schema column: ${missingColumn}.`,
+    };
+  }
+
+  if (/remove|delete/.test(lower) && /chart|graph/.test(lower)) {
+    return {
+      intent: "remove_chart",
+      action: {
+        targetTitle: currentDashboard?.charts?.[0]?.title || "chart",
+      },
+      answer: "I removed the requested chart.",
+      reason: "The command requested removing an existing dashboard chart.",
+    };
+  }
+
+  if (/kpi|card|metric/.test(lower)) {
+    return {
+      intent: "add_kpi",
+      action: {
+        kpi: {
+          title: `Average ${metric.name}`,
+          metric: metric.name,
+          aggregation: "avg",
+        },
+      },
+      answer: `I added an average ${metric.name} KPI.`,
+      reason: `${metric.name} is a measure in the schema.`,
+    };
+  }
+
+  if (/chart|graph|show|create|add/.test(lower)) {
+    return {
+      intent: "add_chart",
+      action: {
+        chart: {
+          title: `${metric.name} by ${dimension.name}`,
+          type: /line/.test(lower) ? "line" : "bar",
+          xKey: dimension.name,
+          yKey: metric.name,
+          aggregation: /average|avg/.test(lower) ? "avg" : "sum",
+        },
+      },
+      answer: `I added a ${metric.name} by ${dimension.name} chart.`,
+      reason: `${dimension.name} is a dimension and ${metric.name} is a measure.`,
+    };
+  }
+
+  return {
+    intent: "general_answer",
+    action: {},
+    answer: "I can help add, remove, update, filter, or explain dashboard charts.",
+    reason: "The request did not require a dashboard mutation.",
+  };
+}
+
 export async function handleE2ECompatRoutes(request, response, pathname) {
   const method = request.method || "GET";
 
   if (method === "OPTIONS") {
     return sendNoContent(response);
+  }
+
+  if (method === "POST" && pathname === "/api/ollama-dashboard-ai/generate-dashboard") {
+    const body = await readJsonBody(request);
+    const dashboard = buildCompatDashboard(body.schemaProfile || body.schema || {});
+
+    return sendJson(response, 200, {
+      success: true,
+      ok: true,
+      provider: "e2e-compat",
+      dashboard,
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/ollama-dashboard-ai/dashboard-command") {
+    const body = await readJsonBody(request);
+    const result = buildCompatDashboardCommand(body);
+
+    return sendJson(response, 200, {
+      success: true,
+      ok: true,
+      provider: "e2e-compat",
+      result,
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/ollama-dashboard-ai/chat") {
+    const body = await readJsonBody(request);
+    const answer = /kpi/i.test(body.message || "")
+      ? "A KPI is a key performance indicator: a simple metric that shows whether something important is doing well."
+      : "I can answer general analytics questions and help explain dashboard concepts.";
+
+    return sendJson(response, 200, {
+      success: true,
+      ok: true,
+      provider: "e2e-compat",
+      answer,
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/dashboard-quality/validate") {
+    const body = await readJsonBody(request);
+    const dashboard = body.dashboard || body.currentDashboard || {};
+    const score = Array.isArray(dashboard.kpis) && Array.isArray(dashboard.charts) ? 90 : 70;
+
+    return sendJson(response, 200, {
+      success: true,
+      data: {
+        score,
+        passed: score >= 70,
+        issues: [],
+        provider: "e2e-compat",
+      },
+    });
   }
 
   if (method === "GET" && pathname === "/api/state") {

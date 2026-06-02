@@ -1,5 +1,6 @@
 import { makeSchemaOnlyPacket } from "./schema-fingerprint.js";
 import { sanitizeChartSpec, sanitizeKpiSpec } from "./dashboard-plan-engine.js";
+import { findAnalystTrainingForDomain } from "./analyst-training-memory.js";
 
 const DEFAULT_OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const DASHBOARD_MODEL = process.env.DASHBOARD_LLM_MODEL || "neural-chat:7b";
@@ -102,6 +103,7 @@ function sanitizeDashboardPlan(plan = {}, schemaProfile) {
 
 function buildDashboardPrompt(schemaProfile, memoryMatch, options = {}) {
   const packet = makeSchemaOnlyPacket(schemaProfile);
+  const analystTraining = findAnalystTrainingForDomain(schemaProfile.domain);
 
   const legacyMemory = memoryMatch?.entry
     ? {
@@ -117,7 +119,22 @@ function buildDashboardPrompt(schemaProfile, memoryMatch, options = {}) {
   return `You are InsightFlow's senior data analyst and schema-only dashboard planner.
 
 YOUR JOB:
-Understand the dataset schema and create the best dashboard plan.
+Understand the dataset schema, infer business meaning, and create the best dashboard plan.
+
+THINK LIKE A SENIOR DATA ANALYST:
+Before creating dashboard:
+1. Identify the business domain.
+2. Find the primary success metric.
+3. Find dimensions that explain that metric.
+4. Create KPIs useful for decision making.
+5. Create charts that answer real business questions.
+6. Reject charts that look visual but give no insight.
+
+Never create random charts.
+Never use ID columns as metrics.
+Never use line chart without date/time.
+Never use pie chart for high-cardinality data.
+Never invent columns.
 
 VERY IMPORTANT:
 You do NOT see raw data rows.
@@ -158,9 +175,15 @@ DASHBOARD QUALITY RULES:
 9. Use count_unique for unique category count.
 10. For language/framework/skill/tag columns, add splitValues: true.
 11. Use only existing column names from the current schema.
+12. Each KPI/chart reason must explain the business question it answers.
+13. Prefer metric-driver charts: primary metric by dimensions that explain it.
+14. If domain is salary/workforce, optimize for "Which factors increase salary?"
 
 CURRENT SCHEMA PACKET:
 ${JSON.stringify(packet, null, 2)}
+
+ANALYST BUSINESS TRAINING MEMORY:
+${JSON.stringify(analystTraining, null, 2)}
 
 SMART SCHEMA UNDERSTANDING:
 ${JSON.stringify(smartUnderstanding, null, 2)}
@@ -175,12 +198,17 @@ RETURN STRICT JSON ONLY:
 {
   "action": "GENERATE_DASHBOARD",
   "message": "short explanation for the user",
+  "domain": "workforce_salary",
+  "primaryMetric": "salary_usd",
+  "dashboardGoal": "Find salary drivers",
+  "businessQuestions": ["Which factors increase salary?"],
   "kpis": [
     {
       "title": "Total Records",
       "metric": "__row_count__",
       "aggregation": "count",
-      "format": "number"
+      "format": "number",
+      "reason": "Total Records tells the user the dataset size behind salary analysis."
     }
   ],
   "charts": [
@@ -190,8 +218,12 @@ RETURN STRICT JSON ONLY:
       "xKey": "country",
       "yKey": "salary_usd",
       "aggregation": "avg",
-      "limit": 10
+      "limit": 10,
+      "reason": "Country is a dimension that can explain differences in the main salary metric."
     }
+  ],
+  "insights": [
+    "Country and experience are likely major salary drivers."
   ],
   "schemaOnly": true
 }`;
@@ -248,6 +280,10 @@ export async function planDashboardWithOllama(schemaProfile, memoryMatch, option
     return {
       source: `ollama:${DASHBOARD_MODEL}`,
       message: json.message || "Dashboard plan generated.",
+      businessQuestions: Array.isArray(json.businessQuestions) ? json.businessQuestions : [],
+      primaryMetric: json.primaryMetric,
+      dashboardGoal: json.dashboardGoal,
+      insights: Array.isArray(json.insights) ? json.insights : [],
       kpis: (json.kpis || []).map((item) => sanitizeKpiSpec(stripUnsafeSpec(item), schemaProfile)).slice(0, 8),
       charts: (json.charts || json.chartSpecs || []).map((item) => sanitizeChartSpec(stripUnsafeSpec(item), schemaProfile)).slice(0, 10),
       schemaOnly: true,

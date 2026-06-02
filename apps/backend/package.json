@@ -11,7 +11,10 @@
     "kill-port": "node kill-port.js",
     "test": "vitest",
     "test:run": "vitest run",
-    "rag:seed": "node scripts/train-smart-rag-seeds.js"
+    "rag:seed": "node scripts/train-smart-rag-seeds.js",
+    "train:agentic-domains": "node scripts/train-agentic-analytics-domains.js",
+    "train:deep-agentic": "node scripts/train-deep-agentic-analytics.js",
+    "train:agentic-master": "node scripts/train-agentic-master-pack.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",

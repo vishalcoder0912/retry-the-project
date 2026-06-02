@@ -105,6 +105,11 @@ function isCategoryColumn(column) {
   );
 }
 
+function isIdColumn(column) {
+  if (!column) return false;
+  return column.role === "id" || /(^id$|_id$|uuid|identifier)/i.test(column.name || "");
+}
+
 function isDateColumn(column) {
   return Boolean(column && (column.role === "date" || column.type === "date"));
 }
@@ -141,8 +146,10 @@ function stripUnsafeKpiData(kpi) {
 }
 
 function normalizeKpiSpec(profile, spec) {
-  const safe = sanitizeKpiSpec(stripUnsafeKpiData(spec), profile);
+  const input = stripUnsafeKpiData(spec || {});
+  const safe = sanitizeKpiSpec(input, profile);
   if (!AGGREGATIONS.has(safe.aggregation)) safe.aggregation = "count";
+  safe.reason = safe.reason || input.reason || `Tracks ${safe.aggregation} of ${safe.metric || "records"} to monitor performance.`;
   return safe;
 }
 
@@ -175,6 +182,16 @@ function normalizeChartSpec(profile, spec) {
     safe.limit = Math.max(safe.limit, 500);
   }
 
+  // Top-N limit for high-cardinality dimension
+  if (x && !isDateColumn(x) && (x.uniqueCount > 10 || (x.uniqueCount === undefined && ["string", "category"].includes(x.type)))) {
+    if (["bar", "radar", "composed", "pie", "donut"].includes(safe.type)) {
+      safe.limit = Math.min(safe.limit || 10, 10);
+    }
+  }
+
+  // Every chart must have business reason
+  safe.reason = safe.reason || input.reason || `Analyzes ${safe.yKey || "records"} by ${safe.xKey || "dimension"} to find business insights.`;
+
   delete safe.data;
   delete safe.rows;
   delete safe.rawRows;
@@ -186,33 +203,51 @@ function normalizeChartSpec(profile, spec) {
 export function validateChartCombination(profile, chartSpec = {}) {
   const chart = normalizeChartSpec(profile, chartSpec);
   const x = getColumn(profile, chart.xKey);
-  const y = chart.yKey === "count" ? null : getColumn(profile, chart.yKey);
+  const y = (chart.yKey === "count" || !chart.yKey) ? null : getColumn(profile, chart.yKey);
 
   if (!CHART_TYPES.has(chart.type)) {
     return { ok: false, reason: `Unsupported chart type: ${chart.type}` };
   }
 
+  if (!x) {
+    return { ok: false, reason: `X-axis column "${chart.xKey}" does not exist.` };
+  }
+
+  if (chart.yKey && chart.yKey !== "count" && !y) {
+    return { ok: false, reason: `Y-axis column "${chart.yKey}" does not exist.` };
+  }
+
+  if (x && isIdColumn(x) && ["sum", "avg"].includes(chart.aggregation)) {
+    return { ok: false, reason: "ID columns cannot be summed or averaged." };
+  }
+
+  if (y && isIdColumn(y) && ["sum", "avg"].includes(chart.aggregation)) {
+    return { ok: false, reason: "ID columns cannot be summed or averaged." };
+  }
+
   if (chart.type === "histogram") {
-    if (!x || !isMetricColumn(x)) return { ok: false, reason: "Histogram needs one numeric metric column." };
+    if (!isMetricColumn(x)) return { ok: false, reason: "Histogram needs one numeric metric column." };
     return { ok: true, chart };
   }
 
   if (chart.type === "scatter") {
-    if (!x || !y || !isMetricColumn(x) || !isMetricColumn(y)) {
+    if (!isMetricColumn(x) || !y || !isMetricColumn(y)) {
       return { ok: false, reason: "Scatter chart needs two numeric metric columns." };
     }
     return { ok: true, chart };
   }
 
   if (["pie", "donut"].includes(chart.type)) {
-    if (!x || !isCategoryColumn(x)) return { ok: false, reason: "Pie/donut chart needs a category column." };
+    if (!isCategoryColumn(x)) return { ok: false, reason: "Pie/donut chart needs a category column." };
+    if (x.uniqueCount !== undefined && x.uniqueCount > 6) {
+      return { ok: false, reason: "Pie/donut chart max 6 categories." };
+    }
     return { ok: true, chart };
   }
 
   if (["line", "area"].includes(chart.type)) {
-    if (!x) return { ok: false, reason: "Line/area chart needs an X column." };
-    if (!isDateColumn(x) && !isCategoryColumn(x)) {
-      return { ok: false, reason: "Line/area chart needs date or ordered category on X." };
+    if (!isDateColumn(x)) {
+      return { ok: false, reason: "Line/area chart needs date or time on X." };
     }
     if (chart.yKey !== "count" && (!y || !isMetricColumn(y))) {
       return { ok: false, reason: "Line/area chart needs numeric Y metric." };
@@ -221,7 +256,6 @@ export function validateChartCombination(profile, chartSpec = {}) {
   }
 
   if (["bar", "radar", "composed", "heatmap"].includes(chart.type)) {
-    if (!x) return { ok: false, reason: `Column ${chart.xKey} does not exist.` };
     if (chart.yKey !== "count" && (!y || !isMetricColumn(y))) {
       return { ok: false, reason: "This chart needs numeric metric on Y." };
     }
@@ -251,24 +285,24 @@ function workforceSalaryPlan(profile) {
   if (!salary) return null;
 
   const kpis = [
-    { title: "Total Records", metric: "__row_count__", aggregation: "count", format: "number" },
-    { title: "Average Salary", metric: salary.name, metricRole: salary.role, aggregation: "avg", format: "currency" },
-    { title: "Median Salary", metric: salary.name, metricRole: salary.role, aggregation: "median", format: "currency" },
-    { title: "Highest Salary", metric: salary.name, metricRole: salary.role, aggregation: "max", format: "currency" },
+    { title: "Total Records", metric: "__row_count__", aggregation: "count", format: "number", reason: "Shows the data volume behind the salary analysis." },
+    { title: "Average Salary", metric: salary.name, metricRole: salary.role, aggregation: "avg", format: "currency", reason: `${salary.name} is the primary business success metric.` },
+    { title: "Median Salary", metric: salary.name, metricRole: salary.role, aggregation: "median", format: "currency", reason: "Median salary reduces the effect of outliers in compensation data." },
+    { title: "Highest Salary", metric: salary.name, metricRole: salary.role, aggregation: "max", format: "currency", reason: "Highest salary shows the top compensation ceiling." },
   ];
 
   if (country) {
-    kpis.push({ title: "Countries", metric: country.name, metricRole: country.role, aggregation: "count_unique", format: "number" });
+    kpis.push({ title: "Countries", metric: country.name, metricRole: country.role, aggregation: "count_unique", format: "number", reason: "Country count shows geographic coverage for salary comparisons." });
   }
 
   const charts = [];
-  if (country) charts.push({ title: "Average Salary by Country", type: "bar", xKey: country.name, yKey: salary.name, aggregation: "avg", limit: 10 });
-  charts.push({ title: "Salary Distribution", type: "histogram", xKey: salary.name, yKey: salary.name, aggregation: "count", limit: 12 });
-  if (experience) charts.push({ title: "Salary vs Experience", type: "scatter", xKey: experience.name, yKey: salary.name, aggregation: "count", limit: 500 });
-  if (education) charts.push({ title: "Education Distribution", type: "donut", xKey: education.name, yKey: "count", aggregation: "count", limit: 10 });
-  if (companySize) charts.push({ title: "Average Salary by Company Size", type: "bar", xKey: companySize.name, yKey: salary.name, aggregation: "avg", limit: 10 });
-  if (languages) charts.push({ title: "Average Salary by Language", type: "bar", xKey: languages.name, yKey: salary.name, aggregation: "avg", limit: 10, splitValues: true });
-  if (frameworks) charts.push({ title: "Average Salary by Framework", type: "bar", xKey: frameworks.name, yKey: salary.name, aggregation: "avg", limit: 10, splitValues: true });
+  if (country) charts.push({ title: "Average Salary by Country", type: "bar", xKey: country.name, yKey: salary.name, aggregation: "avg", limit: 10, reason: `${country.name} is a location dimension that can explain salary differences.` });
+  charts.push({ title: "Salary Distribution", type: "histogram", xKey: salary.name, yKey: salary.name, aggregation: "count", limit: 12, reason: "Salary distribution reveals spread, skew, and outlier compensation." });
+  if (experience) charts.push({ title: "Salary vs Experience", type: "scatter", xKey: experience.name, yKey: salary.name, aggregation: "count", limit: 500, reason: `${experience.name} is a numeric driver that may increase ${salary.name}.` });
+  if (education) charts.push({ title: "Average Salary by Education", type: "bar", xKey: education.name, yKey: salary.name, aggregation: "avg", limit: 10, reason: `${education.name} helps test whether education level changes average salary.` });
+  if (companySize) charts.push({ title: "Average Salary by Company Size", type: "bar", xKey: companySize.name, yKey: salary.name, aggregation: "avg", limit: 10, reason: `${companySize.name} can explain salary differences by employer scale.` });
+  if (languages) charts.push({ title: "Average Salary by Language", type: "bar", xKey: languages.name, yKey: salary.name, aggregation: "avg", limit: 10, splitValues: true, reason: `${languages.name} identifies skills linked with higher salary.` });
+  if (frameworks) charts.push({ title: "Average Salary by Framework", type: "bar", xKey: frameworks.name, yKey: salary.name, aggregation: "avg", limit: 10, splitValues: true, reason: `${frameworks.name} identifies tools linked with higher salary.` });
 
   return {
     source: "guardian-workforce-salary",
@@ -311,7 +345,17 @@ export function enforceDashboardQuality(profile, dashboardPlan = {}, options = {
   const safeKpis = uniqBy(
     (combined.kpis || [])
       .map((item) => normalizeKpiSpec(profile, item))
-      .filter((kpi) => kpi.metric === "__row_count__" || kpi.metric === "__column_count__" || Boolean(getColumn(profile, kpi.metric))),
+      .filter((kpi) => {
+        if (!kpi) return false;
+        if (kpi.metric === "__row_count__" || kpi.metric === "__column_count__") return true;
+        const column = getColumn(profile, kpi.metric);
+        if (!column) return false;
+        if (isIdColumn(column) && ["sum", "avg"].includes(kpi.aggregation)) return false;
+        if (["sum", "avg", "median", "min", "max"].includes(kpi.aggregation)) {
+          return isMetricColumn(column);
+        }
+        return true;
+      }),
     (kpi) => normalize(`${kpi.title}-${kpi.metric}-${kpi.aggregation}`)
   ).slice(0, maxKpis);
 
@@ -324,17 +368,36 @@ export function enforceDashboardQuality(profile, dashboardPlan = {}, options = {
     (chart) => normalize(`${chart.title}-${chart.type}-${chart.xKey}-${chart.yKey}-${chart.aggregation}`)
   ).slice(0, maxCharts);
 
+  const isPriorityMetric = (name) => /revenue|sales|profit|amount/i.test(name || "");
+
+  const sortedKpis = isWorkforceSalarySchema(profile) ? safeKpis : [...safeKpis].sort((a, b) => {
+    const aPriority = isPriorityMetric(a.metric) ? 1 : 0;
+    const bPriority = isPriorityMetric(b.metric) ? 1 : 0;
+    return bPriority - aPriority;
+  });
+
+  const sortedCharts = isWorkforceSalarySchema(profile) ? safeCharts : [...safeCharts].sort((a, b) => {
+    const aPriority = isPriorityMetric(a.yKey) || isPriorityMetric(a.xKey) ? 1 : 0;
+    const bPriority = isPriorityMetric(b.yKey) || isPriorityMetric(b.xKey) ? 1 : 0;
+    return bPriority - aPriority;
+  });
+
   return {
     source: combined.source || "dashboard-quality-guardian",
     domain: combined.domain || profile.domain,
     schemaOnly: true,
-    kpis: safeKpis,
-    charts: safeCharts,
+    kpis: sortedKpis,
+    charts: sortedCharts,
     filters: Array.isArray(combined.filters) ? combined.filters.slice(0, 8) : [],
+    confidence: dashboardPlan.confidence,
+    dashboardGoal: dashboardPlan.dashboardGoal,
+    insightQuestions: dashboardPlan.insightQuestions,
+    warnings: [...(dashboardPlan.warnings || []), ...(combined.warnings || [])],
+    reasoningSummary: dashboardPlan.reasoningSummary,
     guardian: {
       enforced: true,
-      chartCount: safeCharts.length,
-      kpiCount: safeKpis.length,
+      chartCount: sortedCharts.length,
+      kpiCount: sortedKpis.length,
       maxCharts,
       maxKpis,
       unsafeAiDataRemoved: true,
@@ -345,7 +408,7 @@ export function enforceDashboardQuality(profile, dashboardPlan = {}, options = {
     qualityGuard: {
       applied: true,
       expectedCharts: maxCharts,
-      actualCharts: safeCharts.length,
+      actualCharts: sortedCharts.length,
       schemaOnly: true,
       reason: isWorkforceSalarySchema(profile)
         ? "Strict workforce salary dashboard pattern enforced."

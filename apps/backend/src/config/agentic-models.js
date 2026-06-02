@@ -1,49 +1,55 @@
-// Agentic model role map for InsightFlow.
-// Keep this file small and explicit so you can swap models later without touching agent logic.
+import {
+  OLLAMA_AGENT_MODELS,
+  OLLAMA_HOST,
+  OLLAMA_OPTIONS,
+} from './ollama-agent-models.js';
 
-export const OLLAMA_HOST =
-  process.env.OLLAMA_HOST ||
-  process.env.OLLAMA_BASE_URL ||
-  'http://localhost:11434';
+// Backward-compatible role map for older routes/services.
+// New code should prefer OLLAMA_AGENT_MODELS and the explicit agent role names.
+export { OLLAMA_HOST };
 
 export const AGENTIC_MODELS = Object.freeze({
-  // Main brain: breaks user goal into steps and chooses tools.
-  masterPlanner: process.env.AGENTIC_MASTER_MODEL || 'insightflow-master:latest',
+  manager: OLLAMA_AGENT_MODELS.manager,
+  schema: OLLAMA_AGENT_MODELS.schema,
+  dashboardPlanner: OLLAMA_AGENT_MODELS.dashboardPlanner,
+  dashboardChat: OLLAMA_AGENT_MODELS.dashboardChat,
+  generalChat: OLLAMA_AGENT_MODELS.generalChat,
+  embedding: OLLAMA_AGENT_MODELS.embedding,
+  fallback: OLLAMA_AGENT_MODELS.fallback,
 
-  // Strict schema analyst: receives schema/profile, not full raw rows.
-  schemaAnalyst: process.env.AGENTIC_SCHEMA_MODEL || 'insightflow-strict-schema-analyst:latest',
-  schemaAnalystFallback: process.env.AGENTIC_SCHEMA_FALLBACK_MODEL || 'strict-schema-analyst:latest',
+  masterPlanner: OLLAMA_AGENT_MODELS.manager,
+  schemaAnalyst: OLLAMA_AGENT_MODELS.schema,
+  schemaAnalystFallback: OLLAMA_AGENT_MODELS.fallback,
+  dashboardGuardian: OLLAMA_AGENT_MODELS.dashboardPlanner,
 
-  // Dashboard validator: checks chart/KPI specs before frontend renders them.
-  dashboardGuardian: process.env.AGENTIC_GUARDIAN_MODEL || 'insightflow-dashboard-guardian:latest',
-
-  // Expensive/deeper reasoning. Use only when enabled because it may be cloud-backed.
   deepReasoner: process.env.AGENTIC_DEEP_MODEL || 'minimax-m2.7:cloud',
-
-  // Embeddings for future vector RAG.
-  embedding: process.env.AGENTIC_EMBED_MODEL || 'nomic-embed-text:latest',
-
-  // Good for formulas, SQL, code/debug style tasks.
   codeAnalyst: process.env.AGENTIC_CODE_MODEL || 'qwen2.5-coder:7b',
-
-  // General chat/synthesis.
-  generalReasoner: process.env.AGENTIC_GENERAL_MODEL || 'qwen3:8b',
-  fallbackChat: process.env.AGENTIC_FALLBACK_MODEL || 'llama3.2:latest',
-  friendlyChat: process.env.AGENTIC_FRIENDLY_MODEL || 'neural-chat:7b',
+  generalReasoner: OLLAMA_AGENT_MODELS.generalChat,
+  fallbackChat: OLLAMA_AGENT_MODELS.fallback,
+  friendlyChat: OLLAMA_AGENT_MODELS.generalChat,
 });
 
 export const AGENTIC_RUNTIME = Object.freeze({
   provider: process.env.AGENTIC_LLM_PROVIDER || 'ollama',
   useCloudDeepReasoner: process.env.AGENTIC_USE_CLOUD_DEEP_REASONER === 'true',
-  timeoutMs: Number(process.env.AGENTIC_OLLAMA_TIMEOUT_MS || 120000),
-  temperature: Number(process.env.AGENTIC_TEMPERATURE || 0.1),
-  numCtx: Number(process.env.AGENTIC_NUM_CTX || 8192),
+  timeoutMs: Number(process.env.AGENTIC_OLLAMA_TIMEOUT_MS || OLLAMA_OPTIONS.timeoutMs),
+  temperature: Number(process.env.AGENTIC_TEMPERATURE ?? OLLAMA_OPTIONS.temperature),
+  numCtx: Number(process.env.AGENTIC_NUM_CTX || OLLAMA_OPTIONS.num_ctx),
+  numPredict: OLLAMA_OPTIONS.num_predict,
+  keepAlive: OLLAMA_OPTIONS.keep_alive,
 });
 
 export function getModelForTask(task) {
   switch (task) {
+    case 'manager':
     case 'plan':
       return AGENTIC_MODELS.masterPlanner;
+    case 'dashboardPlanner':
+      return AGENTIC_MODELS.dashboardPlanner;
+    case 'dashboardChat':
+      return AGENTIC_MODELS.dashboardChat;
+    case 'generalChat':
+      return AGENTIC_MODELS.generalChat;
     case 'schema':
       return AGENTIC_MODELS.schemaAnalyst;
     case 'schemaFallback':
@@ -74,6 +80,14 @@ export function publicModelConfig() {
     provider: AGENTIC_RUNTIME.provider,
     ollamaHost: OLLAMA_HOST,
     useCloudDeepReasoner: AGENTIC_RUNTIME.useCloudDeepReasoner,
+    agentRoles: { ...OLLAMA_AGENT_MODELS },
     roles: { ...AGENTIC_MODELS },
+    options: {
+      temperature: AGENTIC_RUNTIME.temperature,
+      num_ctx: AGENTIC_RUNTIME.numCtx,
+      num_predict: AGENTIC_RUNTIME.numPredict,
+      keep_alive: AGENTIC_RUNTIME.keepAlive,
+      timeoutMs: AGENTIC_RUNTIME.timeoutMs,
+    },
   };
 }

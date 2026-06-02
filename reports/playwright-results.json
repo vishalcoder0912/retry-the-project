@@ -1,7 +1,7 @@
 {
   "config": {
-    "configFile": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\retry-the-project\\playwright.config.ts",
-    "rootDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/e2e",
+    "configFile": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\playwright.config.ts",
+    "rootDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/e2e",
     "forbidOnly": false,
     "fullyParallel": false,
     "globalSetup": null,
@@ -16,7 +16,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/reports/playwright-artifacts",
+        "outputDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/reports/playwright-artifacts",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -24,7 +24,7 @@
         },
         "id": "chromium",
         "name": "chromium",
-        "testDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/e2e",
+        "testDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/e2e",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
@@ -61,186 +61,363 @@
     "updateSnapshots": "missing",
     "updateSourceMethod": "patch",
     "version": "1.59.1",
-    "workers": 1,
+    "workers": 6,
     "webServer": null
   },
   "suites": [
     {
-      "title": "ai-dashboard-command-flow.spec.ts",
-      "file": "ai-dashboard-command-flow.spec.ts",
+      "title": "agentic-ai-full-flow.spec.ts",
+      "file": "agentic-ai-full-flow.spec.ts",
       "column": 0,
       "line": 0,
-      "specs": [
+      "specs": [],
+      "suites": [
         {
-          "title": "AI dashboard command flow supports chart, KPI, and clear filters commands",
-          "ok": true,
-          "tags": [],
-          "tests": [
+          "title": "Agentic AI Data Analytics Full Flow",
+          "file": "agentic-ai-full-flow.spec.ts",
+          "line": 140,
+          "column": 6,
+          "specs": [
             {
-              "timeout": 60000,
-              "annotations": [],
-              "expectedStatus": "passed",
-              "projectId": "chromium",
-              "projectName": "chromium",
-              "results": [
+              "title": "health check should pass",
+              "ok": false,
+              "tags": [],
+              "tests": [
                 {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 7316,
-                  "errors": [],
-                  "stdout": [],
-                  "stderr": [],
-                  "retry": 0,
-                  "startTime": "2026-05-21T08:58:00.382Z",
+                  "timeout": 60000,
                   "annotations": [],
-                  "attachments": []
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 23,
+                      "error": {
+                        "message": "TypeError: fetch failed",
+                        "stack": "TypeError: fetch failed\n    at requestJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:64:17)\n    at getJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:104:25)\n    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:169:20",
+                        "cause": {
+                          "message": "AggregateError: ",
+                          "stack": "AggregateError: "
+                        },
+                        "location": {
+                          "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                          "column": 17,
+                          "line": 64
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 62 |\u001b[39m\n \u001b[90m 63 |\u001b[39m   \u001b[36mtry\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 64 |\u001b[39m     \u001b[36mconst\u001b[39m res \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m fetch(\u001b[32m`${API_BASE}${path}`\u001b[39m\u001b[33m,\u001b[39m {\n \u001b[90m    |\u001b[39m                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 65 |\u001b[39m       \u001b[33m...\u001b[39minit\u001b[33m,\u001b[39m\n \u001b[90m 66 |\u001b[39m       signal\u001b[33m:\u001b[39m controller\u001b[33m.\u001b[39msignal\u001b[33m,\u001b[39m\n \u001b[90m 67 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                            "column": 17,
+                            "line": 64
+                          },
+                          "message": "TypeError: fetch failed\n\n\u001b[0m \u001b[90m 62 |\u001b[39m\n \u001b[90m 63 |\u001b[39m   \u001b[36mtry\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 64 |\u001b[39m     \u001b[36mconst\u001b[39m res \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m fetch(\u001b[32m`${API_BASE}${path}`\u001b[39m\u001b[33m,\u001b[39m {\n \u001b[90m    |\u001b[39m                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 65 |\u001b[39m       \u001b[33m...\u001b[39minit\u001b[33m,\u001b[39m\n \u001b[90m 66 |\u001b[39m       signal\u001b[33m:\u001b[39m controller\u001b[33m.\u001b[39msignal\u001b[33m,\u001b[39m\n \u001b[90m 67 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at requestJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:64:17)\u001b[22m\n\u001b[2m    at getJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:104:25)\u001b[22m\n\u001b[2m    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:169:20\u001b[22m\n\u001b[2m[cause]: \u001b[22mAggregateError: "
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Agentic AI Data Analytics Test Report\n\n1. Health Check: FAIL\n2. Single Dataset Upload: FAIL\n3. Schema Generation: FAIL\n4. Dashboard Generation: FAIL\n5. KPI Generation: FAIL\n6. Dashboard Quality Check: FAIL\n7. Add Custom Chart Command: FAIL\n8. Remove Chart Command: FAIL\n9. Invalid Chart Reasoning: FAIL\n10. Multiple Dataset Schema Flow: FAIL\n11. General Chatbot Reasoning: FAIL\n\nFinal Result: FAIL\nProject Status: Agentic AI Data Analytics flow working logically\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-01T06:13:11.819Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-2e283-ow-health-check-should-pass-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-2e283-ow-health-check-should-pass-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-2e283-ow-health-check-should-pass-chromium\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                        "column": 17,
+                        "line": 64
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
                 }
               ],
-              "status": "expected"
-            }
-          ],
-          "id": "ea3fa66f92e78aac8903-4cc017da49b11a6f9a00",
-          "file": "ai-dashboard-command-flow.spec.ts",
-          "line": 4,
-          "column": 1
-        }
-      ]
-    },
-    {
-      "title": "dashboard-upload-flow.spec.ts",
-      "file": "dashboard-upload-flow.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [
-        {
-          "title": "dashboard upload flow renders dataset, KPIs, charts, and assistant entry point",
-          "ok": true,
-          "tags": [],
-          "tests": [
+              "id": "9b3a158915ebd0c2fb8c-64e2dfeb0b5d06eec5c7",
+              "file": "agentic-ai-full-flow.spec.ts",
+              "line": 168,
+              "column": 3
+            },
             {
-              "timeout": 60000,
-              "annotations": [],
-              "expectedStatus": "passed",
-              "projectId": "chromium",
-              "projectName": "chromium",
-              "results": [
+              "title": "single dataset upload -> schema -> dashboard -> quality check -> chat command",
+              "ok": false,
+              "tags": [],
+              "tests": [
                 {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 2322,
-                  "errors": [],
-                  "stdout": [],
-                  "stderr": [],
-                  "retry": 0,
-                  "startTime": "2026-05-21T08:58:08.260Z",
+                  "timeout": 60000,
                   "annotations": [],
-                  "attachments": []
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 30,
+                      "error": {
+                        "message": "TypeError: fetch failed",
+                        "stack": "TypeError: fetch failed\n    at requestJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:64:17)\n    at postJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:76:25)\n    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:175:22",
+                        "cause": {
+                          "message": "AggregateError: ",
+                          "stack": "AggregateError: "
+                        },
+                        "location": {
+                          "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                          "column": 17,
+                          "line": 64
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 62 |\u001b[39m\n \u001b[90m 63 |\u001b[39m   \u001b[36mtry\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 64 |\u001b[39m     \u001b[36mconst\u001b[39m res \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m fetch(\u001b[32m`${API_BASE}${path}`\u001b[39m\u001b[33m,\u001b[39m {\n \u001b[90m    |\u001b[39m                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 65 |\u001b[39m       \u001b[33m...\u001b[39minit\u001b[33m,\u001b[39m\n \u001b[90m 66 |\u001b[39m       signal\u001b[33m:\u001b[39m controller\u001b[33m.\u001b[39msignal\u001b[33m,\u001b[39m\n \u001b[90m 67 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                            "column": 17,
+                            "line": 64
+                          },
+                          "message": "TypeError: fetch failed\n\n\u001b[0m \u001b[90m 62 |\u001b[39m\n \u001b[90m 63 |\u001b[39m   \u001b[36mtry\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 64 |\u001b[39m     \u001b[36mconst\u001b[39m res \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m fetch(\u001b[32m`${API_BASE}${path}`\u001b[39m\u001b[33m,\u001b[39m {\n \u001b[90m    |\u001b[39m                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 65 |\u001b[39m       \u001b[33m...\u001b[39minit\u001b[33m,\u001b[39m\n \u001b[90m 66 |\u001b[39m       signal\u001b[33m:\u001b[39m controller\u001b[33m.\u001b[39msignal\u001b[33m,\u001b[39m\n \u001b[90m 67 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at requestJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:64:17)\u001b[22m\n\u001b[2m    at postJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:76:25)\u001b[22m\n\u001b[2m    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:175:22\u001b[22m\n\u001b[2m[cause]: \u001b[22mAggregateError: "
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Agentic AI Data Analytics Test Report\n\n1. Health Check: FAIL\n2. Single Dataset Upload: FAIL\n3. Schema Generation: FAIL\n4. Dashboard Generation: FAIL\n5. KPI Generation: FAIL\n6. Dashboard Quality Check: FAIL\n7. Add Custom Chart Command: FAIL\n8. Remove Chart Command: FAIL\n9. Invalid Chart Reasoning: FAIL\n10. Multiple Dataset Schema Flow: FAIL\n11. General Chatbot Reasoning: FAIL\n\nFinal Result: FAIL\nProject Status: Agentic AI Data Analytics flow working logically\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-01T06:13:13.171Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-64c6c-uality-check---chat-command-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-64c6c-uality-check---chat-command-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-64c6c-uality-check---chat-command-chromium\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                        "column": 17,
+                        "line": 64
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
                 }
               ],
-              "status": "expected"
-            }
-          ],
-          "id": "a38ca1b2dc0027160652-988430f918026d6cbc79",
-          "file": "dashboard-upload-flow.spec.ts",
-          "line": 5,
-          "column": 1
-        }
-      ]
-    },
-    {
-      "title": "pdf-intelligence-flow.spec.ts",
-      "file": "pdf-intelligence-flow.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [
-        {
-          "title": "PDF intelligence flow renders upload and mocked Q&A states",
-          "ok": true,
-          "tags": [],
-          "tests": [
+              "id": "9b3a158915ebd0c2fb8c-025f0a15e9f7bd61c45f",
+              "file": "agentic-ai-full-flow.spec.ts",
+              "line": 174,
+              "column": 3
+            },
             {
-              "timeout": 60000,
-              "annotations": [],
-              "expectedStatus": "passed",
-              "projectId": "chromium",
-              "projectName": "chromium",
-              "results": [
+              "title": "multiple dataset upload should create combined schema and valid analytics dashboard",
+              "ok": false,
+              "tags": [],
+              "tests": [
                 {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 1249,
-                  "errors": [],
-                  "stdout": [],
-                  "stderr": [],
-                  "retry": 0,
-                  "startTime": "2026-05-21T08:58:10.621Z",
+                  "timeout": 60000,
                   "annotations": [],
-                  "attachments": []
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 89,
+                      "error": {
+                        "message": "TypeError: fetch failed",
+                        "stack": "TypeError: fetch failed\n    at requestJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:64:17)\n    at postJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:76:25)\n    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:297:25",
+                        "cause": {
+                          "message": "AggregateError: ",
+                          "stack": "AggregateError: "
+                        },
+                        "location": {
+                          "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                          "column": 17,
+                          "line": 64
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 62 |\u001b[39m\n \u001b[90m 63 |\u001b[39m   \u001b[36mtry\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 64 |\u001b[39m     \u001b[36mconst\u001b[39m res \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m fetch(\u001b[32m`${API_BASE}${path}`\u001b[39m\u001b[33m,\u001b[39m {\n \u001b[90m    |\u001b[39m                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 65 |\u001b[39m       \u001b[33m...\u001b[39minit\u001b[33m,\u001b[39m\n \u001b[90m 66 |\u001b[39m       signal\u001b[33m:\u001b[39m controller\u001b[33m.\u001b[39msignal\u001b[33m,\u001b[39m\n \u001b[90m 67 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                            "column": 17,
+                            "line": 64
+                          },
+                          "message": "TypeError: fetch failed\n\n\u001b[0m \u001b[90m 62 |\u001b[39m\n \u001b[90m 63 |\u001b[39m   \u001b[36mtry\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 64 |\u001b[39m     \u001b[36mconst\u001b[39m res \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m fetch(\u001b[32m`${API_BASE}${path}`\u001b[39m\u001b[33m,\u001b[39m {\n \u001b[90m    |\u001b[39m                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 65 |\u001b[39m       \u001b[33m...\u001b[39minit\u001b[33m,\u001b[39m\n \u001b[90m 66 |\u001b[39m       signal\u001b[33m:\u001b[39m controller\u001b[33m.\u001b[39msignal\u001b[33m,\u001b[39m\n \u001b[90m 67 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at requestJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:64:17)\u001b[22m\n\u001b[2m    at postJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:76:25)\u001b[22m\n\u001b[2m    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:297:25\u001b[22m\n\u001b[2m[cause]: \u001b[22mAggregateError: "
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Agentic AI Data Analytics Test Report\n\n1. Health Check: FAIL\n2. Single Dataset Upload: FAIL\n3. Schema Generation: FAIL\n4. Dashboard Generation: FAIL\n5. KPI Generation: FAIL\n6. Dashboard Quality Check: FAIL\n7. Add Custom Chart Command: FAIL\n8. Remove Chart Command: FAIL\n9. Invalid Chart Reasoning: FAIL\n10. Multiple Dataset Schema Flow: FAIL\n11. General Chatbot Reasoning: FAIL\n\nFinal Result: FAIL\nProject Status: Agentic AI Data Analytics flow working logically\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-01T06:13:16.269Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-f436e-d-valid-analytics-dashboard-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-f436e-d-valid-analytics-dashboard-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-f436e-d-valid-analytics-dashboard-chromium\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                        "column": 17,
+                        "line": 64
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
                 }
               ],
-              "status": "expected"
-            }
-          ],
-          "id": "fef9d73900acaaa79c39-a8e4531169cd79495da0",
-          "file": "pdf-intelligence-flow.spec.ts",
-          "line": 4,
-          "column": 1
-        }
-      ]
-    },
-    {
-      "title": "schema-only-safety.spec.ts",
-      "file": "schema-only-safety.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [
-        {
-          "title": "schema-only safety flow never displays sentinel raw row values",
-          "ok": true,
-          "tags": [],
-          "tests": [
+              "id": "9b3a158915ebd0c2fb8c-6c819dc284493e185580",
+              "file": "agentic-ai-full-flow.spec.ts",
+              "line": 296,
+              "column": 3
+            },
             {
-              "timeout": 60000,
-              "annotations": [],
-              "expectedStatus": "passed",
-              "projectId": "chromium",
-              "projectName": "chromium",
-              "results": [
+              "title": "general chatbot should answer non-data question logically",
+              "ok": false,
+              "tags": [],
+              "tests": [
                 {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 3309,
-                  "errors": [],
-                  "stdout": [],
-                  "stderr": [],
-                  "retry": 0,
-                  "startTime": "2026-05-21T08:58:12.026Z",
+                  "timeout": 60000,
                   "annotations": [],
-                  "attachments": []
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 41,
+                      "error": {
+                        "message": "TypeError: fetch failed",
+                        "stack": "TypeError: fetch failed\n    at requestJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:64:17)\n    at postJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:76:25)\n    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:350:22",
+                        "cause": {
+                          "message": "AggregateError: ",
+                          "stack": "AggregateError: "
+                        },
+                        "location": {
+                          "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                          "column": 17,
+                          "line": 64
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 62 |\u001b[39m\n \u001b[90m 63 |\u001b[39m   \u001b[36mtry\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 64 |\u001b[39m     \u001b[36mconst\u001b[39m res \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m fetch(\u001b[32m`${API_BASE}${path}`\u001b[39m\u001b[33m,\u001b[39m {\n \u001b[90m    |\u001b[39m                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 65 |\u001b[39m       \u001b[33m...\u001b[39minit\u001b[33m,\u001b[39m\n \u001b[90m 66 |\u001b[39m       signal\u001b[33m:\u001b[39m controller\u001b[33m.\u001b[39msignal\u001b[33m,\u001b[39m\n \u001b[90m 67 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                            "column": 17,
+                            "line": 64
+                          },
+                          "message": "TypeError: fetch failed\n\n\u001b[0m \u001b[90m 62 |\u001b[39m\n \u001b[90m 63 |\u001b[39m   \u001b[36mtry\u001b[39m {\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 64 |\u001b[39m     \u001b[36mconst\u001b[39m res \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m fetch(\u001b[32m`${API_BASE}${path}`\u001b[39m\u001b[33m,\u001b[39m {\n \u001b[90m    |\u001b[39m                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 65 |\u001b[39m       \u001b[33m...\u001b[39minit\u001b[33m,\u001b[39m\n \u001b[90m 66 |\u001b[39m       signal\u001b[33m:\u001b[39m controller\u001b[33m.\u001b[39msignal\u001b[33m,\u001b[39m\n \u001b[90m 67 |\u001b[39m     })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at requestJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:64:17)\u001b[22m\n\u001b[2m    at postJson (C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:76:25)\u001b[22m\n\u001b[2m    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts:350:22\u001b[22m\n\u001b[2m[cause]: \u001b[22mAggregateError: "
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Agentic AI Data Analytics Test Report\n\n1. Health Check: FAIL\n2. Single Dataset Upload: FAIL\n3. Schema Generation: FAIL\n4. Dashboard Generation: FAIL\n5. KPI Generation: FAIL\n6. Dashboard Quality Check: FAIL\n7. Add Custom Chart Command: FAIL\n8. Remove Chart Command: FAIL\n9. Invalid Chart Reasoning: FAIL\n10. Multiple Dataset Schema Flow: FAIL\n11. General Chatbot Reasoning: FAIL\n\nFinal Result: FAIL\nProject Status: Agentic AI Data Analytics flow working logically\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2026-06-01T06:13:20.888Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-603c6-non-data-question-logically-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-603c6-non-data-question-logically-chromium\\error-context.md"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\agentic-ai-full-flow-Agent-603c6-non-data-question-logically-chromium\\trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\agentic-ai-full-flow.spec.ts",
+                        "column": 17,
+                        "line": 64
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
                 }
               ],
-              "status": "expected"
+              "id": "9b3a158915ebd0c2fb8c-755fe1b4751d4bf7d0fc",
+              "file": "agentic-ai-full-flow.spec.ts",
+              "line": 349,
+              "column": 3
             }
-          ],
-          "id": "3a9d3d86a74952b24d4f-d2693bccf0fc2aa3deb0",
-          "file": "schema-only-safety.spec.ts",
-          "line": 4,
-          "column": 1
+          ]
         }
       ]
     }
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-05-21T08:57:58.490Z",
-    "duration": 17901.532,
-    "expected": 4,
+    "startTime": "2026-06-01T06:13:10.343Z",
+    "duration": 10716.457,
+    "expected": 0,
     "skipped": 0,
-    "unexpected": 0,
+    "unexpected": 4,
     "flaky": 0
   }
 }

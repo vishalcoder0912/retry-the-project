@@ -300,7 +300,7 @@ export function localCommand(query: string, rows: Row[]): DashboardCommandRespon
   }
 
   if (/scatter| vs /.test(lower)) {
-    const match = lower.match(/show\s+(.+?)\s+vs\s+(.+?)(\s+as\s+scatter|$)/);
+    const match = lower.match(/(?:show\s+)?(.+?)\s+vs\s+(.+?)(?:\s+as\s+scatter|$)/);
     const xKey = match ? findColumn(columns, match[2]) : profile.secondaryMetric?.name;
     const yKey = match ? findColumn(columns, match[1]) : metric;
     if (xKey && yKey) {
@@ -393,7 +393,7 @@ export default function ChatInterface() {
     const planned = localCommand(query, rows);
 
     try {
-      if (planned || /chart|kpi|filter|dashboard|distribution|scatter|pie|donut/i.test(query)) {
+      if (planned || /chart|kpi|filter|dashboard|distribution|scatter|pie|donut|vs|bar/i.test(query)) {
         const response = await api.sendDashboardCommand(dataset.id, query, { schemaOnly: true });
         const command = response.action === "ANSWER" && planned ? planned : response.chartSpec || response.kpiSpec || response.filters ? response : planned;
 

@@ -55,9 +55,36 @@ function hasUsableDashboardPlan(entry = {}) {
   return Array.isArray(plan.kpis) || Array.isArray(plan.charts);
 }
 
+function getMeasures(cols) {
+  return (cols || []).filter(c => {
+    const role = (c.role || "").toLowerCase();
+    const type = (c.type || "").toLowerCase();
+    return role.includes("metric") || role.includes("measure") || type === "number";
+  }).map(c => (c.name || "").toLowerCase()).filter(Boolean);
+}
+
+function getDimensions(cols) {
+  return (cols || []).filter(c => {
+    const role = (c.role || "").toLowerCase();
+    const type = (c.type || "").toLowerCase();
+    return ["string", "category", "dimension", "location", "target"].includes(type) ||
+           ["dimension", "category", "location", "target"].includes(role);
+  }).map(c => (c.name || "").toLowerCase()).filter(Boolean);
+}
+
+function calculateJaccard(setA, setB) {
+  if (setA.size === 0 && setB.size === 0) return 0;
+  let intersection = 0;
+  for (const item of setA) {
+    if (setB.has(item)) intersection++;
+  }
+  const union = new Set([...setA, ...setB]).size;
+  return union > 0 ? intersection / union : 0;
+}
+
 export async function retrieveSchemaRagMemories(schemaProfile, options = {}) {
   const limit = Number(options.limit || 5);
-  const threshold = Number(options.threshold ?? 0.55);
+  const threshold = Number(options.threshold ?? 0.50);
   const profile = schemaProfile?.columns ? schemaProfile : buildSchemaProfile(schemaProfile || {});
   const queryText = schemaProfileToRagText(profile);
 
@@ -76,18 +103,52 @@ export async function retrieveSchemaRagMemories(schemaProfile, options = {}) {
         : 0;
 
       const textScore = jaccardTextSimilarity(queryText, entry.schemaText || "");
-      const domainBoost = entry.domain && entry.domain === profile.domain ? 0.08 : 0;
-      const signatureBoost =
-        entry.schemaSignature && entry.schemaSignature === profile.signature ? 0.12 : 0;
-      const score = Math.min(1, Math.max(vectorScore, textScore) + domainBoost + signatureBoost);
+
+      // 1. domainMatch
+      const domainMatch = (entry.domain && profile.domain && entry.domain.toLowerCase() === profile.domain.toLowerCase()) ? 1.0 : 0.0;
+
+      // 2. columnOverlap
+      const profileColNames = new Set((profile.columns || []).map(c => (c.name || "").toLowerCase()).filter(Boolean));
+      const entryColNames = new Set((entry.columns || entry.schemaProfile?.columns || []).map(c => (c.name || "").toLowerCase()).filter(Boolean));
+      const columnOverlap = calculateJaccard(profileColNames, entryColNames);
+
+      // 3. measureOverlap
+      const profileMeasures = new Set(getMeasures(profile.columns));
+      const entryMeasures = new Set(getMeasures(entry.columns || entry.schemaProfile?.columns));
+      const measureOverlap = calculateJaccard(profileMeasures, entryMeasures);
+
+      // 4. dimensionOverlap
+      const profileDimensions = new Set(getDimensions(profile.columns));
+      const entryDimensions = new Set(getDimensions(entry.columns || entry.schemaProfile?.columns));
+      const dimensionOverlap = calculateJaccard(profileDimensions, entryDimensions);
+
+      // 5. feedbackScore
+      const ratingMap = {
+        excellent: 1.0,
+        good: 0.8,
+        average: 0.5,
+        poor: 0.1,
+      };
+      const rating = entry.rating || entry.feedback?.rating || entry.feedback || "good";
+      const feedbackScore = ratingMap[rating] || 0.5;
+
+      const finalScore =
+        domainMatch * 0.30 +
+        columnOverlap * 0.30 +
+        measureOverlap * 0.20 +
+        dimensionOverlap * 0.15 +
+        feedbackScore * 0.05;
 
       return {
         entry,
-        score,
+        score: finalScore,
         vectorScore,
         textScore,
-        domainBoost,
-        signatureBoost,
+        domainMatch,
+        columnOverlap,
+        measureOverlap,
+        dimensionOverlap,
+        feedbackScore,
       };
     })
     .filter((match) => match.score >= threshold)

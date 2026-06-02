@@ -143,6 +143,28 @@ export interface DashboardCommandResponse {
   aiError?: string | null;
 }
 
+export interface FastDashboardChatResponse {
+  intent:
+    | "answer"
+    | "add_chart"
+    | "remove_chart"
+    | "update_chart"
+    | "add_kpi"
+    | "filter"
+    | "explain"
+    | "general_answer";
+  answer: string;
+  action: {
+    targetTitle?: string;
+    chart?: ChartSpec | Record<string, unknown>;
+    kpi?: KpiSpec | Record<string, unknown>;
+    filter?: Record<string, string>;
+  };
+  reason: string;
+  source: "local" | "ollama" | "fallback";
+  cached: boolean;
+}
+
 export interface DashboardAiPayload {
   rows: any[];
   dataDictionary?: any[];
@@ -277,45 +299,64 @@ const apiBaseUrl = (() => {
   return baseUrl.replace(/\/$/, "");
 })();
 
-const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const startTime = Date.now();
-  const method = init?.method || "GET";
-
+export async function safeApiFetch<T>(
+  path: string,
+  options?: RequestInit,
+): Promise<T> {
   try {
     const response = await fetch(`${apiBaseUrl}${path}`, {
+      ...options,
       headers: {
         "Content-Type": "application/json",
-        ...(init?.headers || {}),
+        ...(options?.headers || {}),
       },
-      ...init,
     });
-
-    const duration = Date.now() - startTime;
 
     if (!response.ok) {
-      const errorPayload = await response.json().catch(() => null);
-      const errorMessage = errorPayload?.error?.message || errorPayload?.error || `Request failed with status ${response.status}`;
-      
-      logger.error(`API Error: ${method} ${path}`, {
-        statusCode: response.status,
-        duration,
-        path,
-        method,
-      });
+      const payload = await response.json().catch(() => null);
+      const fallbackText = await response.text().catch(() => "");
+      const message =
+        payload?.error?.message ||
+        payload?.message ||
+        payload?.error ||
+        fallbackText ||
+        `API failed with status ${response.status}`;
 
-      throw new ApiError(errorMessage, response.status, errorPayload?.error?.code || errorPayload?.code);
+      throw new ApiError(message, response.status, payload?.error?.code || payload?.code);
     }
-
-    logger.info(`API: ${method} ${path}`, {
-      statusCode: response.status,
-      duration,
-    });
 
     if (response.status === 204) {
       return {} as T;
     }
 
-    const payload = await response.json() as T | ApiEnvelope<T>;
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    console.error("API connection failed:", error);
+
+    throw new ApiError(
+      "Backend server is offline. Please start backend on port 3001 and refresh the app.",
+      0,
+      "NETWORK_ERROR",
+    );
+  }
+}
+
+const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const startTime = Date.now();
+  const method = init?.method || "GET";
+
+  try {
+    const payload = await safeApiFetch<T | ApiEnvelope<T>>(path, init);
+    const duration = Date.now() - startTime;
+
+    logger.info(`API: ${method} ${path}`, {
+      statusCode: 200,
+      duration,
+    });
 
     if (
       payload
@@ -431,7 +472,8 @@ export const api = {
     datasetId: string,
     query: string,
     currentDashboard?: unknown,
-    dataset?: { rows?: unknown[]; columns?: unknown[] },
+    dataset?: { rows?: unknown[]; columns?: unknown[]; pageContext?: string; dashboardChartCount?: number },
+    context?: { page?: string; activeFilters?: Record<string, string>; selectedChart?: string; dashboardChartCount?: number },
   ) =>
     request<DashboardCommandResponse>(`/api/datasets/${datasetId}/dashboard-command`, {
       method: "POST",
@@ -439,10 +481,45 @@ export const api = {
         query,
         currentDashboard,
         useLlm: true,
+        rows: dataset?.rows,
         columns: dataset?.columns,
+        context: {
+          ...context,
+          page: context?.page || dataset?.pageContext,
+          dashboardChartCount: context?.dashboardChartCount ?? dataset?.dashboardChartCount,
+        },
       }),
     }),
-  sendSchemaChat: (datasetId: string, query: string, dataset?: { rows?: unknown[]; columns?: unknown[] }) =>
+  sendFastDashboardChat: async (
+    message: string,
+    schemaProfile: Record<string, unknown>,
+    currentDashboard?: unknown,
+    context?: { page?: string; activeFilters?: Record<string, string>; selectedChart?: string },
+  ) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 2500);
+
+    try {
+      return await request<{ ok: boolean; result: FastDashboardChatResponse }>("/api/ollama-manager/fast-chat", {
+        method: "POST",
+        signal: controller.signal,
+        body: JSON.stringify({
+          message,
+          schemaProfile,
+          currentDashboard,
+          context,
+        }),
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  },
+  sendSchemaChat: (
+    datasetId: string,
+    query: string,
+    dataset?: { rows?: unknown[]; columns?: unknown[] },
+    context?: { page?: string; activeFilters?: Record<string, string>; selectedChart?: string },
+  ) =>
     request<{
       userMessage: unknown;
       assistantMessage: {
@@ -458,6 +535,7 @@ export const api = {
         query,
         useLlm: true,
         columns: dataset?.columns,
+        context,
       }),
     }),
   getSchemaTrainingMemory: () =>
@@ -518,9 +596,20 @@ export const api = {
       method: "GET",
     }),
   exportDataset: async (datasetId: string, format: 'json' | 'csv' | 'md') => {
-    const response = await fetch(`${apiBaseUrl}/api/datasets/${datasetId}/export/${format}`);
+    let response: Response;
+    try {
+      response = await fetch(`${apiBaseUrl}/api/datasets/${datasetId}/export/${format}`);
+    } catch (error) {
+      console.error("API connection failed:", error);
+      throw new ApiError(
+        "Backend server is offline. Please start backend on port 3001 and refresh the app.",
+        0,
+        "NETWORK_ERROR",
+      );
+    }
+
     if (!response.ok) {
-      throw new Error(`Export failed with status ${response.status}`);
+      throw new ApiError(`Export failed with status ${response.status}`, response.status);
     }
     return response.blob();
   },
@@ -649,20 +738,15 @@ export const api = {
 };
 
 async function postDashboardAi<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const payload = await safeApiFetch<any>(path, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(body),
   });
 
-  const payload = await response.json();
-
-  if (!response.ok || payload.success === false) {
+  if (payload.success === false) {
     throw new ApiError(
       payload.message || payload.error?.message || "Request failed",
-      response.status,
+      400,
       payload.error?.code
     );
   }

@@ -74,6 +74,24 @@ export function generateDynamicQuestionSuggestions(
 
   pushUnique(suggestions, "Build dashboard automatically");
 
+  const salaryCol = availableColumns.find(col => /salary/i.test(col));
+  const countryCol = availableColumns.find(col => /country/i.test(col));
+  const expCol = availableColumns.find(col => /experience|exp|years/i.test(col));
+  const salesCol = availableColumns.find(col => /sales|revenue|profit/i.test(col));
+  const catCol = availableColumns.find(col => /category|type|segment|department/i.test(col));
+
+  if (countryCol && salaryCol && expCol) {
+    pushUnique(suggestions, `Compare average ${salaryCol} by ${countryCol} and ${expCol} level`);
+  } else if (salaryCol && expCol) {
+    pushUnique(suggestions, `Compare average ${salaryCol} by ${expCol}`);
+  }
+
+  if (countryCol && salesCol) {
+    pushUnique(suggestions, `Compare total ${salesCol} by ${countryCol}`);
+  } else if (catCol && salesCol) {
+    pushUnique(suggestions, `Analyze ${salesCol} breakdown across ${catCol}`);
+  }
+
   if (primaryMetric && primaryCategory) {
     pushUnique(
       suggestions,

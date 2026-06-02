@@ -51,7 +51,9 @@ export async function generateWithAgent(task, prompt, options = {}) {
     options: {
       temperature: options.temperature ?? AGENTIC_RUNTIME.temperature,
       num_ctx: options.numCtx ?? AGENTIC_RUNTIME.numCtx,
+      num_predict: options.numPredict ?? AGENTIC_RUNTIME.numPredict,
     },
+    keep_alive: options.keepAlive ?? AGENTIC_RUNTIME.keepAlive,
   };
 
   const result = await postOllama('/api/generate', payload);
@@ -76,7 +78,9 @@ export async function chatWithAgent(task, messages, options = {}) {
     options: {
       temperature: options.temperature ?? AGENTIC_RUNTIME.temperature,
       num_ctx: options.numCtx ?? AGENTIC_RUNTIME.numCtx,
+      num_predict: options.numPredict ?? AGENTIC_RUNTIME.numPredict,
     },
+    keep_alive: options.keepAlive ?? AGENTIC_RUNTIME.keepAlive,
   };
 
   const result = await postOllama('/api/chat', payload);

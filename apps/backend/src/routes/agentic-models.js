@@ -1,4 +1,5 @@
-import { publicModelConfig, AGENTIC_MODELS } from '../config/agentic-models.js';
+import { publicModelConfig } from '../config/agentic-models.js';
+import { OLLAMA_AGENT_MODELS } from '../config/ollama-agent-models.js';
 import { pingOllamaModels } from '../services/agentic/ollama-agent-router.js';
 import {
   runModelAwareAgenticAnalysis,
@@ -59,7 +60,7 @@ export async function handleAgenticModelRoutes(request, response, pathname) {
   }
 
   if (pathname === '/api/agentic-models/health' && method === 'GET') {
-    const models = Object.values(AGENTIC_MODELS);
+    const models = [...new Set(Object.values(OLLAMA_AGENT_MODELS))];
     const checks = await pingOllamaModels(models);
     sendSuccess(response, { checks }, 'Agentic model health checked');
     return true;

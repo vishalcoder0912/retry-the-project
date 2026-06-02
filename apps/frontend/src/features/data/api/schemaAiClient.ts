@@ -34,6 +34,25 @@ export type SchemaChatResponse = {
   assistantMessage: { role: "assistant"; content: string; model?: string; provider?: string; schemaOnly: true; timestamp?: string };
 };
 
+export type ExcelAnalystResponse = {
+  userMessage?: { role: "user"; content: string; timestamp?: string };
+  assistantMessage?: { role: "assistant"; content: string; model?: string; provider?: string; schemaOnly: true; timestamp?: string };
+  analysis?: {
+    schemaOnly: true;
+    provider: string;
+    model: string;
+    query: string;
+    intent: string;
+    answer: string;
+    plan: Record<string, unknown>;
+    calculation: { ok: boolean; type?: string; warning?: string; result: unknown };
+    suggestedCharts?: unknown[];
+    suggestedKpis?: unknown[];
+    confidence?: number;
+    warnings?: unknown[];
+  };
+};
+
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
 
 function endpoint(path: string) {
@@ -121,6 +140,30 @@ export const schemaAiClient = {
       }),
     }),
 
+  runExcelAnalyze: (
+    datasetId: string,
+    payload: Record<string, unknown>,
+  ) =>
+    request(`/api/datasets/${encodeURIComponent(datasetId)}/excel-analyze`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  runExcelChat: (
+    datasetId: string,
+    payload: Record<string, unknown>,
+  ) =>
+    request<ExcelAnalystResponse>(`/api/datasets/${encodeURIComponent(datasetId)}/excel-chat`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  trainExcelRagSeeds: (payload: Record<string, unknown> = {}) =>
+    request("/api/ai/excel-rag/train-seeds", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   trainSchemaDashboard: (
     datasetId: string,
     dataset: DatasetPayload,
@@ -169,6 +212,18 @@ export const schemaAiClient = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  generateSeniorDashboard: (datasetId: string, payload: Record<string, unknown>) =>
+    request(`/api/datasets/${encodeURIComponent(datasetId)}/senior-dashboard`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  trainSeniorAnalystSeeds: () =>
+    request("/api/ai/senior-analyst/train-seeds", {
+      method: "POST",
+      body: JSON.stringify({ useOllama: false }),
+    }),
 };
 
 export function getSchemaRagMemory() {
@@ -199,6 +254,14 @@ export function trainSmartRagDashboard(datasetId: string, payload: Record<string
   return schemaAiClient.trainSmartRagDashboard(datasetId, payload);
 }
 
+export function generateSeniorDashboard(datasetId: string, payload: Record<string, unknown>) {
+  return schemaAiClient.generateSeniorDashboard(datasetId, payload);
+}
+
+export function trainSeniorAnalystSeeds() {
+  return schemaAiClient.trainSeniorAnalystSeeds();
+}
+
 export function generateSchemaDashboard(datasetId: string, payload: Record<string, unknown>) {
   return request(`/api/datasets/${encodeURIComponent(datasetId)}/schema-dashboard`, {
     method: "POST",
@@ -218,4 +281,16 @@ export function runSchemaChat(datasetId: string, payload: Record<string, unknown
     method: "POST",
     body: JSON.stringify(payload),
   });
+}
+
+export function runExcelAnalyze(datasetId: string, payload: Record<string, unknown>) {
+  return schemaAiClient.runExcelAnalyze(datasetId, payload);
+}
+
+export function runExcelChat(datasetId: string, payload: Record<string, unknown>) {
+  return schemaAiClient.runExcelChat(datasetId, payload);
+}
+
+export function trainExcelRagSeeds(payload: Record<string, unknown> = {}) {
+  return schemaAiClient.trainExcelRagSeeds(payload);
 }
