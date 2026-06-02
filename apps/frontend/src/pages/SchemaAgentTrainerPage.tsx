@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAutoTrainSchema } from '../hooks/useAutoTrainSchema';
 import { SchemaTrainingStatus } from '../components/SchemaTrainingStatus';
+import { AgenticThinkingPanel } from '../features/dashboard/components/AgenticThinkingPanel';
 
 export default function SchemaAgentTrainerPage() {
   const [datasetId, setDatasetId] = useState('');
@@ -37,6 +38,18 @@ export default function SchemaAgentTrainerPage() {
       <div className="mt-5">
         <SchemaTrainingStatus loading={loading} error={error} result={result} />
       </div>
+
+      {result && (result.agentPlan || result.critic || result.ontologyMapping) && (
+        <div className="mt-5">
+          <AgenticThinkingPanel 
+            agentPlan={result.agentPlan} 
+            agentTools={result.agentTools} 
+            critic={result.critic} 
+            ontologyMapping={result.ontologyMapping}
+            dashboardSpec={result.dashboardSpec}
+          />
+        </div>
+      )}
 
       {result?.calculatedDashboard && (
         <section className="mt-5 rounded-2xl border p-6 shadow-sm">
