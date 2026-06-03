@@ -129,6 +129,7 @@ export default function AnalyticsPage() {
           xKey: dateKey,
           yKey: metric,
           aggregation: "avg",
+          intent: "trend",
           limit: 24,
         }),
       );
@@ -142,6 +143,7 @@ export default function AnalyticsPage() {
           xKey: category,
           yKey: metric,
           aggregation: "sum",
+          intent: "comparison",
           limit: 8,
         }),
       );
@@ -152,6 +154,7 @@ export default function AnalyticsPage() {
           xKey: category,
           yKey: metric,
           aggregation: "max",
+          intent: "ranking",
           limit: 10,
         }),
       );
@@ -165,6 +168,7 @@ export default function AnalyticsPage() {
           xKey: profile.locationColumn.name,
           yKey: metric,
           aggregation: "sum",
+          intent: "geo",
           limit: 10,
         }),
       );
@@ -176,6 +180,7 @@ export default function AnalyticsPage() {
           xKey: category,
           yKey: "count",
           aggregation: "count",
+          intent: "distribution",
           limit: 10,
         }),
       );
@@ -189,12 +194,23 @@ export default function AnalyticsPage() {
           xKey: profile.numericColumns[0].name,
           yKey: profile.numericColumns[1].name,
           aggregation: "avg",
+          intent: "correlation",
         }),
       );
     }
 
     return list;
   }, [analyticsRows, category, dateKey, metric, profile.dateColumn, profile.locationColumn, profile.numericColumns]);
+
+  const visibleCharts = useMemo(() => {
+    if (activeTab === "Trends") return charts.filter((chart) => chart.intent === "trend");
+    if (activeTab === "Geography") return charts.filter((chart) => chart.intent === "geo");
+    if (activeTab === "Correlation") return charts.filter((chart) => chart.intent === "correlation");
+    if (activeTab === "Segments") {
+      return charts.filter((chart) => chart.intent === "distribution" || chart.intent === "ranking" || chart.intent === "comparison");
+    }
+    return charts;
+  }, [activeTab, charts]);
 
   if (isHydrating) {
     return <StatusPanel title="Loading analytics" message="Preparing dynamic analytics from your current dataset." />;
@@ -341,7 +357,7 @@ export default function AnalyticsPage() {
         <div className={showAi ? "grid gap-5 2xl:grid-cols-[1fr_360px]" : ""}>
           <main className="space-y-5">
             <section className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-              {charts.map((chart) => (
+              {visibleCharts.map((chart) => (
                 <SmartChartCard key={chart.id} chart={chart} />
               ))}
               <div className={`${CARD} grid min-h-[22rem] place-items-center p-5`}>

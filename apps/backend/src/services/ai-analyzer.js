@@ -272,7 +272,9 @@ Respond in JSON format:
               };
               analysis.aiReasoning = parsed.reason;
             }
-          } catch (e) {}
+          } catch (e) {
+            console.debug('AI response parse failed, using defaults:', e.message);
+          }
         }
       } catch (e) {
         console.warn('Query context analysis failed:', e.message);

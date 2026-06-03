@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  BarChart3,
   Calendar,
+  CheckCircle2,
   Database,
   Download,
   FileSpreadsheet,
   FileText,
+  Lightbulb,
   MoreVertical,
   Plus,
   RefreshCw,
   Share2,
   ShieldCheck,
   Table2,
+  Target,
   Trash2,
+  TrendingUp,
   X,
 } from "lucide-react";
 import SchemaDashboardChat from "@/features/dashboard/components/SchemaDashboardChat";
@@ -21,6 +26,9 @@ import SmartChartCard from "@/features/dashboard/components/SmartChartCard";
 import { useSchemaTrainedDashboard } from "@/features/dashboard/hooks/useSchemaTrainedDashboard";
 import { useData } from "@/features/data/context/useData";
 import type { ChartType } from "@/features/dashboard/types/dashboardTypes";
+import type { InsightFlowResult, InsightFlowFilter } from "@/features/dashboard/types/dashboardTypes";
+import type { Aggregation, ChartIntent, ChartSpec, KpiSpec } from "@/types/dashboard";
+import GeoIntelligence from "@/features/dashboard/geo/GeoIntelligence";
 import {
   applyFilters,
   buildChartFromSpec,
@@ -41,6 +49,7 @@ import {
   loadDashboardState,
   saveDashboardState,
 } from "@/features/dashboard/utils/dashboardStateStorage";
+import { runInsightFlow } from "@/features/dashboard/utils/insightFlowEngine";
 import StatusPanel from "@/shared/layout/StatusPanel";
 
 const CARD = "rounded-2xl border border-slate-700/60 bg-slate-900/70 shadow-xl backdrop-blur";
@@ -113,6 +122,137 @@ function KpiCard({ kpi, index }: { kpi: DashboardKpi; index: number }) {
   );
 }
 
+function InsightPanel({ result, mode }: { result: InsightFlowResult; mode: string }) {
+  const insight = mode === "Executive" ? result.insights.executive
+    : mode === "Analyst" ? result.insights.analyst
+      : result.insights.story;
+
+  const icon = mode === "Executive" ? <TrendingUp className="size-4" />
+    : mode === "Analyst" ? <BarChart3 className="size-4" />
+      : <Lightbulb className="size-4" />;
+
+  const borderColor = mode === "Executive" ? "border-violet-500/40"
+    : mode === "Analyst" ? "border-cyan-500/40"
+      : "border-amber-500/40";
+
+  const bgColor = mode === "Executive" ? "from-violet-600/10"
+    : mode === "Analyst" ? "from-cyan-600/10"
+      : "from-amber-600/10";
+
+  return (
+    <section className={`rounded-2xl border ${borderColor} bg-gradient-to-r ${bgColor} via-slate-900/80 to-slate-900/60 p-5 shadow-xl backdrop-blur`}>
+      <div className="flex items-start gap-3">
+        <div className={`mt-0.5 grid size-8 place-items-center rounded-lg ${
+          mode === "Executive" ? "bg-violet-500/20 text-violet-300"
+            : mode === "Analyst" ? "bg-cyan-500/20 text-cyan-300"
+              : "bg-amber-500/20 text-amber-300"
+        }`}>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{mode} Insight</p>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-200">{insight}</p>
+        </div>
+      </div>
+      {result.qualityScore.total > 0 && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+          <Target className="size-3" />
+          Dashboard Score: <span className={`font-semibold ${result.qualityScore.passed ? "text-green-400" : "text-amber-400"}`}>
+            {result.qualityScore.total}% {result.qualityScore.passed ? "(Passed)" : "(Needs Improvement)"}
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function QualityRings({ quality, insightScore }: { quality: { finalScore: number }; insightScore: { total: number; passed: boolean } }) {
+  return (
+    <div className="flex items-center gap-3">
+      <div className="text-center">
+        <p className="mb-1 text-xs text-slate-400">Data Quality</p>
+        <div
+          className="grid size-16 place-items-center rounded-full"
+          style={{
+            background: `conic-gradient(#22c55e ${quality.finalScore * 3.6}deg, rgba(51,65,85,0.9) 0deg)`,
+          }}
+        >
+          <div className="grid size-11 place-items-center rounded-full bg-slate-950 text-center">
+            <span className="text-sm font-bold text-white">{Math.round(quality.finalScore)}%</span>
+          </div>
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="mb-1 text-xs text-slate-400">Dashboard Score</p>
+        <div
+          className="grid size-16 place-items-center rounded-full"
+          style={{
+            background: `conic-gradient(${insightScore.passed ? "#7c3aed" : "#f59e0b"} ${insightScore.total * 3.6}deg, rgba(51,65,85,0.9) 0deg)`,
+          }}
+        >
+          <div className="grid size-11 place-items-center rounded-full bg-slate-950 text-center">
+            <span className="text-sm font-bold text-white">{Math.round(insightScore.total)}%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilterChips({ filters, activeFilters, onFilterChange }: {
+  filters: InsightFlowFilter[];
+  activeFilters: Record<string, string>;
+  onFilterChange: (key: string, value: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {filters.map((filter) => {
+        const key = filter.key;
+        const isActive = activeFilters[key] !== undefined && activeFilters[key] !== "";
+        return (
+          <div key={key} className="relative">
+            {filter.type === "date" ? (
+              <div className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-200">
+                <Calendar className="size-4 text-slate-400" />
+                <input
+                  type="date"
+                  value={String(activeFilters[`${key}Start`] || "")}
+                  onChange={(e) => onFilterChange(`${key}Start`, e.target.value)}
+                  className="w-32 bg-transparent outline-none"
+                  placeholder="Start"
+                />
+                <span className="text-slate-500">-</span>
+                <input
+                  type="date"
+                  value={String(activeFilters[`${key}End`] || "")}
+                  onChange={(e) => onFilterChange(`${key}End`, e.target.value)}
+                  className="w-32 bg-transparent outline-none"
+                  placeholder="End"
+                />
+              </div>
+            ) : filter.type === "geo" || filter.type === "category" || filter.type === "business" ? (
+              <select
+                value={String(activeFilters[key] || "")}
+                onChange={(e) => onFilterChange(key, e.target.value)}
+                className={`rounded-xl border px-4 py-2 text-sm outline-none ${
+                  isActive
+                    ? "border-violet-500/50 bg-violet-500/10 text-violet-200"
+                    : "border-slate-700/60 bg-slate-900/70 text-slate-100"
+                }`}
+              >
+                <option value="">All {filter.label}</option>
+                {filter.values.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function EliteDashboardPage() {
   const { dataset, isHydrating, apiError, loadDemo, retryHydrate, deleteDataset } = useData();
   const [filters, setFilters] = useState<DashboardFilters>({});
@@ -122,12 +262,31 @@ export default function EliteDashboardPage() {
   const [chartTypeOverrides, setChartTypeOverrides] = useState<Record<string, ChartType>>({});
   const [showSchema, setShowSchema] = useState(false);
   const [dashboardMode, setDashboardMode] = useState<"Executive" | "Analyst" | "Story">("Executive");
+  const [countryFilter, setCountryFilter] = useState<string>("");
+  const [useInsightFlow, setUseInsightFlow] = useState(true);
 
   const rawRows = useMemo<Row[]>(() => (dataset?.rows || []) as Row[], [dataset?.rows]);
   const rows = useMemo(() => cleanDatasetRows(rawRows), [rawRows]);
   const profile = useMemo(() => buildDatasetProfile(rows), [rows]);
   const quality = useMemo(() => buildDataQualityScore(rows), [rows]);
-  const filteredRows = useMemo(() => applyFilters(rows, filters), [rows, filters]);
+  const filteredRows = useMemo(() => {
+    let result = applyFilters(rows, filters);
+    if (countryFilter && profile.locationColumn) {
+      result = result.filter(
+        (r) => String(r[profile.locationColumn!.name]).toLowerCase() === countryFilter.toLowerCase(),
+      );
+    }
+    return result;
+  }, [rows, filters, countryFilter, profile.locationColumn]);
+  const insightFlowResult = useMemo<InsightFlowResult | null>(() => {
+    if (!useInsightFlow || !rows.length) return null;
+    return runInsightFlow(rows);
+  }, [rows, useInsightFlow]);
+
+  const insightFlowFilters = useMemo(() => {
+    return insightFlowResult?.filters || [];
+  }, [insightFlowResult]);
+
   const defaultKpis = useMemo(() => buildKpis(filteredRows), [filteredRows]);
   const tableColumns = profile.columns.map((column) => column.name);
   const schemaDashboard = useSchemaTrainedDashboard({
@@ -135,7 +294,7 @@ export default function EliteDashboardPage() {
     datasetName: dataset?.name || "Uploaded Dataset",
     rows,
     columns: dataset?.columns || tableColumns,
-    dictionaryRows: (dataset as any)?.dictionaryRows || (dataset as any)?.dataDictionary || [],
+    dictionaryRows: (dataset as { dictionaryRows?: unknown[] } | null)?.dictionaryRows || (dataset as { dataDictionary?: unknown[] } | null)?.dataDictionary || [],
     autoLoad: Boolean(rows.length),
   });
   const aiController = useDashboardAiController({
@@ -146,8 +305,8 @@ export default function EliteDashboardPage() {
       columns: dataset?.columns || tableColumns,
     },
     initialDashboard: {
-      kpis: schemaDashboard.kpiSpecs as any,
-      charts: schemaDashboard.chartSpecs as any,
+      kpis: schemaDashboard.kpiSpecs as KpiSpec[],
+      charts: schemaDashboard.chartSpecs as ChartSpec[],
       source: schemaDashboard.provider,
     },
     initialFilters: filters,
@@ -174,6 +333,38 @@ export default function EliteDashboardPage() {
     saveDashboardState(dataset.id, { filters, manualCharts, manualKpis });
   }, [dataset?.id, filters, manualCharts, manualKpis]);
 
+  const insightFlowKpis = useMemo(() => {
+    if (!insightFlowResult?.kpis.length) return [];
+    return insightFlowResult.kpis.map((k) => ({
+      id: k.id,
+      title: k.title,
+      value: k.value,
+      rawValue: k.rawValue,
+      subtitle: k.subtitle,
+      metric: k.metric,
+      aggregation: k.aggregation as Aggregation,
+      format: k.format,
+      businessKpi: true,
+    })) as DashboardKpi[];
+  }, [insightFlowResult]);
+
+  const insightFlowCharts = useMemo(() => {
+    if (!insightFlowResult?.charts.length) return [];
+    return insightFlowResult.charts.map((c) => ({
+      id: c.id,
+      type: c.type,
+      title: c.title,
+      subtitle: c.subtitle,
+      xKey: c.xKey,
+      yKey: c.yKey,
+      aggregation: c.aggregation as Aggregation,
+      intent: c.intent,
+      data: c.data,
+      businessValue: c.businessValue,
+      warning: c.warning,
+    })) as DashboardChart[];
+  }, [insightFlowResult]);
+
   const trainedCharts = useMemo(
     () =>
       schemaDashboard.chartSpecs
@@ -181,15 +372,17 @@ export default function EliteDashboardPage() {
           buildChartFromSpec(filteredRows, {
             ...spec,
             type: chartTypeOverrides[spec.id || spec.title] || spec.type,
-          } as any),
+          } as ChartSpec),
         )
         .filter(Boolean),
     [chartTypeOverrides, filteredRows, schemaDashboard.chartSpecs],
   );
 
   const charts = useMemo(() => {
-    const aiCharts = aiController.charts.length ? aiController.charts : trainedCharts;
-    const merged = [...manualCharts, ...aiCharts]
+    const source = insightFlowCharts.length ? insightFlowCharts
+      : aiController.charts.length ? aiController.charts
+        : trainedCharts;
+    const merged = [...manualCharts, ...source]
       .filter(Boolean)
       .filter((chart) => !hiddenChartIds.has(chart.id));
 
@@ -208,15 +401,34 @@ export default function EliteDashboardPage() {
   const trainedKpis = useMemo(
     () =>
       schemaDashboard.kpiSpecs
-        .map((spec) => buildKpiFromSpec(filteredRows, spec as any))
+        .map((spec) => buildKpiFromSpec(filteredRows, spec as KpiSpec))
         .filter(Boolean),
     [filteredRows, schemaDashboard.kpiSpecs],
   );
 
   const kpis = useMemo(
-    () => [...(aiController.kpis.length ? aiController.kpis : trainedKpis.length ? trainedKpis : defaultKpis), ...manualKpis].slice(0, 8),
-    [aiController.kpis, defaultKpis, manualKpis, trainedKpis],
+    () => {
+      const source = insightFlowKpis.length ? insightFlowKpis
+        : aiController.kpis.length ? aiController.kpis
+          : trainedKpis.length ? trainedKpis
+            : defaultKpis;
+      return [...source, ...manualKpis].slice(0, 8);
+    },
+    [insightFlowKpis, aiController.kpis, defaultKpis, manualKpis, trainedKpis],
   );
+
+  const handleInsightFlowFilter = (key: string, value: string) => {
+    if (key.endsWith("Start") || key.endsWith("End")) {
+      const filterKey = key.endsWith("Start") ? "dateStart" : "dateEnd";
+      setFilters((prev) => ({ ...prev, [filterKey]: value || undefined }));
+      aiController.setFilters({ ...filters, [filterKey]: value || undefined });
+    } else {
+      const next = { ...filters, [key]: value || undefined };
+      setFilters(next);
+      aiController.setFilters(next);
+    }
+  };
+
   const primaryFilter = profile.primaryCategory;
   const dateColumn = profile.dateColumn;
 
@@ -298,7 +510,7 @@ export default function EliteDashboardPage() {
     setChartTypeOverrides({});
   }
 
-  function applyAiDashboardCommand(command: any) {
+  function applyAiDashboardCommand(command: Record<string, unknown>) {
     if (!command) return;
 
     if (command.action === "GENERATE_DASHBOARD") {
@@ -329,8 +541,14 @@ export default function EliteDashboardPage() {
               <span>-</span>
               <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs">{filteredRows.length.toLocaleString()} rows</span>
             </div>
-            <h1 className="mt-2 text-3xl font-semibold tracking-normal text-white">Dashboard</h1>
-            <p className="mt-1 text-sm text-slate-400">Auto-generated insights from your current dataset schema.</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-normal text-white">
+              {insightFlowResult?.dashboardType || "Dashboard"}
+            </h1>
+            <p className="mt-1 text-sm text-slate-400">
+              {insightFlowResult
+                ? `${insightFlowResult.datasetType} · ${insightFlowResult.qualityScore.passed ? "Self-critic: Passed" : "Self-critic: Scored " + insightFlowResult.qualityScore.total + "%"}`
+                : "Auto-generated insights from your current dataset schema."}
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -375,9 +593,23 @@ export default function EliteDashboardPage() {
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            {insightFlowResult && (
+              <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-violet-200">
+                {insightFlowResult.datasetType}
+              </span>
+            )}
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-emerald-200">
-              {schemaDashboard.chartSpecs.length || charts.length} charts
+              {insightFlowCharts.length || schemaDashboard.chartSpecs.length || charts.length} charts
             </span>
+            {insightFlowResult && (
+              <span className={`rounded-full border px-3 py-1 ${
+                insightFlowResult.qualityScore.passed
+                  ? "border-green-500/30 bg-green-500/10 text-green-200"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-200"
+              }`}>
+                {insightFlowResult.qualityScore.passed ? "✓ Self-Critic Passed" : `Self-Critic ${insightFlowResult.qualityScore.total}%`}
+              </span>
+            )}
             {schemaDashboard.memoryMatch && (
               <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-cyan-200">
                 trained memory matched
@@ -390,60 +622,66 @@ export default function EliteDashboardPage() {
         <div className="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_460px]">
           <main className="space-y-5">
             <section className="flex flex-wrap gap-3">
-              <div className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-200">
-                <Calendar className="size-4 text-slate-400" />
-                {dateColumn ? (
-                  <>
-                    <input
-                      type="date"
-                      value={String(filters.dateStart || "")}
-                      onChange={(event) => {
-                        const next = { ...filters, dateStart: event.target.value };
-                        setFilters(next);
-                        aiController.setFilters(next);
-                      }}
-                      className="bg-transparent outline-none"
-                    />
-                    <span className="text-slate-500">to</span>
-                    <input
-                      type="date"
-                      value={String(filters.dateEnd || "")}
-                      onChange={(event) => {
-                        const next = { ...filters, dateEnd: event.target.value };
-                        setFilters(next);
-                        aiController.setFilters(next);
-                      }}
-                      className="bg-transparent outline-none"
-                    />
-                  </>
-                ) : (
-                  <span>All rows</span>
-                )}
-              </div>
+              {insightFlowFilters.length > 0 ? (
+                <FilterChips
+                  filters={insightFlowFilters}
+                  activeFilters={filters as Record<string, string>}
+                  onFilterChange={handleInsightFlowFilter}
+                />
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-200">
+                    <Calendar className="size-4 text-slate-400" />
+                    {dateColumn ? (
+                      <>
+                        <input
+                          type="date"
+                          value={String(filters.dateStart || "")}
+                          onChange={(event) => {
+                            const next = { ...filters, dateStart: event.target.value };
+                            setFilters(next);
+                            aiController.setFilters(next);
+                          }}
+                          className="bg-transparent outline-none"
+                        />
+                        <span className="text-slate-500">to</span>
+                        <input
+                          type="date"
+                          value={String(filters.dateEnd || "")}
+                          onChange={(event) => {
+                            const next = { ...filters, dateEnd: event.target.value };
+                            setFilters(next);
+                            aiController.setFilters(next);
+                          }}
+                          className="bg-transparent outline-none"
+                        />
+                      </>
+                    ) : (
+                      <span>All rows</span>
+                    )}
+                  </div>
 
-              {primaryFilter && (
-                <select
-                  value={String(filters[primaryFilter.name] || "")}
-                  onChange={(event) => {
-                    const next = { ...filters, [primaryFilter.name]: event.target.value || undefined };
-                    setFilters(next);
-                    aiController.setFilters(next);
-                  }}
-                  className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 outline-none"
-                >
-                  <option value="">All {primaryFilter.name}</option>
-                  {getUniqueValues(rows, primaryFilter.name, 50).map((value) => (
-                    <option key={value} value={value}>
-                      {value}
-                    </option>
-                  ))}
-                </select>
+                  {primaryFilter && (
+                    <select
+                      value={String(filters[primaryFilter.name] || "")}
+                      onChange={(event) => {
+                        const next = { ...filters, [primaryFilter.name]: event.target.value || undefined };
+                        setFilters(next);
+                        aiController.setFilters(next);
+                      }}
+                      className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 outline-none"
+                    >
+                      <option value="">All {primaryFilter.name}</option>
+                      {getUniqueValues(rows, primaryFilter.name, 50).map((value) => (
+                        <option key={value} value={value}>
+                          {value}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </>
               )}
 
-              <button type="button" className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-                <Plus className="mr-2 inline size-4" />
-                Add Filter
-              </button>
               <button type="button" onClick={() => { setFilters({}); aiController.setFilters({}); }} className="rounded-xl border border-slate-700/60 bg-slate-900/70 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
                 <RefreshCw className="mr-2 inline size-4" />
                 Reset
@@ -472,14 +710,28 @@ export default function EliteDashboardPage() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <div>
-                    <p className="text-xs text-slate-400">Data Quality Score</p>
-                    <QualityRing score={quality.finalScore} />
+                  {insightFlowResult ? (
+                    <QualityRings quality={quality} insightScore={insightFlowResult.qualityScore} />
+                  ) : (
+                    <div>
+                      <p className="text-xs text-slate-400">Data Quality Score</p>
+                      <QualityRing score={quality.finalScore} />
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setUseInsightFlow((p) => !p)} className={`rounded-xl border px-4 py-2 text-sm ${
+                      useInsightFlow
+                        ? "border-violet-500/50 bg-violet-500/10 text-violet-200"
+                        : "border-slate-700/60 bg-slate-950/60 text-slate-100"
+                    }`}>
+                      <CheckCircle2 className="mr-2 inline size-4" />
+                      InsightFlow
+                    </button>
+                    <button type="button" onClick={() => setShowSchema(true)} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
+                      <Table2 className="mr-2 inline size-4" />
+                      View Schema
+                    </button>
                   </div>
-                  <button type="button" onClick={() => setShowSchema(true)} className="rounded-xl border border-slate-700/60 bg-slate-950/60 px-4 py-2 text-sm text-slate-100 hover:bg-slate-800">
-                    <Table2 className="mr-2 inline size-4" />
-                    View Schema
-                  </button>
                 </div>
               </div>
             </section>
@@ -489,6 +741,8 @@ export default function EliteDashboardPage() {
                 <KpiCard key={`${kpi.id}-${index}`} kpi={kpi} index={index} />
               ))}
             </section>
+
+            {insightFlowResult && <InsightPanel result={insightFlowResult} mode={dashboardMode} />}
 
             <section className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
               {charts.length ? (
@@ -508,6 +762,17 @@ export default function EliteDashboardPage() {
                 </div>
               )}
             </section>
+
+            <GeoIntelligence
+              rows={filteredRows}
+              columns={tableColumns}
+              onFilterByCountry={(country) => {
+                setCountryFilter(country);
+                if (country) {
+                  setFilters((prev) => ({ ...prev }));
+                }
+              }}
+            />
 
             <section className={`${CARD} overflow-hidden`}>
               <div className="flex flex-col gap-3 border-b border-slate-700/60 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -623,9 +888,12 @@ export default function EliteDashboardPage() {
         </div>
       )}
 
-      <div className="fixed bottom-4 right-4 hidden items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/90 px-3 py-2 text-xs text-slate-400 shadow-xl backdrop-blur md:flex">
+      <div className="fixed bottom-4 right-4 flex items-center gap-2 rounded-full border border-slate-700/60 bg-slate-900/90 px-3 py-2 text-xs text-slate-400 shadow-xl backdrop-blur">
         <ShieldCheck className="size-4 text-green-400" />
-        Schema-only AI enabled
+        {useInsightFlow ? "InsightFlow Engine v2" : "Schema-only AI"}
+        {insightFlowResult && (
+          <span className="ml-1 text-violet-400">· {insightFlowResult.datasetType}</span>
+        )}
       </div>
     </div>
   );

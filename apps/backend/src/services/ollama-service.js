@@ -5,8 +5,8 @@ import {
 } from "./schema-packet-builder.js";
 import { GEMINI_SYSTEM_PROMPT, OLLAMA_CONFIG } from "../config/gemini-config.js";
 
-const OLLAMA_URL = process.env.OLLAMA_BASE_URL 
-  ? `${process.env.OLLAMA_BASE_URL}/api/generate` 
+const OLLAMA_URL = process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL
+  ? `${process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL}/api/generate`
   : "http://127.0.0.1:11434/api/generate";
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2:latest";
 const OLLAMA_TIMEOUT_MS = OLLAMA_CONFIG.timeout || 120000;

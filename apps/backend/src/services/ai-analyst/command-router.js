@@ -1,3 +1,4 @@
+import { serviceUrls } from "../../config/serviceUrls.js";
 import { findColumn } from "./schema-profiler.js";
 
 function deterministicCommand(schema, command) {
@@ -46,7 +47,7 @@ function deterministicCommand(schema, command) {
 }
 
 async function callLlmForPlan(schema, command) {
-  const baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  const baseUrl = serviceUrls.ollama;
   const model = process.env.OLLAMA_MODEL || "llama3.2:latest";
 
   const prompt = `

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
+import { API_BASE_URL } from "@/config/apiConfig";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
@@ -90,7 +91,7 @@ export default function GenAIDashboard() {
 
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:3000/api/genai/dashboard/create", {
+      const response = await axios.post(`${API_BASE_URL}/api/genai/dashboard/create`, {
         dataset,
       });
 
@@ -113,7 +114,7 @@ export default function GenAIDashboard() {
 
     setLoading(true);
     try {
-      const response = await axios.post("http://localhost:3000/api/genai/query", {
+      const response = await axios.post(`${API_BASE_URL}/api/genai/query`, {
         query,
         dataset,
       });

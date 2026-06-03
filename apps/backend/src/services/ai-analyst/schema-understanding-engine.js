@@ -261,14 +261,6 @@ export function buildSmartKpiCandidates(profile, roles = identifySchemaRoles(pro
       reason: "Shows total dataset size.",
       priority: 100,
     },
-    {
-      title: "Total Columns",
-      metric: "__column_count__",
-      aggregation: "count",
-      format: "number",
-      reason: "Shows schema width.",
-      priority: 80,
-    },
   ];
 
   for (const metric of roles.metrics.slice(0, 4)) {
@@ -431,22 +423,48 @@ export function buildSmartChartCandidates(profile, roles = identifySchemaRoles(p
 
 export function explainSchemaForUser(profile, understanding) {
   const roles = understanding.roles;
+  const importantFields = [
+    roles.primaryMetric,
+    roles.primaryCategory,
+    roles.secondaryCategory,
+    roles.primaryDate,
+  ].filter(Boolean);
+  const fieldLines = importantFields
+    .filter((field, index, fields) => fields.findIndex((item) => item.name === field.name) === index)
+    .slice(0, 5)
+    .map((field) => {
+      const name = normalize(field.name);
+      if (/salary|income|pay|compensation/.test(name)) return `- ${field.name} -> employee compensation`;
+      if (/revenue|sales|profit|amount|billing|cost|price/.test(name)) return `- ${field.name} -> financial performance`;
+      if (/country|state|city|region|location/.test(name)) return `- ${field.name} -> geographic distribution`;
+      if (/education|degree|qualification/.test(name)) return `- ${field.name} -> qualification level`;
+      if (/experience|tenure|seniority|years/.test(name)) return `- ${field.name} -> seniority indicator`;
+      if (field.role === "date") return `- ${field.name} -> time trend`;
+      if (field.role === "location") return `- ${field.name} -> geographic dimension`;
+      if (isMeasureMetric(field)) return `- ${field.name} -> business metric`;
+      return `- ${field.name} -> analysis segment`;
+    });
+  const recommendedCharts = buildSmartChartCandidates(profile, roles)
+    .slice(0, 5)
+    .map((chart) => `- ${chart.title}`);
 
   return [
-    `I detected this as a ${understanding.domain.domain.replaceAll("_", " ")} dataset with ${Math.round(
-      understanding.domain.confidence * 100
-    )}% confidence.`,
-    `It has ${profile.rowCount.toLocaleString()} rows and ${profile.columnCount} columns.`,
-    roles.primaryMetric
-      ? `Main metric appears to be "${roles.primaryMetric.name}".`
-      : "I could not confidently detect a main numeric metric.",
-    roles.primaryCategory
-      ? `Main category appears to be "${roles.primaryCategory.name}".`
-      : "I could not confidently detect a main category.",
-    roles.primaryDate
-      ? `Time/date column detected: "${roles.primaryDate.name}".`
-      : "No strong time/date column detected.",
-  ].join(" ");
+    `This appears to be a ${understanding.domain.domain.replaceAll("_", " ")} analytics dataset that can help compare performance across key segments and uncover patterns worth turning into dashboard views.`,
+    "",
+    "The most important fields appear to be:",
+    ...(fieldLines.length ? fieldLines : ["- The available fields can be used for segment, ranking, and distribution analysis."]),
+    "",
+    "Based on the schema, this dataset can answer questions such as:",
+    roles.primaryMetric && roles.primaryCategory
+      ? `1. How does ${roles.primaryMetric.name} vary by ${roles.primaryCategory.name}?`
+      : "1. Which segments stand out most?",
+    roles.primaryMetric ? `2. What does the ${roles.primaryMetric.name} distribution look like?` : "2. What are the main distribution patterns?",
+    roles.secondaryCategory ? `3. Which ${roles.secondaryCategory.name} groups deserve closer attention?` : "3. Are there outliers or unusual groups?",
+    roles.primaryDate && roles.primaryMetric ? `4. How does ${roles.primaryMetric.name} change over time?` : "4. What should be tracked in a dashboard?",
+    "",
+    "I recommend starting with:",
+    ...(recommendedCharts.length ? recommendedCharts : ["- Category Breakdown", "- Metric Distribution", "- Top Segment Ranking"]),
+  ].join("\n");
 }
 
 export function buildSchemaUnderstanding(datasetOrProfile = {}) {
