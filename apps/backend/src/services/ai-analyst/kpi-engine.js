@@ -1,19 +1,24 @@
+import crypto from "node:crypto";
 import { findColumn, safeNumber } from "./schema-profiler.js";
 
+const BLOCKED_MAIN_KPI_TITLES = new Set([
+  "attributes / columns",
+  "numeric columns",
+  "categorical columns",
+  "missing values",
+  "data quality score",
+]);
+
 function aggregate(values = [], aggregation = "count") {
-  const present = values.filter(
-    (value) => value !== null && value !== undefined && value !== ""
-  );
+  const present = values.filter((v) => v !== null && v !== undefined && v !== "");
 
   if (aggregation === "count") return present.length;
-
   if (aggregation === "count_unique") {
     return new Set(present.map((v) => String(v).trim().toLowerCase())).size;
   }
 
-  const numbers = present.map(safeNumber).filter((value) => value !== null);
-
-  if (!numbers.length) return 0;
+  const numbers = present.map(safeNumber).filter((v) => v !== null && Number.isFinite(v));
+  if (!numbers.length) return null;
 
   if (aggregation === "sum") return numbers.reduce((a, b) => a + b, 0);
   if (aggregation === "avg") return numbers.reduce((a, b) => a + b, 0) / numbers.length;
@@ -23,9 +28,7 @@ function aggregate(values = [], aggregation = "count") {
   if (aggregation === "median") {
     const sorted = [...numbers].sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2
-      ? sorted[mid]
-      : (sorted[mid - 1] + sorted[mid]) / 2;
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
   if (aggregation === "p75") {
@@ -40,19 +43,129 @@ function aggregate(values = [], aggregation = "count") {
     return sorted[Math.max(0, index)];
   }
 
-  return present.length;
+  return null;
 }
 
-function calculateQualityScore(rows, schema) {
-  const totalCells = Math.max(rows.length * schema.columns.length, 1);
-  const missingCells = schema.columns.reduce(
-    (sum, column) => sum + column.nullCount,
-    0
-  );
-  return ((totalCells - missingCells) / totalCells) * 100;
+function hasColumn(schema, name) {
+  return schema.columns?.some((col) => col.name === name);
 }
 
-function formatValue(metricName, value, aggregation) {
+function isBlockedMainKpi(title) {
+  return BLOCKED_MAIN_KPI_TITLES.has(String(title || "").trim().toLowerCase());
+}
+
+function makeKpi({ title, metric, aggregation, value, format = "number" }) {
+  return {
+    id: crypto.randomUUID(),
+    title,
+    metric,
+    aggregation,
+    rawValue: value,
+    value: formatValue(value, format),
+    format,
+    businessKpi: true,
+  };
+}
+
+function formatValue(value, format = "number") {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return "N/A";
+
+  if (format === "currency") {
+    return `$${Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  }
+
+  if (format === "percent") {
+    return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+  }
+
+  return Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
+function topGroupByAverage(rows, groupKey, metricKey) {
+  const groups = new Map();
+
+  rows.forEach((row) => {
+    const group = row?.[groupKey];
+    const metric = safeNumber(row?.[metricKey]);
+    if (group === null || group === undefined || group === "" || metric === null) return;
+
+    const key = String(group).trim();
+    const current = groups.get(key) || { total: 0, count: 0 };
+    current.total += metric;
+    current.count += 1;
+    groups.set(key, current);
+  });
+
+  return [...groups.entries()]
+    .map(([name, stats]) => ({ name, average: stats.total / stats.count }))
+    .sort((left, right) => right.average - left.average)[0]?.name || null;
+}
+
+export function buildSalaryBusinessKpis(rows, schema) {
+  const required = ["salary_usd", "experience", "country"];
+  const hasSalarySchema = required.every((col) => hasColumn(schema, col));
+
+  if (!hasSalarySchema) return null;
+
+  const salaryValues = rows.map((row) => row.salary_usd);
+  const experienceValues = rows.map((row) => row.experience);
+  const countries = rows.map((row) => row.country);
+  const topPayingCountry = topGroupByAverage(rows, "country", "salary_usd");
+
+  return [
+    makeKpi({
+      title: "Total Records",
+      metric: "__row_count__",
+      aggregation: "count",
+      value: rows.length,
+    }),
+    makeKpi({
+      title: "Average Salary",
+      metric: "salary_usd",
+      aggregation: "avg",
+      value: aggregate(salaryValues, "avg"),
+      format: "currency",
+    }),
+    makeKpi({
+      title: "Median Salary",
+      metric: "salary_usd",
+      aggregation: "median",
+      value: aggregate(salaryValues, "median"),
+      format: "currency",
+    }),
+    makeKpi({
+      title: "Highest Salary",
+      metric: "salary_usd",
+      aggregation: "max",
+      value: aggregate(salaryValues, "max"),
+      format: "currency",
+    }),
+    makeKpi({
+      title: "Average Experience",
+      metric: "experience",
+      aggregation: "avg",
+      value: aggregate(experienceValues, "avg"),
+    }),
+    makeKpi({
+      title: "Countries",
+      metric: "country",
+      aggregation: "count_unique",
+      value: aggregate(countries, "count_unique"),
+    }),
+    {
+      id: crypto.randomUUID(),
+      title: "Top Paying Country",
+      metric: "country",
+      aggregation: "top_by_avg",
+      rawValue: topPayingCountry,
+      value: topPayingCountry || "N/A",
+      format: "text",
+      businessKpi: true,
+    },
+  ];
+}
+
+function formatMetricValue(metricName, value, aggregation) {
   const name = String(metricName || "").toLowerCase();
 
   if (aggregation === "count_unique") {
@@ -60,37 +173,30 @@ function formatValue(metricName, value, aggregation) {
   }
 
   if (/salary|revenue|sales|amount|price|cost|profit|income|compensation/.test(name)) {
-    return `$${Math.round(value).toLocaleString()}`;
+    return formatValue(value, "currency");
   }
 
-  if (/rate|percent|margin|quality|attendance/.test(name)) {
-    return `${Number(value).toFixed(1)}%`;
+  if (/rate|percent|margin|attendance/.test(name)) {
+    return formatValue(value, "percent");
   }
 
-  if (Number.isInteger(value) || Math.abs(value) >= 1000) {
-    return Math.round(value).toLocaleString();
-  }
-  return Number(value.toFixed ? value.toFixed(2) : value).toLocaleString();
+  return formatValue(value, "number");
 }
 
 function buildKpiFromTemplate(rows, schema, template) {
+  if (isBlockedMainKpi(template.title) || template.aggregation === "quality_score") {
+    return null;
+  }
+
   if (template.aggregation === "count") {
     return {
       id: crypto.randomUUID(),
       title: template.title,
       value: rows.length.toLocaleString(),
-      metric: "*",
+      rawValue: rows.length,
+      metric: "__row_count__",
       aggregation: "count",
-    };
-  }
-
-  if (template.aggregation === "quality_score") {
-    return {
-      id: crypto.randomUUID(),
-      title: template.title,
-      value: `${calculateQualityScore(rows, schema).toFixed(1)}%`,
-      metric: "*",
-      aggregation: "quality_score",
+      businessKpi: true,
     };
   }
 
@@ -102,19 +208,16 @@ function buildKpiFromTemplate(rows, schema, template) {
 
     if (!col) return null;
 
-    const uniqueCount = new Set(
-      rows
-        .map((row) => row[col.name])
-        .filter((v) => v !== null && v !== undefined && v !== "")
-        .map((v) => String(v).trim().toLowerCase())
-    ).size;
+    const uniqueCount = aggregate(rows.map((row) => row[col.name]), "count_unique");
 
     return {
       id: crypto.randomUUID(),
       title: template.title,
       value: uniqueCount.toLocaleString(),
+      rawValue: uniqueCount,
       metric: col.name,
       aggregation: "count_unique",
+      businessKpi: true,
     };
   }
 
@@ -133,14 +236,18 @@ function buildKpiFromTemplate(rows, schema, template) {
   return {
     id: crypto.randomUUID(),
     title: template.title,
-    value: formatValue(metric.name, value, template.aggregation),
+    value: formatMetricValue(metric.name, value, template.aggregation),
+    rawValue: value,
     metric: metric.name,
     aggregation: template.aggregation,
+    businessKpi: true,
   };
 }
 
 export function buildAutoKpis({ dataset, schema, playbook, memoryMatch }) {
   const rows = dataset.rows || [];
+  const salaryKpis = buildSalaryBusinessKpis(rows, schema);
+  if (salaryKpis) return salaryKpis;
 
   const baseKpis = (playbook.kpis || [])
     .map((template) => buildKpiFromTemplate(rows, schema, template))
@@ -157,11 +264,11 @@ export function buildAutoKpis({ dataset, schema, playbook, memoryMatch }) {
     .filter(Boolean);
 
   const merged = [...learnedKpis, ...baseKpis];
-
   const seen = new Set();
 
   return merged
     .filter((kpi) => {
+      if (!kpi.businessKpi || isBlockedMainKpi(kpi.title)) return false;
       if (seen.has(kpi.title)) return false;
       seen.add(kpi.title);
       return true;

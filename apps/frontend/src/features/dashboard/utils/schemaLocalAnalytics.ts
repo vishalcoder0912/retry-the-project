@@ -70,6 +70,26 @@ function aggregate(rows: DataRow[], metric: string, aggregation: SchemaAggregati
   return numbers.length;
 }
 
+function topGroupByAverage(rows: DataRow[], groupKey: string, metricKey = "salary_usd") {
+  const groups = new Map<string, { total: number; count: number }>();
+
+  rows.forEach((row) => {
+    const group = row[groupKey];
+    const metric = toNumber(row[metricKey]);
+    if (isMissing(group) || metric === null) return;
+
+    const key = String(group).trim();
+    const current = groups.get(key) || { total: 0, count: 0 };
+    current.total += metric;
+    current.count += 1;
+    groups.set(key, current);
+  });
+
+  return [...groups.entries()]
+    .map(([name, stats]) => ({ name, average: stats.total / stats.count }))
+    .sort((left, right) => right.average - left.average)[0]?.name || "N/A";
+}
+
 function formatValue(value: number | string, format?: string) {
   if (typeof value === "string") return value;
 
@@ -91,6 +111,16 @@ function formatValue(value: number | string, format?: string) {
 }
 
 export function calculateKpi(rows: DataRow[], spec: SchemaDashboardKpiSpec): LocalKpiResult {
+  if (spec.aggregation === "top_by_avg") {
+    const value = topGroupByAverage(rows, spec.metric || "country");
+
+    return {
+      ...spec,
+      value,
+      formattedValue: value,
+    };
+  }
+
   const value = aggregate(rows, spec.metric || "__row_count__", spec.aggregation || "count");
 
   return {
@@ -104,21 +134,28 @@ export function calculateKpis(rows: DataRow[], specs: SchemaDashboardKpiSpec[] =
   return specs.map((spec) => calculateKpi(rows, spec));
 }
 
-function groupRows(rows: DataRow[], key: string) {
+function groupRows(rows: DataRow[], key: string, spec?: SchemaDashboardChartSpec) {
   const groups = new Map<string, DataRow[]>();
+  const splitValues = (spec as any)?.splitValues === true || (spec as any)?.multiValue === true;
+  const delimiter = (spec as any)?.splitDelimiter || ",";
 
   for (const row of rows) {
     const raw = row[key];
-    const label = isMissing(raw) ? "(Missing)" : String(raw);
-    if (!groups.has(label)) groups.set(label, []);
-    groups.get(label)!.push(row);
+    const labels = splitValues && !isMissing(raw)
+      ? String(raw).split(delimiter).map((item) => item.trim()).filter(Boolean)
+      : [isMissing(raw) ? "(Missing)" : String(raw)];
+
+    labels.forEach((label) => {
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label)!.push(row);
+    });
   }
 
   return groups;
 }
 
 function buildGroupedChart(rows: DataRow[], spec: SchemaDashboardChartSpec) {
-  const groups = groupRows(rows, spec.xKey);
+  const groups = groupRows(rows, spec.xKey, spec);
 
   return [...groups.entries()]
     .map(([name, group]) => ({
@@ -254,6 +291,14 @@ export function applyDashboardFilters(rows: DataRow[], filters: DashboardFilter[
 export function validateChartSpecForRows(rows: DataRow[], spec: SchemaDashboardChartSpec) {
   const first = rows[0] || {};
   const keys = new Set(Object.keys(first));
+
+  if (spec.xKey === "__row_index__") {
+    return { ok: false, reason: "Row index is not a real business dimension." };
+  }
+
+  if ((spec.type === "line" || spec.intent === "trend") && !/date|time/i.test(spec.xKey)) {
+    return { ok: false, reason: "Trend charts require a real date/time column." };
+  }
 
   if (spec.xKey !== "__column__" && !keys.has(spec.xKey)) {
     return { ok: false, reason: `Column ${spec.xKey} does not exist in rows.` };

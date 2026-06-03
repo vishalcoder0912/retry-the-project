@@ -1,3 +1,5 @@
+import { serviceUrls } from "../../config/serviceUrls.js";
+
 function tokenize(text = "") {
   return String(text)
     .toLowerCase()
@@ -42,7 +44,7 @@ export async function answerPdfQuestion({ query, knowledgeBase }) {
     .map((chunk, index) => `SOURCE ${index + 1}:\n${chunk.content}`)
     .join("\n\n");
 
-  const baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  const baseUrl = serviceUrls.ollama;
   const model = process.env.OLLAMA_MODEL || "llama3.2:latest";
 
   try {

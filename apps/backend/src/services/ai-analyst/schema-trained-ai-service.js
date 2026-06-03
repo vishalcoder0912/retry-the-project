@@ -3,6 +3,7 @@ import { applyTrainedTemplates, buildRuleDashboardPlan, mergePlans, pickPrimaryC
 import { findBestSchemaMatch, trainSchemaExample } from "./schema-training-store.js";
 import { formatChatAnswerWithOllama, planCommandWithOllama, planDashboardWithOllama } from "./llm-schema-dashboard-planner.js";
 import { buildGuardianDashboardResponse } from "./dashboard-quality-guardian.js";
+import { generateUnifiedDashboard } from "../agentic-dashboard/unified-dashboard-orchestrator.js";
 import {
   buildSchemaUnderstanding,
 } from "./schema-understanding-engine.js";
@@ -11,6 +12,10 @@ import {
   retrieveSchemaRagMemories,
   trainSchemaRagMemoryFromDataset,
 } from "./schema-rag-retriever.js";
+import {
+  governDashboardCommand,
+  governChatAnswer,
+} from "../agentic-dashboard/chat-agent.js";
 
 function findColumn(profile, text, preferredRoles = []) {
   const lower = normalizeColumnName(text);
@@ -45,6 +50,30 @@ function findCategory(profile, text) {
 }
 
 export async function generateSchemaDashboard(dataset, options = {}) {
+  const unified = await generateUnifiedDashboard(dataset, options);
+  const data = { ...unified.data };
+
+  if (options.useLlm !== false) {
+    const profile = buildSchemaProfile(dataset);
+    const llmPlan = await planDashboardWithOllama(profile, null, {
+      ragMatches: [],
+      schemaUnderstanding: {},
+    });
+
+    if (llmPlan) {
+      data.llm = {
+        source: llmPlan.source,
+        model: llmPlan.model,
+        error: llmPlan.error,
+      };
+      data.model = llmPlan.model || data.model;
+    }
+  }
+
+  return data;
+}
+
+export async function generateLegacySchemaDashboard(dataset, options = {}) {
   const profile = buildSchemaProfile(dataset);
   const understanding = buildSchemaUnderstanding(profile);
 
@@ -136,6 +165,15 @@ export async function generateSchemaDashboard(dataset, options = {}) {
     },
     dashboard: guarded.dashboard,
     dashboardPlan: guarded.dashboard,
+    dashboardType: llmPlan?.dashboardType || understanding.domain?.domain || profile.domain,
+    executiveSummary: llmPlan?.executiveSummary || null,
+    geoAnalysis: Array.isArray(llmPlan?.geoAnalysis) ? llmPlan.geoAnalysis : [],
+    insights: Array.isArray(llmPlan?.insights) ? llmPlan.insights : [],
+    recommendations: Array.isArray(llmPlan?.recommendations) ? llmPlan.recommendations : [],
+    storyMode: llmPlan?.storyMode || null,
+    confidenceScore: Number.isFinite(Number(llmPlan?.confidenceScore))
+      ? Number(llmPlan.confidenceScore)
+      : guarded.qualityScore / 100,
     dashboardHealth: guarded.dashboardHealth,
     provider: llmPlan?.source?.startsWith("ollama:") ? "ollama" : ragResult.used ? "rag+local" : "local",
     model: llmPlan?.model || "local",
@@ -293,12 +331,81 @@ function localCommand(profile, query) {
 
   return {
     action: "ANSWER",
-    message: `I found ${profile.rowCount.toLocaleString()} records, ${profile.columnCount} columns, and detected the domain as ${profile.domain}. Ask me to create a KPI, chart, filter, or dashboard.` ,
+    message: buildDatasetUnderstandingAnswer(profile),
     schemaOnly: true,
   };
 }
 
-export async function runDashboardCommand({ dataset, query, currentDashboard = {}, useLlm = true }) {
+function toDashboardActionItem(command = {}) {
+  if (command.action === "GENERATE_CHART" && command.chartSpec) {
+    return {
+      action: "create_chart",
+      chart_type: command.chartSpec.type,
+      title: command.chartSpec.title,
+      x: command.chartSpec.xKey,
+      y: command.chartSpec.yKey,
+      aggregation: command.chartSpec.aggregation,
+      reason: command.chartSpec.reason || "Schema-safe chart action.",
+      chartSpec: command.chartSpec,
+    };
+  }
+
+  if (command.action === "MODIFY_CHART" && command.chartSpec) {
+    return {
+      action: "modify_chart",
+      chart_type: command.chartSpec.type,
+      title: command.chartSpec.title,
+      x: command.chartSpec.xKey,
+      y: command.chartSpec.yKey,
+      aggregation: command.chartSpec.aggregation,
+      reason: command.chartSpec.reason || "Schema-safe chart modification.",
+      chartSpec: command.chartSpec,
+    };
+  }
+
+  if (command.action === "GENERATE_KPI" && command.kpiSpec) {
+    return {
+      action: "create_kpi",
+      title: command.kpiSpec.title,
+      metric: command.kpiSpec.metric,
+      aggregation: command.kpiSpec.aggregation,
+      reason: command.kpiSpec.description || "Schema-safe KPI action.",
+      kpiSpec: command.kpiSpec,
+    };
+  }
+
+  if (command.action === "FILTER") {
+    return {
+      action: "filter",
+      filters: command.filters || {},
+      reason: "Schema-safe filter action.",
+    };
+  }
+
+  if (command.action === "CLEAR_FILTERS") return { action: "clear_filters" };
+  if (command.action === "DELETE_CHART") return { action: "delete_chart" };
+
+  return null;
+}
+
+function withDashboardActionEnvelope(command = {}) {
+  if (command.response_type === "dashboard_action") return command;
+
+  const item = toDashboardActionItem(command);
+  if (!item) return command;
+
+  return {
+    ...command,
+    response_type: "dashboard_action",
+    natural_response: command.message || "I prepared a schema-safe dashboard action.",
+    actions: [item],
+    warnings: command.warnings || [],
+    schema_safe: true,
+    schemaOnly: true,
+  };
+}
+
+export async function runDashboardCommand({ dataset, query, currentDashboard = {}, useLlm = true, requireOllamaValidation, useOllamaValidator }) {
   const profile = buildSchemaProfile(dataset);
   const matchResult = findBestSchemaMatch(profile, { threshold: 0.35 });
   const ragResult = await retrieveSchemaRagMemories(profile, {
@@ -325,11 +432,31 @@ export async function runDashboardCommand({ dataset, query, currentDashboard = {
       ragMatches: ragResult.matches,
       currentDashboard,
     });
-    if (planned && planned.action !== "ANSWER") return { ...planned, rag };
-    return { ...deterministic, aiFallback: planned?.aiError || null, model: planned?.model, provider: planned?.provider, rag };
+    if (planned && planned.action !== "ANSWER") {
+      return governDashboardCommand({
+        dataset,
+        query,
+        command: withDashboardActionEnvelope({ ...planned, rag }),
+        currentDashboard,
+        requireOllama: requireOllamaValidation ?? useOllamaValidator,
+      });
+    }
+    return governDashboardCommand({
+      dataset,
+      query,
+      command: withDashboardActionEnvelope({ ...deterministic, aiFallback: planned?.aiError || null, model: planned?.model, provider: planned?.provider, rag }),
+      currentDashboard,
+      requireOllama: requireOllamaValidation ?? useOllamaValidator,
+    });
   }
 
-  return { ...deterministic, rag };
+  return governDashboardCommand({
+    dataset,
+    query,
+    command: withDashboardActionEnvelope({ ...deterministic, rag }),
+    currentDashboard,
+    requireOllama: requireOllamaValidation ?? useOllamaValidator,
+  });
 }
 
 function computeLocalAnswer(profile, query) {
@@ -338,7 +465,7 @@ function computeLocalAnswer(profile, query) {
   const category = findCategory(profile, lower);
 
   if (/schema|columns|fields/.test(lower)) {
-    return `This dataset has ${profile.rowCount.toLocaleString()} rows and ${profile.columnCount} columns. Main domain: ${profile.domain}. Columns: ${profile.columns.map((c) => `${c.name} (${c.type}, ${c.role})`).join(", ")}.`;
+    return buildDatasetUnderstandingAnswer(profile, { includeColumns: true });
   }
 
   if (/kpi|dashboard|chart/.test(lower)) {
@@ -355,13 +482,157 @@ function computeLocalAnswer(profile, query) {
     return `Top ${category.title} values are: ${top || "not available from schema profile"}.`;
   }
 
-  return `Dataset summary: ${profile.rowCount.toLocaleString()} rows, ${profile.columnCount} columns, detected domain ${profile.domain}. Primary metric: ${metric?.name || "not detected"}. Primary category: ${category?.name || "not detected"}.`;
+  return buildDatasetUnderstandingAnswer(profile);
 }
 
-export async function runSchemaChat({ dataset, query, useLlm = true }) {
+function inferIntent(query) {
+  const lower = String(query || "").toLowerCase();
+  if (/report|presentation|board|executive summary|summary/.test(lower)) return "executive narrative";
+  if (/trend|growth|changed|over time|fastest/.test(lower)) return "trend analysis";
+  if (/compare| vs | versus /.test(lower)) return "comparison";
+  if (/correlation|relationship|affect|impact/.test(lower)) return "relationship analysis";
+  if (/top|highest|best|rank|most/.test(lower)) return "ranking";
+  if (/country|region|city|state|geo|map/.test(lower)) return "geo analysis";
+  if (/kpi|average|avg|total|sum|revenue|salary|count/.test(lower)) return "KPI analysis";
+  return "dataset understanding";
+}
+
+function formatAnalystAnswer({ query, localAnswer, profile }) {
+  const intent = inferIntent(query);
+
+  return [
+    "Summary",
+    localAnswer,
+    "",
+    "What This Can Help Answer",
+    ...buildBusinessQuestions(profile).slice(0, 5).map((question, index) => `${index + 1}. ${question}`),
+    "",
+    "Recommended Starting Point",
+    ...buildRecommendedVisuals(profile).slice(0, 5).map((visual) => `- ${visual}`),
+    "",
+    "Next Step",
+    intent === "dataset understanding"
+      ? "I can turn this into a focused dashboard with KPIs, distributions, segment comparisons, and ranking views."
+      : "I can use this as the basis for the next dashboard action or deeper analysis.",
+  ].join("\n");
+}
+
+function roleLabel(column = {}) {
+  const name = String(column.normalizedName || column.name || "").toLowerCase();
+  if (/salary|income|pay|compensation/.test(name)) return "employee compensation";
+  if (/revenue|sales|amount|profit|cost|price|billing/.test(name)) return "financial performance";
+  if (/country|state|city|region|territory|location/.test(name)) return "geographic distribution";
+  if (/education|degree|qualification/.test(name)) return "qualification level";
+  if (/experience|seniority|tenure|years/.test(name)) return "seniority indicator";
+  if (/department|team|function/.test(name)) return "organizational segment";
+  if (/category|segment|type|status/.test(name)) return "business segment";
+  if (/date|time|created|ordered|admission/.test(name)) return "time trend";
+  if (/rating|score|satisfaction/.test(name)) return "quality or performance score";
+
+  if (column.role === "location") return "geographic dimension";
+  if (column.role === "date") return "time dimension";
+  if (["money_metric", "continuous_metric", "score_metric", "count_metric"].includes(column.role)) return "business metric";
+  if (["category", "target", "numeric_category"].includes(column.role)) return "analysis segment";
+  return "supporting field";
+}
+
+function describeDomain(profile) {
+  const names = (profile.columns || []).map((column) => column.normalizedName || normalizeColumnName(column.name)).join(" ");
+  if (/salary|income|pay|compensation/.test(names)) {
+    return "workforce compensation dataset that can explain salary patterns across employee, location, and qualification segments";
+  }
+  if (/revenue|sales|profit|order|customer/.test(names)) {
+    return "commercial performance dataset that can show revenue, customer, product, and market patterns";
+  }
+  if (/patient|hospital|medical|disease|condition|billing/.test(names)) {
+    return "healthcare operations dataset that can support patient, condition, provider, and billing analysis";
+  }
+  if (/rating|review|score/.test(names)) {
+    return "feedback and quality dataset that can highlight satisfaction, ratings, and review patterns";
+  }
+  return "business dataset that can be explored through its key measures, segments, and distributions";
+}
+
+function importantColumns(profile) {
+  const roles = ["money_metric", "continuous_metric", "score_metric", "count_metric", "location", "date", "category", "target", "numeric_category"];
+  const selected = [];
+  for (const column of profile.columns || []) {
+    if (roles.includes(column.role) && !selected.some((item) => item.name === column.name)) selected.push(column);
+    if (selected.length >= 6) break;
+  }
+  return selected;
+}
+
+function buildBusinessQuestions(profile) {
+  const metric = pickPrimaryMetric(profile);
+  const category = pickPrimaryCategory(profile);
+  const secondaryMetric = pickSecondaryMetric(profile);
+  const location = (profile.columns || []).find((column) => column.role === "location");
+  const date = (profile.columns || []).find((column) => column.role === "date");
+
+  return [
+    metric && location ? `Which ${location.title.toLowerCase()} segments perform best on ${metric.title.toLowerCase()}?` : null,
+    metric && category ? `How does ${metric.title.toLowerCase()} vary by ${category.title.toLowerCase()}?` : null,
+    metric ? `What does the ${metric.title.toLowerCase()} distribution look like, and are there outliers?` : null,
+    metric && secondaryMetric ? `Is there a relationship between ${metric.title.toLowerCase()} and ${secondaryMetric.title.toLowerCase()}?` : null,
+    date && metric ? `How is ${metric.title.toLowerCase()} changing over time?` : null,
+    category ? `Which ${category.title.toLowerCase()} groups dominate the dataset?` : null,
+  ].filter(Boolean);
+}
+
+function buildRecommendedVisuals(profile) {
+  const plan = buildRuleDashboardPlan(profile);
+  return plan.charts?.length
+    ? plan.charts.map((chart) => chart.title)
+    : ["Metric by Category", "Category Distribution", "Top Segment Ranking", "Metric Distribution"];
+}
+
+function buildDatasetUnderstandingAnswer(profile, { includeColumns = false } = {}) {
+  const columns = importantColumns(profile);
+  const lines = [
+    `This appears to be a ${describeDomain(profile)}.`,
+    "",
+    "The most useful fields appear to be:",
+    ...columns.map((column) => `- ${column.name} -> ${roleLabel(column)}`),
+  ];
+
+  if (includeColumns) {
+    const remaining = (profile.columns || [])
+      .filter((column) => !columns.some((selected) => selected.name === column.name))
+      .slice(0, 6)
+      .map((column) => column.name);
+    if (remaining.length) {
+      lines.push("", `Other available fields include ${remaining.join(", ")}.`);
+    }
+  }
+
+  lines.push(
+    "",
+    "Based on these fields, I would start by looking for performance differences, segment patterns, distributions, rankings, and any unusual outliers."
+  );
+
+  return lines.join("\n");
+}
+
+export async function runSchemaChat({ dataset, query, useLlm = true, requireOllamaValidation, useOllamaValidator }) {
   const profile = buildSchemaProfile(dataset);
   const localAnswer = computeLocalAnswer(profile, query);
-  if (!useLlm) return { answer: localAnswer, model: "local", provider: "local", schemaOnly: true };
-  const formatted = await formatChatAnswerWithOllama({ query, schemaProfile: profile, localAnswer });
-  return { ...formatted, schemaOnly: true };
+  const structuredLocalAnswer = formatAnalystAnswer({ query, localAnswer, profile });
+  if (!useLlm) {
+    const governed = await governChatAnswer({
+      dataset,
+      query,
+      answer: structuredLocalAnswer,
+      requireOllama: requireOllamaValidation ?? useOllamaValidator,
+    });
+    return { ...governed, model: "local", provider: "local", schemaOnly: true };
+  }
+  const formatted = await formatChatAnswerWithOllama({ query, schemaProfile: profile, localAnswer: structuredLocalAnswer });
+  const governed = await governChatAnswer({
+    dataset,
+    query,
+    answer: formatted.answer,
+    requireOllama: requireOllamaValidation ?? useOllamaValidator,
+  });
+  return { ...formatted, ...governed, schemaOnly: true };
 }

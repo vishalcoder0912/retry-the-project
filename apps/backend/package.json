@@ -37,7 +37,8 @@
     "papaparse": "^5.4.1",
     "pdfkit": "^0.15.2",
     "qrcode": "^1.5.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

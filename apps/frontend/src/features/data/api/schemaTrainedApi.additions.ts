@@ -2,6 +2,7 @@ import { schemaAiClient, type DatasetPayload } from "./schemaAiClient";
 
 export type SchemaDashboardResponse = {
   success: boolean;
+  ok?: boolean;
   schemaOnly: true;
   profile: {
     datasetName: string;
@@ -25,29 +26,65 @@ export type SchemaDashboardResponse = {
       id?: string;
       title: string;
       metric: string;
-      aggregation: "count" | "sum" | "avg" | "min" | "max" | "median" | "count_unique";
-      format?: "number" | "currency" | "percent";
+      aggregation: "count" | "sum" | "avg" | "min" | "max" | "median" | "count_unique" | "top_by_avg";
+      format?: "number" | "currency" | "percent" | "text";
+      sourceColumn?: string | null;
+      confidence?: number;
+      businessKpi?: boolean;
     }>;
     charts: Array<{
       id?: string;
-      type: "bar" | "line" | "area" | "pie" | "donut" | "histogram" | "scatter" | "radar" | "composed" | "heatmap";
+      type: "bar" | "horizontal_bar" | "horizontalBar" | "line" | "area" | "pie" | "donut" | "histogram" | "scatter" | "radar" | "composed" | "heatmap" | "map" | "table";
       title: string;
       xKey: string;
       yKey: string;
-      aggregation: "count" | "sum" | "avg" | "min" | "max" | "median";
+      aggregation: "none" | "count" | "sum" | "avg" | "min" | "max" | "median";
+      intent?: "trend" | "ranking" | "distribution" | "correlation" | "geo" | "comparison" | "table" | "relationship" | "geo_ranking" | "segment_comparison" | "skill_salary_impact";
+      confidence?: number;
       limit?: number;
+      multiValue?: boolean;
+      splitValues?: boolean;
+      splitDelimiter?: string;
     }>;
   };
+  dashboardType?: string;
+  executiveSummary?: {
+    overview?: string;
+    topTrend?: string | null;
+    biggestOpportunity?: string | null;
+    biggestRisk?: string | null;
+    businessRecommendation?: string;
+    confidenceScore?: number;
+  } | null;
+  geoAnalysis?: Array<Record<string, unknown>>;
+  insights?: Array<Record<string, unknown>>;
+  recommendations?: Array<Record<string, unknown>>;
+  storyMode?: {
+    whatHappened?: string;
+    whyItHappened?: string;
+    whatWillHappen?: string;
+    recommendedAction?: string;
+  } | null;
+  confidenceScore?: number;
+  governance?: {
+    status?: "APPROVED" | "REJECTED";
+    approvedForRender?: boolean;
+    blockingReasons?: string[];
+    [key: string]: unknown;
+  };
+  approvedForRender?: boolean;
 };
 
 export type SchemaAggregation =
+  | "none"
   | "count"
   | "sum"
   | "avg"
   | "min"
   | "max"
   | "median"
-  | "count_unique";
+  | "count_unique"
+  | "top_by_avg";
 
 export type SchemaDashboardKpiSpec = SchemaDashboardResponse["dashboard"]["kpis"][number];
 export type SchemaDashboardChartSpec = SchemaDashboardResponse["dashboard"]["charts"][number];
@@ -70,6 +107,8 @@ export type SchemaDashboardCommandResponse = {
   dashboardPlan?: SchemaDashboardResponse["dashboard"];
   correctedDashboard?: unknown;
   schemaOnly: true;
+  governance?: SchemaDashboardResponse["governance"];
+  approvedForRender?: boolean;
   provider?: string;
   model?: string;
   aiError?: string | null;

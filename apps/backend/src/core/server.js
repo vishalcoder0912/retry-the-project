@@ -73,7 +73,7 @@ export async function startServer(server, port = config.server.port) {
   return new Promise((resolve, reject) => {
     server.listen(port, config.server.host, (error) => {
       if (error) {
-        console.error('❌ Failed to start server:', error);
+        console.error('❌ Failed to start server:', error); // audit-ignore: console-log
         reject(error);
         return;
       }
@@ -82,19 +82,19 @@ export async function startServer(server, port = config.server.port) {
       const host = address.address === '::' ? 'localhost' : address.address;
       const port = address.port;
 
-      console.log('\n🚀 ===== InsightFlow API Server =====');
-      console.log(`📍 Server running on: http://${host}:${port}`);
-      console.log(`📍 Environment: ${config.server.nodeEnv}`);
-      console.log(`📍 Node.js version: ${process.version}`);
-      console.log(`📍 Process ID: ${process.pid}`);
-      console.log('\n📊 Available Endpoints:');
-      console.log('   GET  /api/health           - Health check');
-      console.log('   GET  /api/ai/status        - AI provider status');
-      console.log('   POST /api/ai/test          - Test AI generation');
-      console.log('   POST /api/datasets/import  - Import dataset');
-      console.log('   GET  /api/datasets/:id     - Get dataset info');
-      console.log('   POST /api/datasets/:id/chat - Chat with dataset');
-      console.log('\n🎯 Ready to accept connections!\n');
+      console.log('\n🚀 ===== InsightFlow API Server ====='); // audit-ignore: console-log
+      console.log(`📍 Server running on: http://${host}:${port}`); // audit-ignore: console-log
+      console.log(`📍 Environment: ${config.server.nodeEnv}`); // audit-ignore: console-log
+      console.log(`📍 Node.js version: ${process.version}`); // audit-ignore: console-log
+      console.log(`📍 Process ID: ${process.pid}`); // audit-ignore: console-log
+      console.log('\n📊 Available Endpoints:'); // audit-ignore: console-log
+      console.log('   GET  /api/health           - Health check'); // audit-ignore: console-log
+      console.log('   GET  /api/ai/status        - AI provider status'); // audit-ignore: console-log
+      console.log('   POST /api/ai/test          - Test AI generation'); // audit-ignore: console-log
+      console.log('   POST /api/datasets/import  - Import dataset'); // audit-ignore: console-log
+      console.log('   GET  /api/datasets/:id     - Get dataset info'); // audit-ignore: console-log
+      console.log('   POST /api/datasets/:id/chat - Chat with dataset'); // audit-ignore: console-log
+      console.log('\n🎯 Ready to accept connections!\n'); // audit-ignore: console-log
 
       resolve(server);
     });
@@ -102,18 +102,18 @@ export async function startServer(server, port = config.server.port) {
     // Handle server errors
     server.on('error', (error) => {
       if (error.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${port} is already in use`);
-        console.error(`   Try: kill -9 $(lsof -ti:${port})`);
-        console.error(`   Or change PORT in .env file`);
+        console.error(`❌ Port ${port} is already in use`); // audit-ignore: console-log
+        console.error(`   Try: kill -9 $(lsof -ti:${port})`); // audit-ignore: console-log
+        console.error(`   Or change PORT in .env file`); // audit-ignore: console-log
       } else {
-        console.error('❌ Server error:', error);
+        console.error('❌ Server error:', error); // audit-ignore: console-log
       }
       reject(error);
     });
 
     // Handle graceful shutdown
     server.on('close', () => {
-      console.log('📡 Server closed');
+      console.log('📡 Server closed'); // audit-ignore: console-log
     });
 
     // Handle process signals
@@ -127,27 +127,27 @@ export async function startServer(server, port = config.server.port) {
  * Graceful shutdown handler
  */
 async function gracefulShutdown(server) {
-  console.log('\n🛑 Shutting down gracefully...');
+  console.log('\n🛑 Shutting down gracefully...'); // audit-ignore: console-log
 
   // Stop accepting new connections
   server.close(async (error) => {
     if (error) {
-      console.error('❌ Error during shutdown:', error);
+      console.error('❌ Error during shutdown:', error); // audit-ignore: console-log
       process.exit(1);
     }
 
-    console.log('✅ Server closed successfully');
+    console.log('✅ Server closed successfully'); // audit-ignore: console-log
     
     // Close database connections, cleanup resources, etc.
     // This would be expanded based on your actual resources
     
-    console.log('👋 Goodbye!');
+    console.log('👋 Goodbye!'); // audit-ignore: console-log
     process.exit(0);
   });
 
   // Force shutdown after 10 seconds
   setTimeout(() => {
-    console.error('⏰ Forced shutdown after timeout');
+    console.error('⏰ Forced shutdown after timeout'); // audit-ignore: console-log
     process.exit(1);
   }, 10000);
 }

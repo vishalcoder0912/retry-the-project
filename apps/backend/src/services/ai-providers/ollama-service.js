@@ -1,9 +1,10 @@
 import axios from 'axios';
+import { serviceUrls } from "../../config/serviceUrls.js";
 import { extractSchemaForAI, buildSchemaOnlyPrompt, validateSchemaOnlyContext } from '../../utils/schema-extractor.js';
 
 class OllamaService {
   constructor() {
-    this.baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+    this.baseUrl = serviceUrls.ollama;
     this.model = process.env.OLLAMA_MODEL || 'llama3.2:latest';
     this.timeout = parseInt(process.env.AI_TIMEOUT_MS) || 30000;
   }

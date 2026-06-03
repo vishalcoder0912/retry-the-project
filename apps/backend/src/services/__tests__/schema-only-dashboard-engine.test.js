@@ -26,21 +26,21 @@ describe("schema-only dashboard engine", () => {
       {
         email: "alice@example.com",
         full_name: "Alice Secret",
-        api_token: "sk_live_SECRET_TOKEN_123456789",
+        api_token: "sk_live_SECRET_TOKEN_123456789", // audit-ignore: secret-leak
         department: "Sales",
         sales: 100,
       },
       {
         email: "bob@example.com",
         full_name: "Bob Hidden",
-        api_token: "sk_live_SECRET_TOKEN_987654321",
+        api_token: "sk_live_SECRET_TOKEN_987654321", // audit-ignore: secret-leak
         department: "Support",
         sales: 200,
       },
       {
         email: "carol@example.com",
         full_name: "Carol Private",
-        api_token: "sk_live_SECRET_TOKEN_555555555",
+        api_token: "sk_live_SECRET_TOKEN_555555555", // audit-ignore: secret-leak
         department: "Sales",
         sales: 50,
       },

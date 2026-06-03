@@ -30,9 +30,11 @@ const INCLUDED_EXTENSIONS = new Set([
 const IGNORED_DIRECTORIES = new Set([
   '.agents',
   '.claude',
+  '.cursor',
   '.firebase',
   '.git',
   '.next',
+  '.pytest_cache',
   '.tmp_schema_trained_patch',
   '.vscode',
   '.windsurf',

@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import genaiRoutes from "../routes/genaiRoutes.js";
+import { serviceUrls } from "../../config/serviceUrls.js";
 
 dotenv.config();
 
@@ -22,5 +23,5 @@ app.get("/health", (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 InsightFlow GenAI Server running on port ${PORT}`);
-  console.log(`📊 API Documentation: http://localhost:${PORT}/api/docs`);
+  console.log(`📊 API Documentation: ${serviceUrls.frontend}/api/docs`);
 });

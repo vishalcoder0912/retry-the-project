@@ -3,6 +3,7 @@ export type DatasetPayload = {
   name?: string;
   rows?: Array<Record<string, unknown>>;
   columns?: Array<{ name?: string; key?: string; type?: string; role?: string } | string>;
+  runtimeContext?: Record<string, unknown>;
 };
 
 export type DashboardCommandResponse = {
@@ -17,6 +18,26 @@ export type DashboardCommandResponse = {
     | "CLEAR_FILTERS"
     | "ANSWER";
   message?: string;
+  response_type?: "dashboard_action";
+  natural_response?: string;
+  actions?: Array<{
+    action: string;
+    chart_type?: string;
+    type?: string;
+    title?: string;
+    x?: string;
+    y?: string;
+    xKey?: string;
+    yKey?: string;
+    metric?: string;
+    aggregation?: string;
+    reason?: string;
+    filters?: Record<string, unknown>;
+    chartSpec?: Record<string, unknown>;
+    kpiSpec?: Record<string, unknown>;
+  }>;
+  warnings?: string[];
+  schema_safe?: boolean;
   chartSpec?: Record<string, unknown>;
   kpiSpec?: Record<string, unknown>;
   filters?: Record<string, unknown> | Array<{ key?: string; column?: string; operator?: string; value?: unknown }>;
@@ -34,7 +55,9 @@ export type SchemaChatResponse = {
   assistantMessage: { role: "assistant"; content: string; model?: string; provider?: string; schemaOnly: true; timestamp?: string };
 };
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+import { API_BASE_URL } from "@/config/apiConfig";
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || API_BASE_URL).replace(/\/$/, "");
 
 function endpoint(path: string) {
   return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
@@ -73,6 +96,7 @@ function safeDatasetBody(dataset?: DatasetPayload) {
     name: dataset?.name,
     rows: Array.isArray(dataset?.rows) ? dataset.rows : undefined,
     columns: Array.isArray(dataset?.columns) ? dataset.columns : undefined,
+    runtimeContext: dataset?.runtimeContext,
   };
 }
 
@@ -215,6 +239,31 @@ export function runDashboardCommand(datasetId: string, payload: Record<string, u
 
 export function runSchemaChat(datasetId: string, payload: Record<string, unknown>) {
   return request(`/api/datasets/${encodeURIComponent(datasetId)}/schema-chat`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+// ─── InsightFlow Engine API ──────────────────────────────────
+
+export function runInsightFlowAnalysis(payload: {
+  datasetId?: string;
+  rows?: Array<Record<string, unknown>>;
+  columns?: string[];
+}) {
+  return request("/api/insight-flow/analyze", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runInsightFlowValidation(payload: {
+  charts?: unknown[];
+  kpis?: unknown[];
+  geoIntelligence?: unknown;
+  schema?: unknown;
+}) {
+  return request("/api/insight-flow/validate", {
     method: "POST",
     body: JSON.stringify(payload),
   });
