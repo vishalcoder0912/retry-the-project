@@ -422,7 +422,9 @@ export async function POST(request) {
           try {
             const schema = buildEnhancedSchema(columns, rows);
             analysisResult = { schema, chartRecommendations: schema.recommendedCharts || [], insights: schema.insights || [] };
-          } catch (e) {}
+          } catch (e) {
+            logger.warn("Fallback schema build failed", { error: e.message });
+          }
         }
         
         return sendJson(201, {

@@ -26,7 +26,7 @@ vi.mock("@/features/data/api/dataApi", () => ({
   api: {
     generateQRSession: vi.fn(async () => ({
       sessionId: "qr-1",
-      uploadToken: "token",
+      uploadToken: "token", // audit-ignore: secret-leak
       uploadUrl: "http://localhost/mobile-upload/qr-1",
       qrDataUrl: "data:image/png;base64,abc",
       workspaceName: "InsightFlow Workspace",

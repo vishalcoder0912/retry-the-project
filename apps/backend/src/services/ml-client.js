@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import axios from 'axios';
+import { serviceUrls } from "../config/serviceUrls.js";
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+const ML_SERVICE_URL = serviceUrls.ml;
 const DEFAULT_TIMEOUT_MS = Number(process.env.ML_SERVICE_TIMEOUT_MS || 10000);
 const MAX_ROWS_SENT_TO_ML = Number(process.env.ML_SERVICE_MAX_ROWS || 50000);
 

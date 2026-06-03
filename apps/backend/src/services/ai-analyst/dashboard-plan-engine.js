@@ -1,7 +1,9 @@
 import { humanize, normalizeColumnName } from "./schema-fingerprint.js";
+import { buildSalaryDashboardPlan } from "./salary-dashboard-engine.js";
 
-const CHART_TYPES = new Set(["bar", "line", "area", "pie", "donut", "histogram", "scatter", "radar", "composed", "heatmap"]);
+const CHART_TYPES = new Set(["bar", "horizontalBar", "line", "area", "pie", "donut", "histogram", "scatter", "radar", "composed", "heatmap"]);
 const AGGREGATIONS = new Set([
+  "none",
   "count",
   "sum",
   "avg",
@@ -9,7 +11,125 @@ const AGGREGATIONS = new Set([
   "max",
   "median",
   "count_unique",
+  "top_by_avg",
 ]);
+
+const METRIC_PRIORITY_HINTS = [
+  "revenue",
+  "profit",
+  "sales",
+  "billing_amount",
+  "billingamount",
+  "salary_usd",
+  "salary",
+  "orders",
+  "customers",
+  "patients",
+  "review_count",
+  "reviewcount",
+  "rating",
+  "quantity",
+  "amount",
+  "price",
+  "cost",
+];
+
+const CATEGORY_PRIORITY_HINTS = [
+  "country",
+  "state",
+  "city",
+  "region",
+  "territory",
+  "province",
+  "gender",
+  "department",
+  "product_category",
+  "category",
+  "insurance_provider",
+  "admission_type",
+  "medical_condition",
+  "condition",
+  "test_results",
+  "status",
+  "segment",
+  "market",
+];
+
+const REJECTED_METRIC_TERMS = [
+  "name",
+  "reviewer_name",
+  "customer_name",
+  "patient_name",
+  "doctor",
+  "hospital",
+  "email",
+  "phone",
+  "address",
+  "profile_link",
+  "link",
+  "url",
+  "title",
+  "description",
+  "text",
+  "id",
+];
+
+const REJECTED_DEFAULT_AXIS_TERMS = [
+  "name",
+  "reviewer_name",
+  "customer_name",
+  "patient_name",
+  "doctor",
+  "email",
+  "phone",
+  "address",
+  "profile_link",
+  "link",
+  "url",
+  "title",
+  "description",
+  "text",
+  "id",
+];
+
+function normalized(columnOrName = "") {
+  return typeof columnOrName === "string"
+    ? normalizeColumnName(columnOrName)
+    : columnOrName.normalizedName || normalizeColumnName(columnOrName.name);
+}
+
+function hasAnyHint(column, hints) {
+  const n = normalized(column);
+  return hints.some((hint) => n.includes(normalizeColumnName(hint)));
+}
+
+function isRejectedMetricColumn(column) {
+  if (!column || column.name === "__row_count__") return false;
+  const n = normalized(column);
+  return REJECTED_METRIC_TERMS.some((term) => n.includes(normalizeColumnName(term)));
+}
+
+function isRejectedDefaultAxisColumn(column) {
+  if (!column) return false;
+  const n = normalized(column);
+  return REJECTED_DEFAULT_AXIS_TERMS.some((term) => n.includes(normalizeColumnName(term)));
+}
+
+function isMetricColumn(column) {
+  return Boolean(
+    column &&
+    !isRejectedMetricColumn(column) &&
+    ["money_metric", "score_metric", "rate_metric", "count_metric", "continuous_metric"].includes(column.role)
+  );
+}
+
+function isDefaultAxisColumn(column) {
+  return Boolean(
+    column &&
+    !isRejectedDefaultAxisColumn(column) &&
+    ["location", "category", "target", "numeric_category"].includes(column.role)
+  );
+}
 
 function byPriority(profile, roles, nameHints = []) {
   const columns = profile.columns || [];
@@ -19,33 +139,23 @@ function byPriority(profile, roles, nameHints = []) {
 }
 
 export function pickPrimaryMetric(profile) {
-  return byPriority(
-    profile,
-    ["money_metric", "score_metric", "rate_metric", "count_metric", "continuous_metric"],
-    ["salary", "revenue", "sales", "amount", "profit", "score", "stress", "anxiety", "depression", "performance"]
-  );
+  const candidates = (profile.columns || []).filter(isMetricColumn);
+  return candidates.find((column) => hasAnyHint(column, METRIC_PRIORITY_HINTS)) || candidates[0];
 }
 
 export function pickSecondaryMetric(profile) {
   const primary = pickPrimaryMetric(profile);
-  return (profile.columns || []).find((column) =>
-    column.name !== primary?.name && ["continuous_metric", "score_metric", "count_metric", "rate_metric", "money_metric"].includes(column.role)
-  );
+  return (profile.columns || []).filter(isMetricColumn).find((column) => column.name !== primary?.name);
 }
 
 export function pickPrimaryCategory(profile) {
-  return byPriority(
-    profile,
-    ["location", "category", "target", "numeric_category"],
-    ["country", "region", "education", "product", "department", "gender", "platform", "company_size", "status"]
-  );
+  const candidates = (profile.columns || []).filter(isDefaultAxisColumn);
+  return candidates.find((column) => hasAnyHint(column, CATEGORY_PRIORITY_HINTS)) || candidates[0];
 }
 
 export function pickSecondaryCategory(profile) {
   const primary = pickPrimaryCategory(profile);
-  return (profile.columns || []).find((column) =>
-    column.name !== primary?.name && ["category", "location", "target", "numeric_category"].includes(column.role)
-  );
+  return (profile.columns || []).filter(isDefaultAxisColumn).find((column) => column.name !== primary?.name);
 }
 
 export function pickDateColumn(profile) {
@@ -60,11 +170,71 @@ function kpi(id, title, metric, aggregation, options = {}) {
     aggregation,
     format: options.format || (aggregation === "count" ? "number" : undefined),
     description: options.description || "",
+    businessKpi: true,
   };
 }
 
 function chart(id, type, title, xKey, yKey, aggregation = "count", options = {}) {
   return sanitizeChartSpec({ id, type, title, xKey, yKey, aggregation, limit: options.limit || 10, ...options });
+}
+
+function isRealDateColumn(schema, columnName) {
+  const col = schema.columns?.find((c) => c.name === columnName);
+  return Boolean(col && (col.type === "date" || col.role === "date"));
+}
+
+export function validateChartSpec(chartSpec, schema) {
+  const columns = new Set((schema.columns || []).map((col) => col.name));
+  const columnByName = new Map((schema.columns || []).map((col) => [col.name, col]));
+
+  if (chartSpec.xKey === "__row_index__") {
+    return {
+      valid: false,
+      reason: "Row index is not a real business dimension.",
+    };
+  }
+
+  if (chartSpec.type === "line" || chartSpec.intent === "trend") {
+    if (!isRealDateColumn(schema, chartSpec.xKey)) {
+      return {
+        valid: false,
+        reason: "Trend charts require a real date/time column.",
+      };
+    }
+  }
+
+  if (chartSpec.xKey && chartSpec.xKey !== "count" && !columns.has(chartSpec.xKey)) {
+    return { valid: false, reason: `Missing xKey column: ${chartSpec.xKey}` };
+  }
+
+  if (chartSpec.yKey && chartSpec.yKey !== "count" && !columns.has(chartSpec.yKey)) {
+    return { valid: false, reason: `Missing yKey column: ${chartSpec.yKey}` };
+  }
+
+  const xColumn = columnByName.get(chartSpec.xKey);
+  const yColumn = columnByName.get(chartSpec.yKey);
+
+  if (chartSpec.yKey && chartSpec.yKey !== "count" && !isMetricColumn(yColumn)) {
+    return { valid: false, reason: `Invalid metric column: ${chartSpec.yKey}` };
+  }
+
+  if (["pie", "donut"].includes(chartSpec.type) && !isDefaultAxisColumn(xColumn)) {
+    return { valid: false, reason: `Invalid distribution axis: ${chartSpec.xKey}` };
+  }
+
+  if (["bar", "horizontalBar"].includes(chartSpec.type) && !isDefaultAxisColumn(xColumn)) {
+    return { valid: false, reason: `Invalid grouping axis: ${chartSpec.xKey}` };
+  }
+
+  if (chartSpec.type === "histogram" && !isMetricColumn(xColumn)) {
+    return { valid: false, reason: `Histogram requires a numeric metric: ${chartSpec.xKey}` };
+  }
+
+  if (chartSpec.type === "scatter" && (!isMetricColumn(xColumn) || !isMetricColumn(yColumn))) {
+    return { valid: false, reason: "Scatter charts require two numeric business metrics." };
+  }
+
+  return { valid: true };
 }
 
 export function sanitizeChartSpec(spec = {}, profile) {
@@ -77,6 +247,7 @@ export function sanitizeChartSpec(spec = {}, profile) {
     aggregation: AGGREGATIONS.has(spec.aggregation) ? spec.aggregation : "count",
     limit: Number.isFinite(Number(spec.limit)) ? Math.max(1, Math.min(50, Number(spec.limit))) : 10,
     reason: spec.reason || "",
+    intent: spec.intent,
   };
 
   if (profile?.columns?.length) {
@@ -99,6 +270,14 @@ export function sanitizeChartSpec(spec = {}, profile) {
     safe.splitValues = true;
   }
 
+  if (spec.multiValue === true) {
+    safe.multiValue = true;
+  }
+
+  if (spec.splitDelimiter) {
+    safe.splitDelimiter = spec.splitDelimiter;
+  }
+
   if (Number.isFinite(Number(spec.bins))) {
     safe.bins = Math.max(2, Math.min(50, Number(spec.bins)));
   }
@@ -115,10 +294,20 @@ export function sanitizeKpiSpec(spec = {}, profile) {
     aggregation: AGGREGATIONS.has(spec.aggregation) ? spec.aggregation : "count",
     format: spec.format || undefined,
     description: spec.description || "",
+    businessKpi: spec.businessKpi === true,
   };
 }
 
 export function buildRuleDashboardPlan(profile) {
+  const salaryPlan = buildSalaryDashboardPlan(profile);
+  if (salaryPlan) {
+    return {
+      ...salaryPlan,
+      kpis: salaryPlan.kpis.map((item) => sanitizeKpiSpec(item, profile)),
+      charts: salaryPlan.charts.map((item) => sanitizeChartSpec(item, profile)),
+    };
+  }
+
   const metric = pickPrimaryMetric(profile);
   const metric2 = pickSecondaryMetric(profile);
   const category = pickPrimaryCategory(profile);
@@ -226,16 +415,72 @@ export function applyTrainedTemplates(profile, memoryMatch) {
 }
 
 export function mergePlans(profile, ...plans) {
+  const salaryPlan = buildSalaryDashboardPlan(profile);
+  if (salaryPlan) {
+    return critiqueDashboard({
+      ...salaryPlan,
+      kpis: salaryPlan.kpis.map((item) => sanitizeKpiSpec(item, profile)),
+      charts: salaryPlan.charts.map((item) => sanitizeChartSpec(item, profile)),
+    }, profile);
+  }
+
   const validPlans = plans.filter(Boolean);
   const kpis = dedupeBy(validPlans.flatMap((plan) => plan.kpis || []), "title").map((item) => sanitizeKpiSpec(item, profile));
   const charts = dedupeBy(validPlans.flatMap((plan) => plan.charts || []), "title").map((item) => sanitizeChartSpec(item, profile));
 
-  return {
+  return critiqueDashboard({
     source: validPlans.map((plan) => plan.source).join("+"),
     domain: profile.domain,
     kpis: kpis.slice(0, 8),
     charts: charts.slice(0, 10),
+  }, profile);
+}
+
+export function critiqueDashboard(plan, schema) {
+  const blockedKpis = [
+    "attributes / columns",
+    "numeric columns",
+    "categorical columns",
+    "missing values",
+    "data quality score",
+  ];
+
+  const cleanedKpis = (plan.kpis || []).filter((kpi) => {
+    const title = String(kpi.title || "").toLowerCase();
+    if (blockedKpis.includes(title)) return false;
+    if (kpi.aggregation === "quality_score") return false;
+    if (kpi.metric && !kpi.metric.startsWith("__") && !schema.columns.some((c) => c.name === kpi.metric)) {
+      return false;
+    }
+    if (kpi.metric && !kpi.metric.startsWith("__")) {
+      const column = schema.columns.find((c) => c.name === kpi.metric);
+      if (kpi.aggregation === "count_unique") return isDefaultAxisColumn(column);
+      return isMetricColumn(column);
+    }
+    return true;
+  });
+
+  const cleanedCharts = (plan.charts || []).filter((chart) => {
+    if (chart.xKey === "__row_index__") return false;
+    if (/row index/i.test(chart.title || "")) return false;
+    return validateChartSpec(chart, schema).valid;
+  });
+
+  return {
+    ...plan,
+    kpis: cleanedKpis,
+    charts: dedupeCharts(cleanedCharts),
   };
+}
+
+function dedupeCharts(charts) {
+  const seen = new Set();
+  return charts.filter((chart) => {
+    const key = `${chart.type}:${chart.xKey}:${chart.yKey}:${chart.aggregation}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export function templatePlanForStorage(plan = {}, profile) {

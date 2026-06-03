@@ -36,6 +36,8 @@ interface KPICardProps {
 }
 
 const KPICard = ({ kpi, index }: KPICardProps) => {
+  if (kpi.businessKpi !== true) return null;
+
   const Icon = iconMap[kpi.icon] || DollarSign;
   const trend = kpi.trend ?? 'stable';
   const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus;

@@ -1,5 +1,6 @@
 import Busboy from "busboy";
 import QRCode from "qrcode";
+import { serviceUrls } from "../config/serviceUrls.js";
 import { randomUUID } from "node:crypto";
 import { sendSuccess, sendError, sendRedirect } from "../utils/response-utils.js";
 import { HTTP_STATUS, ERROR_CODES } from "../config/constants.js";
@@ -63,10 +64,10 @@ function getPortalBaseUrl(request) {
   }
 
   const protocol = request.headers["x-forwarded-proto"] || "http";
-  const host = request.headers.host || "localhost:3001";
+  const host = request.headers.host || new URL(serviceUrls.api).host;
 
-  if (host === "localhost:3001") {
-    return `${protocol}://localhost:5173`;
+  if (host === new URL(serviceUrls.api).host) {
+    return serviceUrls.frontend;
   }
 
   if (host === "127.0.0.1:3001") {

@@ -4,8 +4,9 @@
  */
 
 import { extractSchemaForAI, buildSchemaOnlyPrompt, validateSchemaOnlyContext } from '../utils/schema-extractor.js';
+import { serviceUrls } from "../config/serviceUrls.js";
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+const OLLAMA_BASE_URL = serviceUrls.ollama;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2:latest";
 const API_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS) || 60000;
 

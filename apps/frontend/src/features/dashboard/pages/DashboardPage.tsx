@@ -98,28 +98,33 @@ const DashboardPage = () => {
 
   const kpis = useMemo(() => {
     if (!filteredDataset) return [];
+
+    const backendBusinessKpis = (analysis?.kpis || []).filter((kpi) => kpi.businessKpi === true);
+    if (backendBusinessKpis.length > 0) return backendBusinessKpis;
+
     if (analysis?.insights && analysis.insights.length > 0) {
       const aiKPIs: KPI[] = [];
       analysis.insights.forEach((insight: Record<string, unknown>) => {
         if (insight.type === 'summary' && insight.metrics) {
           const metrics = insight.metrics as Record<string, unknown>;
           if (metrics.totalRecords !== undefined) {
-            aiKPIs.push({ title: 'Total Records', value: String(metrics.totalRecords), icon: 'rows' });
+            aiKPIs.push({ title: 'Total Records', value: String(metrics.totalRecords), icon: 'rows', businessKpi: true });
           }
           if (metrics.totalValue !== undefined) {
-            aiKPIs.push({ title: `Total ${metrics.primaryMetric || 'Value'}`, value: String(metrics.totalValue), icon: 'chart' });
+            aiKPIs.push({ title: `Total ${metrics.primaryMetric || 'Value'}`, value: String(metrics.totalValue), icon: 'chart', businessKpi: true });
           }
           if (metrics.averageValue !== undefined) {
-            aiKPIs.push({ title: `Avg ${metrics.primaryMetric || 'Value'}`, value: String(metrics.averageValue), icon: 'chart' });
+            aiKPIs.push({ title: `Avg ${metrics.primaryMetric || 'Value'}`, value: String(metrics.averageValue), icon: 'chart', businessKpi: true });
           }
         }
         if (insight.type === 'top_performer' && insight.category) {
-          aiKPIs.push({ title: `Top Performer`, value: String(insight.category), icon: 'star' });
+          aiKPIs.push({ title: `Top Performer`, value: String(insight.category), icon: 'star', businessKpi: true });
         }
       });
-      if (aiKPIs.length > 0) return aiKPIs;
+      const businessAiKpis = aiKPIs.filter((kpi) => kpi.businessKpi === true);
+      if (businessAiKpis.length > 0) return businessAiKpis;
     }
-    return generateDemoKPIs(filteredDataset);
+    return generateDemoKPIs(filteredDataset).filter((kpi) => kpi.businessKpi === true);
   }, [filteredDataset, analysis]);
 
   const charts = useMemo(() => {

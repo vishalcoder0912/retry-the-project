@@ -4,6 +4,7 @@ import {
   formatSchemaForPrompt,
   getDataQualityScore,
 } from "./schema-packet-builder.js";
+import { serviceUrls } from "../config/serviceUrls.js";
 
 const CHART_TYPES = new Set([
   "bar",
@@ -277,7 +278,7 @@ Return this JSON shape:
 
 async function callOllamaPlanner(schemaPacket, query, mode = "command") {
   const model = process.env.OLLAMA_CHAT_MODEL || "llama3.2";
-  const baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  const baseUrl = serviceUrls.ollama;
   const timeoutMs = Number(process.env.DASHBOARD_AI_TIMEOUT_MS || 45000);
 
   const controller = new AbortController();

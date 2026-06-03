@@ -1,5 +1,7 @@
+import { serviceUrls } from "../../config/serviceUrls.js";
+
 const DEFAULT_TIMEOUT_MS = Number(process.env.ML_SERVICE_TIMEOUT_MS || 30_000);
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+const ML_SERVICE_URL = serviceUrls.ml;
 
 export class MlServiceError extends Error {
   constructor(message, { status, cause } = {}) {

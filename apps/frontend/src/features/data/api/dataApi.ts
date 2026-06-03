@@ -203,7 +203,7 @@ export type SchemaDashboardResponse = {
     }>;
     charts: Array<{
       id?: string;
-      type: "bar" | "line" | "area" | "pie" | "donut" | "histogram" | "scatter" | "radar" | "composed" | "heatmap";
+      type: "bar" | "horizontalBar" | "line" | "area" | "pie" | "donut" | "histogram" | "scatter" | "radar" | "composed" | "heatmap";
       title: string;
       xKey: string;
       yKey: string;
@@ -211,6 +211,25 @@ export type SchemaDashboardResponse = {
       limit?: number;
     }>;
   };
+  dashboardType?: string;
+  executiveSummary?: {
+    overview?: string;
+    topTrend?: string | null;
+    biggestOpportunity?: string | null;
+    biggestRisk?: string | null;
+    businessRecommendation?: string;
+    confidenceScore?: number;
+  } | null;
+  geoAnalysis?: Array<Record<string, unknown>>;
+  insights?: Array<Record<string, unknown>>;
+  recommendations?: Array<Record<string, unknown>>;
+  storyMode?: {
+    whatHappened?: string;
+    whyItHappened?: string;
+    whatWillHappen?: string;
+    recommendedAction?: string;
+  } | null;
+  confidenceScore?: number;
 };
 
 export interface PdfImportResult {
