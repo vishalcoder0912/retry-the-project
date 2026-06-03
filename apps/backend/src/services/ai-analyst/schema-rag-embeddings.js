@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 const DEFAULT_OLLAMA_BASE_URL =
-  process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+  process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 
 const DEFAULT_EMBEDDING_MODEL =
   process.env.RAG_EMBEDDING_MODEL || "nomic-embed-text";

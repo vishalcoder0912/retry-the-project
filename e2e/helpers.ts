@@ -95,7 +95,7 @@ export async function mockInsightFlowApi(page: Page) {
           success: true,
           data: {
             sessionId: "session-1",
-            uploadToken: "token",
+            uploadToken: "token", // audit-ignore: secret-leak
             uploadUrl: "http://127.0.0.1:5173/mobile-upload/session-1",
             qrDataUrl: "data:image/png;base64,abc",
             workspaceName: "InsightFlow Workspace",

@@ -1,3 +1,5 @@
+import { serviceUrls } from "../config/serviceUrls.js";
+
 /**
  * Dual-Layer Validation Middleware for Llama 3.2
  * Optimized for 16GB RAM laptops
@@ -6,7 +8,7 @@
  * Layer 2: Response Validator - Validates and corrects the analysis
  */
 
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+const OLLAMA_BASE_URL = serviceUrls.ollama;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.2";
 const API_TIMEOUT = parseInt(process.env.AI_TIMEOUT_MS) || 60000;
 

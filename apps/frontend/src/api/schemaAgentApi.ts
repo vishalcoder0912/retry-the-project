@@ -1,8 +1,10 @@
+import type { ColumnProfile, DashboardPlan } from "@/types/dashboard";
+
 export type SchemaTrainResponse = {
   ok: boolean;
-  profile: any;
-  dashboardSpec: any;
-  agentPlan?: any;
+  profile: ColumnProfile[] | null;
+  dashboardSpec: DashboardPlan | null;
+  agentPlan?: Record<string, unknown>;
   agentTools?: string[];
   ontologyMapping?: {
     inferredDomain: string;
@@ -20,7 +22,7 @@ export type SchemaTrainResponse = {
     errors: string[];
     warnings: string[];
   };
-  calculatedDashboard?: any;
+  calculatedDashboard?: DashboardPlan;
   memoryRecordId?: string;
   trainingExamplesCount?: number;
   message?: string;
@@ -59,7 +61,7 @@ export const schemaAgentApi = {
   },
 
   memoryStats() {
-    return requestJson<{ ok: boolean; stats: any }>(
+    return requestJson<{ ok: boolean; stats: Record<string, unknown> }>(
       '/api/schema-agent/memory/stats'
     );
   },

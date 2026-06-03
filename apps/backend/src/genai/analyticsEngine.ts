@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import axios from "axios";
+import { serviceUrls } from "../config/serviceUrls.js";
 
 interface Dataset {
   columns: string[];
@@ -60,7 +61,7 @@ enum AIProvider {
 
 class AIClient {
   private genAI: GoogleGenerativeAI | null = null;
-  private ollamaUrl: string = "http://localhost:11434";
+  private ollamaUrl: string = serviceUrls.ollama;
   private ollamaModel: string = "llama3.2";
   private ollamaAvailable: boolean = false;
   private activeProvider: AIProvider = AIProvider.NONE;
@@ -76,7 +77,7 @@ class AIClient {
     this.fallbackChain = [];
 
     // Initialize Ollama (local AI - PRIMARY)
-    this.ollamaUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+    this.ollamaUrl = serviceUrls.ollama;
     this.ollamaModel = process.env.OLLAMA_MODEL || "llama3.2";
     
     // Test Ollama connection and add to chain

@@ -45,11 +45,13 @@ You return ONLY valid JSON. No markdown. No preamble. No explanation outside JSO
 
 ## Chart Selection Rules
 - Categorical comparison → bar
-- Trend over time → line
+- Trend over time → line only when a real date/time column exists
 - Part of whole → pie (only for <8 categories)
 - Single numeric distribution → histogram
 - Two numeric relationship → scatter
 - Many columns or raw data → table
+- Never use __row_index__ as a trend or business dimension
+- Never promote schema profile metrics such as Attributes / Columns, Numeric Columns, Categorical Columns, Missing Values, or Data Quality Score into business dashboard KPIs
 
 ## Unanswerable Queries
 If the question cannot be answered from the schema, return:

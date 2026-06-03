@@ -1,16 +1,19 @@
 export type Aggregation =
+  | "none"
   | "count"
   | "sum"
   | "avg"
   | "min"
   | "max"
   | "median"
-  | "count_unique";
+  | "count_unique"
+  | "top_by_avg";
 
 export type DashboardTheme = "dark" | "light";
 
 export type ChartType =
   | "bar"
+  | "horizontal_bar"
   | "horizontalBar"
   | "line"
   | "area"
@@ -20,7 +23,23 @@ export type ChartType =
   | "scatter"
   | "radar"
   | "composed"
-  | "heatmap";
+  | "heatmap"
+  | "map"
+  | "table";
+
+export type ChartIntent =
+  | "trend"
+  | "ranking"
+  | "distribution"
+  | "correlation"
+  | "geo"
+  | "comparison"
+  | "composition"
+  | "table"
+  | "relationship"
+  | "geo_ranking"
+  | "segment_comparison"
+  | "skill_salary_impact";
 
 export interface DashboardFilters {
   [key: string]: unknown;
@@ -39,9 +58,12 @@ export interface ChartSpec {
   title: string;
   xKey: string;
   yKey: string;
-  aggregation: Exclude<Aggregation, "count_unique">;
+  aggregation: Exclude<Aggregation, "count_unique" | "top_by_avg">;
+  intent?: ChartIntent;
   limit?: number;
   splitValues?: boolean;
+  multiValue?: boolean;
+  splitDelimiter?: string;
 }
 
 export interface ChartConfig extends ChartSpec {
@@ -55,6 +77,7 @@ export interface KpiSpec {
   metric?: string;
   aggregation?: Aggregation;
   format?: "number" | "currency" | "percent" | "text";
+  businessKpi?: boolean;
 }
 
 export interface KpiConfig extends KpiSpec {
@@ -103,4 +126,89 @@ export interface DashboardCommand {
   schemaOnly: true;
   model?: string;
   provider?: string;
+}
+
+// ─── InsightFlow Enhanced Types ──────────────────────────────
+
+export interface InsightFlowScore {
+  total: number;
+  kpiRelevance: number;
+  chartDiversity: number;
+  geoRelevance: number;
+  businessUsefulness: number;
+  filterUsefulness: number;
+  passed: boolean;
+}
+
+export interface InsightFlowInsights {
+  executive: string;
+  analyst: string;
+  story: string;
+}
+
+export interface InsightFlowGeoLocation {
+  name: string;
+  metricValue: number;
+  recordCount: number;
+  rank: number;
+  formattedValue: string;
+  highlight: "high" | "medium" | "low";
+  contributionPct: number;
+}
+
+export interface InsightFlowGeo {
+  enabled: boolean;
+  field: string;
+  metricField: string;
+  mapType: "marker" | "choropleth" | "regional" | "single" | "none";
+  locations: InsightFlowGeoLocation[];
+  totalLocations: number;
+  topLocation: InsightFlowGeoLocation | null;
+  totalRecords: number;
+  globalAverage: number;
+  mostCommonCategory: string;
+  recommendation: string;
+}
+
+export interface InsightFlowFilter {
+  key: string;
+  label: string;
+  type: "date" | "geo" | "category" | "business";
+  values: string[];
+  priority: number;
+}
+
+export interface InsightFlowResult {
+  valid: boolean;
+  dashboardType: string;
+  datasetType: string;
+  qualityScore: InsightFlowScore;
+  kpis: Array<{
+    id: string;
+    title: string;
+    value: string;
+    rawValue: number | string;
+    subtitle: string;
+    metric: string;
+    aggregation: string;
+    format: "number" | "currency" | "percent" | "text";
+    businessValue: string;
+    domain: string;
+  }>;
+  charts: Array<{
+    id: string;
+    type: ChartType;
+    title: string;
+    subtitle: string;
+    xKey: string;
+    yKey: string;
+    aggregation: string;
+    intent: ChartIntent;
+    data: Array<Record<string, string | number>>;
+    businessValue: string;
+    warning?: string;
+  }>;
+  geoIntelligence: InsightFlowGeo;
+  filters: InsightFlowFilter[];
+  insights: InsightFlowInsights;
 }

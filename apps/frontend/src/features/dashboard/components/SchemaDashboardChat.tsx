@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
   BrainCircuit,
@@ -9,6 +10,12 @@ import {
   Sparkles,
   Wand2,
   Wrench,
+  User,
+  Circle,
+  Lightbulb,
+  Target,
+  TrendingUp,
+  AlertTriangle,
 } from "lucide-react";
 import { generateDynamicQuestionSuggestions } from "@/features/dashboard/utils/dynamicQuestionSuggestions";
 import type { useDashboardAiController } from "@/features/dashboard/hooks/useDashboardAiController";
@@ -17,15 +24,15 @@ import { api } from "@/features/data/api/dataApi";
 type DatasetLike = {
   id?: string;
   name?: string;
-  rows?: any[];
-  columns?: any[];
+  rows?: Array<Record<string, unknown>>;
+  columns?: Array<Record<string, unknown> | string>;
 };
 
 type Props = {
   dataset: DatasetLike;
   controller?: ReturnType<typeof useDashboardAiController>;
   currentDashboard?: unknown;
-  onCommand: (command: any) => void;
+  onCommand: (command: Record<string, unknown>) => void;
   onSend?: (query: string) => void;
   collapsible?: boolean;
 };
@@ -36,6 +43,135 @@ const modes = [
   { id: "Explain", icon: MessageSquareText, prompt: "Explain this dashboard" },
   { id: "Train", icon: BrainCircuit, prompt: "Train memory from this dashboard pattern" },
 ] as const;
+
+function TypingIndicator() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="flex items-end gap-2"
+    >
+      <div className="flex size-8 items-center justify-center rounded-xl bg-violet-600/20 shrink-0">
+        <Bot className="size-4 text-violet-300" />
+      </div>
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          {[0, 0.15, 0.3].map((delay) => (
+            <motion.span
+              key={delay}
+              className="size-1.5 rounded-full bg-slate-400"
+              animate={{ y: [0, -5, 0] }}
+              transition={{ duration: 0.6, repeat: Infinity, delay, ease: "easeInOut" }}
+            />
+          ))}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function formatMessageContent(content: string) {
+  const parts = content.split(/(`{3,}[\s\S]*?`{3,}|`[^`]+`)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("```") && part.endsWith("```")) {
+      const code = part.slice(3, -3).replace(/^\w+\n/, "");
+      return (
+        <pre key={i} className="my-2 overflow-x-auto rounded-lg border border-slate-700 bg-slate-950 p-3 text-xs text-slate-300">
+          <code>{code}</code>
+        </pre>
+      );
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code key={i} className="rounded bg-slate-800 px-1.5 py-0.5 text-xs text-violet-300">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
+type Section = { title: string; icon: React.ReactNode; content: string };
+
+const sectionMatchers: Array<{ pattern: RegExp; icon: React.ReactNode }> = [
+  { pattern: /^(Summary|Overview)/im, icon: <Lightbulb className="size-3.5 text-amber-400" /> },
+  { pattern: /^(Key Findings?|Findings)/im, icon: <Target className="size-3.5 text-violet-400" /> },
+  { pattern: /^(Business Impact|Impact)/im, icon: <TrendingUp className="size-3.5 text-emerald-400" /> },
+  { pattern: /^(Recommendation|Next Step)/im, icon: <Sparkles className="size-3.5 text-blue-400" /> },
+  { pattern: /^(Confidence Score|Score)/im, icon: <AlertTriangle className="size-3.5 text-amber-400" /> },
+  { pattern: /^(What This Can Help Answer)/im, icon: <Target className="size-3.5 text-cyan-400" /> },
+  { pattern: /^(Recommended Starting Point)/im, icon: <Sparkles className="size-3.5 text-pink-400" /> },
+];
+
+function parseSections(text: string): Section[] | null {
+  const sectionRegex = /^(#{0,3}\s*)?(Summary|Overview|Key Findings?|Findings|Business Impact|Impact|Recommendation|Recommended Starting Point|Next Step|Confidence Score|Score|What This Can Help Answer)[:\s]*\n*/gim;
+  const lines = text.split("\n");
+  const sections: Section[] = [];
+  let currentTitle = "";
+  let currentContent: string[] = [];
+
+  for (const line of lines) {
+    sectionRegex.lastIndex = 0;
+    const match = sectionRegex.exec(line);
+    if (match) {
+      if (currentTitle) {
+        sections.push({ title: currentTitle, icon: <Lightbulb className="size-3.5" />, content: currentContent.join("\n").trim() });
+      }
+      currentTitle = match[2].trim();
+      currentContent = [];
+    } else {
+      currentContent.push(line);
+    }
+  }
+  if (currentTitle) {
+    sections.push({ title: currentTitle, icon: <Lightbulb className="size-3.5" />, content: currentContent.join("\n").trim() });
+  }
+
+  if (sections.length < 2) return null;
+
+  return sections.map((s) => {
+    const matcher = sectionMatchers.find((m) => m.pattern.test(s.title));
+    return { ...s, icon: matcher?.icon || <Lightbulb className="size-3.5 text-slate-400" /> };
+  });
+}
+
+function StructuredMessage({ content }: { content: string }) {
+  const sections = parseSections(content);
+
+  if (!sections) {
+    return <div className="whitespace-pre-wrap break-words">{formatMessageContent(content)}</div>;
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {sections.map((section, i) => (
+        <div key={i} className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3">
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-300">
+            {section.icon}
+            {section.title}
+          </div>
+          {section.content.startsWith("- ") || section.content.startsWith("1. ") ? (
+            <ul className="space-y-1">
+              {section.content.split("\n").filter(Boolean).map((item, j) => (
+                <li key={j} className="flex items-start gap-2 text-sm text-slate-300">
+                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-violet-500" />
+                  <span>{formatMessageContent(item.replace(/^[\d.]*\s*[-.]?\s*/, ""))}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-sm leading-relaxed text-slate-300">
+              {formatMessageContent(section.content)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+let messageIdCounter = 0;
 
 export default function SchemaDashboardChat({
   dataset,
@@ -49,8 +185,9 @@ export default function SchemaDashboardChat({
   const [provider, setProvider] = useState("schema-safe");
   const [activeMode, setActiveMode] =
     useState<(typeof modes)[number]["id"]>("Build");
-  const [messages, setMessages] = useState<Array<{ role: "user" | "assistant"; content: string }>>([
+  const [messages, setMessages] = useState<Array<{ id: string; role: "user" | "assistant"; content: string }>>([
     {
+      id: "welcome",
       role: "assistant",
       content:
         "Schema-trained assistant ready. I can build, fix, explain, or train dashboard patterns without sending raw rows to the LLM.",
@@ -58,9 +195,31 @@ export default function SchemaDashboardChat({
   ]);
   const loading = controller?.loading || localLoading;
   const visibleMessages = controller?.messages || messages;
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const prevMessageCount = useRef(visibleMessages.length);
+
+  useEffect(() => {
+    if (visibleMessages.length > prevMessageCount.current) {
+      const raf = requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      });
+      prevMessageCount.current = visibleMessages.length;
+      return () => cancelAnimationFrame(raf);
+    }
+    prevMessageCount.current = visibleMessages.length;
+  }, [visibleMessages.length]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+    }
+  }, [input]);
 
   const suggestions = useMemo(() => {
-    const dynamic = generateDynamicQuestionSuggestions(dataset as any, 8);
+    const dynamic = generateDynamicQuestionSuggestions(dataset as Record<string, unknown>, 8);
 
     const fixed = [
       "Build dashboard automatically",
@@ -87,15 +246,16 @@ export default function SchemaDashboardChat({
     return Array.isArray(dashboard?.charts) ? dashboard.charts.length : 0;
   }, [currentDashboard]);
 
-  async function submit(explicitQuery?: string) {
+  const submit = useCallback(async (explicitQuery?: string) => {
     const query = (explicitQuery || input).trim();
     if (!query || loading) return;
 
     setInput("");
     setLocalLoading(true);
 
+    const userMsgId = `user-${++messageIdCounter}`;
     if (!controller) {
-      setMessages((current) => [...current, { role: "user", content: query }]);
+      setMessages((current) => [...current, { id: userMsgId, role: "user", content: query }]);
     }
 
     let resultMessage = "";
@@ -120,9 +280,11 @@ export default function SchemaDashboardChat({
       }
 
       if (!controller) {
+        const assistantMsgId = `assistant-${++messageIdCounter}`;
         setMessages((current) => [
           ...current,
           {
+            id: assistantMsgId,
             role: "assistant",
             content:
               resultMessage ||
@@ -134,9 +296,11 @@ export default function SchemaDashboardChat({
       }
     } catch (error) {
       if (!controller) {
+        const errorMsgId = `error-${++messageIdCounter}`;
         setMessages((current) => [
           ...current,
           {
+            id: errorMsgId,
             role: "assistant",
             content: error instanceof Error ? error.message : "Command failed.",
           },
@@ -145,29 +309,38 @@ export default function SchemaDashboardChat({
     } finally {
       setLocalLoading(false);
     }
+  }, [input, loading, controller, dataset, currentDashboard, onSend, onCommand]);
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void submit();
+    }
   }
 
   return (
-    <aside className="sticky top-5 h-fit rounded-2xl border border-slate-700/70 bg-slate-950/90 shadow-2xl shadow-black/30 backdrop-blur">
-      <div className="border-b border-slate-800 p-4">
+    <aside className="sticky top-5 flex h-[calc(100vh-8rem)] flex-col rounded-2xl border border-slate-700/70 bg-slate-950/90 shadow-2xl shadow-black/30 backdrop-blur">
+      <div className="shrink-0 border-b border-slate-800 p-4">
         <div className="flex items-start gap-3">
-          <div className="grid size-11 place-items-center rounded-2xl bg-violet-600/20 text-violet-200">
+          <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-violet-600/30 to-violet-600/10 text-violet-200 shadow-[0_0_12px_rgba(124,58,237,0.15)]">
             <Bot className="size-5" />
           </div>
 
           <div className="min-w-0 flex-1">
             <h3 className="text-base font-semibold text-white">Schema AI Studio</h3>
-            <p className="mt-1 text-xs text-slate-400">{dataset?.name || "Current dataset"}</p>
+            <p className="mt-0.5 text-xs text-slate-400">{dataset?.name || "Current dataset"}</p>
           </div>
 
-          <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-200">
+            <span className="size-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]" />
             Schema-only
           </span>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 grid grid-cols-4 gap-1.5">
           {modes.map((mode) => {
             const Icon = mode.icon;
+            const isActive = activeMode === mode.id;
 
             return (
               <button
@@ -177,13 +350,13 @@ export default function SchemaDashboardChat({
                   setActiveMode(mode.id);
                   void submit(mode.prompt);
                 }}
-                className={`inline-flex items-center gap-1 rounded-xl border px-3 py-1.5 text-xs transition ${
-                  activeMode === mode.id
-                    ? "border-violet-500/60 bg-violet-500/15 text-violet-100"
-                    : "border-slate-700 bg-slate-900 text-slate-300 hover:border-violet-500/60"
+                className={`relative flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-medium transition-all ${
+                  isActive
+                    ? "border-violet-500/60 bg-violet-500/15 text-violet-100 shadow-[0_0_12px_rgba(124,58,237,0.1)]"
+                    : "border-slate-700/50 bg-slate-900/50 text-slate-400 hover:border-violet-500/40 hover:text-violet-300"
                 }`}
               >
-                <Icon className="size-3.5" />
+                <Icon className={`size-4 ${isActive ? "text-violet-300" : ""}`} />
                 {mode.id}
               </button>
             );
@@ -191,21 +364,22 @@ export default function SchemaDashboardChat({
         </div>
       </div>
 
-      <div className="border-b border-slate-800 p-4">
+      <div className="shrink-0 border-b border-slate-800 p-4">
         <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-300">
           <Sparkles className="size-3.5 text-violet-300" />
           Trained prompts
         </div>
 
-        <div className="grid gap-2">
-          {suggestions.map((prompt) => (
+        <div className="grid gap-1.5">
+          {suggestions.slice(0, 5).map((prompt) => (
             <button
               key={prompt}
               type="button"
               onClick={() => submit(prompt)}
               disabled={loading}
-              className="rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-left text-xs text-slate-300 transition hover:border-violet-500/60 hover:bg-violet-500/10 hover:text-violet-100 disabled:opacity-50"
+              className="group rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-2 text-left text-xs text-slate-400 transition-all hover:border-violet-500/50 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
             >
+              <span className="mr-1.5 text-slate-600 transition-colors group-hover:text-violet-400">&rarr;</span>
               {prompt}
             </button>
           ))}
@@ -213,77 +387,129 @@ export default function SchemaDashboardChat({
       </div>
 
       {controller?.dashboardHealth && (
-        <div className="border-b border-slate-800 px-4 py-3">
+        <div className="shrink-0 border-b border-slate-800 px-4 py-3">
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400">Guardian health</span>
-            <span className={controller.dashboardHealth.status === "failed" ? "text-red-300" : controller.dashboardHealth.status === "warning" ? "text-amber-300" : "text-emerald-300"}>
+            <span
+              className={
+                controller.dashboardHealth.status === "failed"
+                  ? "text-red-300"
+                  : controller.dashboardHealth.status === "warning"
+                    ? "text-amber-300"
+                    : "text-emerald-300"
+              }
+            >
               {controller.dashboardHealth.status} {controller.dashboardHealth.score}/100
             </span>
           </div>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800">
+          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-800">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400"
+              className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 transition-all duration-500"
               style={{ width: `${Math.max(12, Math.min(100, controller.dashboardHealth.score || 0))}%` }}
             />
           </div>
         </div>
       )}
 
-      <div className="max-h-72 space-y-3 overflow-y-auto p-4">
-        {visibleMessages.map((message, index) => (
-          <div
-            key={`${(message as any).id || message.role}-${index}`}
-            className={
-              message.role === "user"
-                ? "ml-6 rounded-2xl bg-violet-600 px-4 py-3 text-sm text-white"
-                : "mr-6 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-200"
-            }
-          >
-            {message.content}
-          </div>
-        ))}
+      <div ref={containerRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+        <AnimatePresence mode="popLayout">
+          {visibleMessages.map((message) => (
+            <motion.div
+              key={(message as { id?: string }).id || message.role + ((message as { content?: string }).content || "").slice(0, 20)}
+              layout
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className={`flex items-end gap-2 ${message.role === "user" ? "flex-row-reverse" : ""}`}
+            >
+              <div
+                className={`flex size-7 shrink-0 items-center justify-center rounded-xl ${
+                  message.role === "user"
+                    ? "bg-slate-800"
+                    : "bg-violet-600/20"
+                }`}
+              >
+                {message.role === "user" ? (
+                  <User className="size-3.5 text-slate-400" />
+                ) : (
+                  <Bot className="size-3.5 text-violet-300" />
+                )}
+              </div>
 
-        {loading && (
-          <div className="mr-6 flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-900 px-4 py-3 text-sm text-slate-400">
-            <Loader2 className="size-4 animate-spin" />
-            Processing schema-safe command...
-          </div>
-        )}
+              <div
+                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                  message.role === "user"
+                    ? "bg-violet-600 text-white shadow-[0_2px_8px_rgba(124,58,237,0.2)]"
+                    : "border border-slate-800 bg-slate-900/80 text-slate-200"
+                }`}
+              >
+                {message.role === "user" ? (
+                  <div className="whitespace-pre-wrap break-words">{formatMessageContent(message.content)}</div>
+                ) : (
+                  <StructuredMessage content={message.content} />
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+
+        {loading && <TypingIndicator />}
+
+        <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-slate-800 p-4">
+      <div className="shrink-0 border-t border-slate-800 p-4">
         <form
-          className="flex gap-2"
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
           }}
+          className="flex gap-2"
         >
-          <input
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Ask: build the strict salary dashboard"
-            className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-500 focus:border-violet-500"
-          />
+          <div className="relative flex-1">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask: build the strict salary dashboard"
+              rows={1}
+              className="min-h-[40px] w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 pr-10 text-sm text-slate-100 outline-none placeholder:text-slate-500 transition-all focus:border-violet-500 focus:shadow-[0_0_12px_rgba(124,58,237,0.08)]"
+              disabled={loading}
+            />
+            <kbd className="absolute bottom-2 right-2 hidden rounded-md border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-500 md:inline">
+              ↵
+            </kbd>
+          </div>
 
           <button
             type="submit"
             aria-label="Send dashboard command"
             disabled={loading || !input.trim()}
-            className="grid size-10 place-items-center rounded-xl bg-violet-600 text-white transition hover:bg-violet-500 disabled:opacity-50"
+            className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-violet-700 text-white shadow-[0_2px_8px_rgba(124,58,237,0.25)] transition-all hover:from-violet-500 hover:to-violet-600 hover:shadow-[0_4px_12px_rgba(124,58,237,0.35)] active:scale-95 disabled:opacity-50 disabled:shadow-none"
           >
-            <Send className="size-4" />
+            {loading ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
           </button>
         </form>
 
         <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
-          <span>Mode: {activeMode}</span>
-          <span>{controller?.error ? "Backend fallback active" : dashboardChartCount ? `${dashboardChartCount} charts` : `Provider: ${provider}`}</span>
+          <div className="flex items-center gap-1.5">
+            <Circle className="size-2 fill-emerald-400 text-emerald-400" />
+            <span>Provider: {provider}</span>
+          </div>
+          <span className="text-slate-600">
+            {dashboardChartCount ? `${dashboardChartCount} charts` : `Mode: ${activeMode}`}
+          </span>
         </div>
 
-        <div className="mt-2 flex items-center gap-1 text-[11px] text-emerald-300">
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-300">
           <ShieldCheck className="size-3.5" />
-          Schema-only AI enabled
+          Schema-only AI enabled &middot; raw rows never sent to LLM
         </div>
       </div>
     </aside>

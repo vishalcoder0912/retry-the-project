@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildSchemaProfile } from "../services/ai-analyst/schema-fingerprint.js";
 import {
   buildRuleDashboardPlan,
+  critiqueDashboard,
   sanitizeChartSpec,
 } from "../services/ai-analyst/dashboard-plan-engine.js";
 import { validateChartCombination } from "../services/ai-analyst/dashboard-quality-guardian.js";
@@ -47,5 +48,45 @@ describe("dashboard plan engine", () => {
     }, profile);
 
     expect(spec).not.toHaveProperty("data");
+  });
+
+  it("rejects person, link, and text columns from default dashboard charts", () => {
+    const reviewProfile = buildSchemaProfile({
+      name: "Amazon_Reviews",
+      rows: [
+        {
+          "Reviewer Name": "A",
+          "Profile Link": "https://example.test/a",
+          Country: "USA",
+          "Review Count": "9 reviews",
+          Rating: "Rated 4 out of 5 stars",
+          "Review Title": "Useful",
+          "Review Text": "Good product",
+        },
+        {
+          "Reviewer Name": "B",
+          "Profile Link": "https://example.test/b",
+          Country: "India",
+          "Review Count": "3 reviews",
+          Rating: "Rated 5 out of 5 stars",
+          "Review Title": "Great",
+          "Review Text": "Fast delivery",
+        },
+      ],
+    });
+
+    const cleaned = critiqueDashboard({
+      kpis: [],
+      charts: [
+        { type: "bar", title: "Review Count by Reviewer Name", xKey: "Reviewer Name", yKey: "Review Count", aggregation: "sum" },
+        { type: "donut", title: "Reviewer Name Distribution", xKey: "Reviewer Name", yKey: "count", aggregation: "count" },
+        { type: "scatter", title: "Rating vs Profile Link", xKey: "Profile Link", yKey: "Rating", aggregation: "count" },
+        { type: "bar", title: "Review Count by Country", xKey: "Country", yKey: "Review Count", aggregation: "sum" },
+      ],
+    }, reviewProfile);
+
+    expect(cleaned.charts).toEqual([
+      expect.objectContaining({ title: "Review Count by Country" }),
+    ]);
   });
 });

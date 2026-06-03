@@ -5,6 +5,7 @@ import {
   trainSchemaDashboard,
   trainSchemaRagDashboard,
 } from "../services/ai-analyst/schema-trained-ai-service.js";
+import { generateUnifiedDashboard } from "../services/agentic-dashboard/unified-dashboard-orchestrator.js";
 import { getMemoryStats, readSchemaTrainingMemory, trainManySchemaExamples } from "../services/ai-analyst/schema-training-store.js";
 import { validateAndFixDashboard } from "../services/dashboard/dashboard-integrity-engine.js";
 import { buildSchemaProfile } from "../services/ai-analyst/schema-fingerprint.js";
@@ -51,7 +52,69 @@ async function tryCall(fn) {
   try { return await fn(); } catch { return null; }
 }
 
+/**
+ * Runtime Context Recovery Mode
+ * Enriches the dataset object from runtimeContext before passing to services.
+ * Schema is the only required field — everything else is optional.
+ * Never returns "runtime_context_missing" unless schema itself is unavailable.
+ */
+function recoverRuntimeContext(body = {}) {
+  const ctx = body.runtimeContext || body.context || {};
+
+  // Schema is the only required field
+  const schema = Array.isArray(ctx.schema) ? ctx.schema
+    : Array.isArray(body.schema) ? body.schema
+      : Array.isArray(body.columns) ? body.columns.map((c) => typeof c === "string" ? c : (c.name || c.key || ""))
+        : null;
+
+  if (!schema || !schema.length) {
+    // Only fail when schema itself is unavailable
+    return null;
+  }
+
+  const datasetName = ctx.dataset_name || body.name || "Uploaded Dataset";
+  const rowCount = ctx.row_count || (Array.isArray(body.rows) ? body.rows.length : 0);
+  const columnProfiles = ctx.column_profiles || {};
+
+  // Build column metadata from profiles or schema names
+  const enrichedColumns = schema.map((name) => {
+    const profile = columnProfiles[name] || {};
+    return {
+      name,
+      type: profile.type === "numeric" ? "number"
+        : profile.type === "date" ? "date"
+          : profile.type === "geo" || profile.type === "category" ? "string"
+            : "string",
+      role: profile.type === "numeric" ? "metric"
+        : profile.type === "date" ? "date"
+          : profile.type === "geo" ? "location"
+            : profile.type === "category" ? "category"
+              : profile.type === "person" ? "text"
+                : profile.type === "identifier" ? "id"
+                  : "text",
+      uniqueValues: profile.unique_values,
+      sampleValues: profile.sample_values,
+    };
+  });
+
+  return {
+    id: body.id || "context-recovered",
+    name: datasetName,
+    rowCount,
+    columns: enrichedColumns,
+    rows: Array.isArray(body.rows) ? body.rows : [],
+    schema,
+    columnProfiles,
+    recovered: true,
+    recoveryReason: "Schema provided via runtime context.",
+  };
+}
+
 async function loadDatasetById(datasetId, body = {}) {
+  // Try runtime context recovery first (zero-shot, no DB needed)
+  const recovered = recoverRuntimeContext(body);
+  if (recovered) return recovered;
+
   if (body.dataset?.rows) return body.dataset;
   if (Array.isArray(body.rows)) return { id: datasetId, name: body.name || datasetId, columns: body.columns || [], rows: body.rows, dictionaryRows: body.dictionaryRows || [] };
 
@@ -262,14 +325,16 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
       const body = await readJsonBody(request);
       const dataset = await loadDatasetById(dashboardMatch[1], body);
       if (!dataset) return fail(response, 404, "Dataset not found. Pass {rows, columns} in body or check dataset repository integration.");
-      const result = await generateSchemaDashboard(dataset, {
+      const result = await generateUnifiedDashboard(dataset, {
         useLlm: body.useLlm !== false,
         threshold: body.threshold,
         ragThreshold: body.ragThreshold,
         ragLimit: body.ragLimit,
         useRagEmbedding: body.useRagEmbedding !== false,
+        requireOllamaValidation: body.requireOllamaValidation,
+        useOllamaValidator: body.useOllamaValidator,
       });
-      ok(response, result, "Schema-trained RAG dashboard generated");
+      sendJson(response, 200, result);
       return true;
     } catch (error) {
       fail(response, 500, error.message || "Dashboard generation failed");
@@ -302,7 +367,13 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
     try {
       const body = await readJsonBody(request);
       const dataset = await loadDatasetById(commandMatch[1], body);
-      if (!dataset) return fail(response, 404, "Dataset not found");
+      if (!dataset) {
+        const ctx = body.runtimeContext || body.context || {};
+        if (ctx.schema?.length) {
+          return fail(response, 404, "Dataset not found in database, but schema was provided in runtime context. Ensure rows are included in the payload or load the dataset first.");
+        }
+        return fail(response, 404, "Dataset not found. Provide schema in runtimeContext or load the dataset first.");
+      }
       const query = String(body.query || "").trim();
       if (!query) return fail(response, 400, "query is required");
 
@@ -324,7 +395,23 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
         return true;
       }
 
-      const result = await runDashboardCommand({ dataset, query, currentDashboard: body.currentDashboard || {}, useLlm: body.useLlm !== false });
+      const result = await runDashboardCommand({
+        dataset,
+        query,
+        currentDashboard: body.currentDashboard || {},
+        useLlm: body.useLlm !== false,
+        requireOllamaValidation: body.requireOllamaValidation,
+        useOllamaValidator: body.useOllamaValidator,
+      });
+
+      // Attach context recovery info if dataset was recovered
+      if (dataset?.recovered) {
+        result.recoveredContext = true;
+        result.recoveryReason = dataset.recoveryReason || "Schema used for context-aware generation.";
+        result.schema = dataset.schema;
+        result.columnProfiles = dataset.columnProfiles;
+      }
+
       ok(response, result, "Dashboard command processed");
       return true;
     } catch (error) {
@@ -338,14 +425,40 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
     try {
       const body = await readJsonBody(request);
       const dataset = await loadDatasetById(chatMatch[1], body);
-      if (!dataset) return fail(response, 404, "Dataset not found");
+      if (!dataset) {
+        const ctx = body.runtimeContext || body.context || {};
+        if (ctx.schema?.length) {
+          return fail(response, 404, "Dataset not found in database, but schema was provided in runtime context. Ensure rows are included or load the dataset first.");
+        }
+        return fail(response, 404, "Dataset not found. Provide schema in runtimeContext or load the dataset first.");
+      }
       const query = String(body.query || body.message || "").trim();
       if (!query) return fail(response, 400, "query is required");
-      const result = await runSchemaChat({ dataset, query, useLlm: body.useLlm !== false });
-      ok(response, {
+      const result = await runSchemaChat({
+        dataset,
+        query,
+        useLlm: body.useLlm !== false,
+        requireOllamaValidation: body.requireOllamaValidation,
+        useOllamaValidator: body.useOllamaValidator,
+      });
+      const chatResponse = {
         userMessage: { role: "user", content: query, timestamp: new Date().toISOString() },
-        assistantMessage: { role: "assistant", content: result.answer, model: result.model, provider: result.provider, schemaOnly: true, timestamp: new Date().toISOString() },
-      }, "AI chat response generated");
+        assistantMessage: {
+          role: "assistant",
+          content: result.answer,
+          model: result.model,
+          provider: result.provider,
+          schemaOnly: true,
+          governance: result.governance,
+          approvedForRender: result.approvedForRender,
+          timestamp: new Date().toISOString(),
+        },
+      };
+      if (dataset?.recovered) {
+        chatResponse.recoveredContext = true;
+        chatResponse.recoveryReason = dataset.recoveryReason || "Schema used for context-aware chat.";
+      }
+      ok(response, chatResponse, "AI chat response generated");
       return true;
     } catch (error) {
       fail(response, 500, error.message || "AI chat failed");

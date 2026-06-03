@@ -1,5 +1,6 @@
 // AI provider routes and status
 import QRCode from 'qrcode';
+import { serviceUrls } from "../config/serviceUrls.js";
 import { aiManager } from '../services/ai/ai-manager.js';
 import { getOllamaStatus } from '../services/ollama/ollama-dual-model-service.js';
 import {
@@ -348,10 +349,10 @@ export async function handleAIRoutes(request, response, pathname) {
 
 function getDefaultPortalBaseUrl(request) {
   const protocol = request.headers['x-forwarded-proto'] || 'http';
-  const host = request.headers.host || 'localhost:3001';
+  const host = request.headers.host || new URL(serviceUrls.api).host;
 
-  if (host === 'localhost:3001') {
-    return `${protocol}://localhost:5173`;
+  if (host === new URL(serviceUrls.api).host) {
+    return serviceUrls.frontend;
   }
 
   if (host === '127.0.0.1:3001') {

@@ -3,6 +3,7 @@ type ColumnRole = "metric" | "dimension" | "date" | "id" | "text";
 
 type ChartType =
   | "bar"
+  | "horizontalBar"
   | "line"
   | "area"
   | "pie"
@@ -70,6 +71,24 @@ export interface DashboardPlan {
     label: string;
     type: "select" | "dateRange" | "numberRange";
   }>;
+  executiveSummary?: {
+    overview?: string;
+    topTrend?: string | null;
+    biggestOpportunity?: string | null;
+    biggestRisk?: string | null;
+    businessRecommendation?: string;
+    confidenceScore?: number;
+  };
+  geoAnalysis?: Array<Record<string, unknown>>;
+  insights?: Array<Record<string, unknown>>;
+  recommendations?: Array<Record<string, unknown>>;
+  storyMode?: {
+    whatHappened?: string;
+    whyItHappened?: string;
+    whatWillHappen?: string;
+    recommendedAction?: string;
+  };
+  confidenceScore?: number;
 }
 
 export interface MasterPlannerResponse {
@@ -79,8 +98,9 @@ export interface MasterPlannerResponse {
   dashboardPlan?: DashboardPlan;
 }
 
-const OLLAMA_BASE_URL =
-  process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+import { serviceUrls } from "../../config/serviceUrls.js";
+
+const OLLAMA_BASE_URL = serviceUrls.ollama;
 
 const MASTER_MODEL =
   process.env.DASHBOARD_MASTER_MODEL || "insightflow-master";
@@ -148,6 +168,7 @@ const dashboardPlanSchema = {
                 type: "string",
                 enum: [
                   "bar",
+                  "horizontalBar",
                   "line",
                   "area",
                   "pie",
@@ -192,6 +213,29 @@ const dashboardPlanSchema = {
               },
             },
           },
+        },
+        executiveSummary: {
+          type: "object",
+          additionalProperties: true,
+        },
+        geoAnalysis: {
+          type: "array",
+          items: { type: "object", additionalProperties: true },
+        },
+        insights: {
+          type: "array",
+          items: { type: "object", additionalProperties: true },
+        },
+        recommendations: {
+          type: "array",
+          items: { type: "object", additionalProperties: true },
+        },
+        storyMode: {
+          type: "object",
+          additionalProperties: true,
+        },
+        confidenceScore: {
+          type: "number",
         },
       },
     },
@@ -291,6 +335,12 @@ function validatePlan(
       kpis: safeKpis,
       charts: safeCharts,
       filters: safeFilters,
+      executiveSummary: response.dashboardPlan?.executiveSummary,
+      geoAnalysis: response.dashboardPlan?.geoAnalysis || [],
+      insights: response.dashboardPlan?.insights || [],
+      recommendations: response.dashboardPlan?.recommendations || [],
+      storyMode: response.dashboardPlan?.storyMode,
+      confidenceScore: response.dashboardPlan?.confidenceScore,
     },
   };
 }
@@ -482,7 +532,7 @@ export async function generateMasterDashboardPlan({
           {
             role: "system",
             content:
-              "Return strict JSON only. Never include chart.data. Use only schema columns.",
+              "You are InsightFlow AI, a Chief Data Analyst, RAG-aware Schema Engine, and dashboard architect. You do not see raw rows. Return strict JSON only. Never include chart.data, KPI values, fake numbers, sample records, or raw rows. Use only schema columns. Infer business KPIs, charts, executive summary, geo analysis only when location fields exist, AI insights, recommendations, story mode, and confidence from schema semantics.",
           },
           {
             role: "user",

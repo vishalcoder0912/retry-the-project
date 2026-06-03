@@ -1,4 +1,6 @@
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+import { serviceUrls } from "../../config/serviceUrls.js";
+
+const OLLAMA_BASE_URL = serviceUrls.ollama;
 
 export const OLLAMA_MODELS = {
   dashboard: process.env.OLLAMA_DASHBOARD_MODEL || 'neural-chat:7b',

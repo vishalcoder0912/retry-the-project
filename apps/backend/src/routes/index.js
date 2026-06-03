@@ -18,11 +18,13 @@ import { handleDashboardQualityRoutes } from './dashboard-quality.js';
 import { handleDashboardAiRoutes } from './dashboardAiRoutes.js';
 import { handleAgenticModelRoutes } from './agentic-models.js';
 import { handleAgenticDataScienceRoutes } from './agentic-data-science.js';
+import { handleAgenticApiRoutes } from './agentic-api.js';
 import { handleSchemaAgentRoutes } from './schema-agent.js';
 import {
   handleE2ECompatRoutes,
   handleE2ENotFound,
 } from './e2e-compat.routes.js';
+import { handleInsightFlowRoutes } from './insight-flow.js';
 import { sendError, sendSuccess, sendJson } from '../utils/response-utils.js';
 import { HTTP_STATUS } from '../config/constants.js';
 
@@ -37,6 +39,10 @@ export async function setupRoutes(request, response) {
     }
 
     if (await handleAgenticDataScienceRoutes(request, response, pathname)) {
+      return;
+    }
+
+    if (await handleAgenticApiRoutes(request, response, pathname)) {
       return;
     }
 
@@ -61,6 +67,11 @@ export async function setupRoutes(request, response) {
 
     // Schema-trained dashboard/chat/RAG routes before legacy dashboard/chat handlers
     if (await handleSchemaTrainedAIRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // InsightFlow — Master Analytics Pipeline
+    if (await handleInsightFlowRoutes(request, response, pathname)) {
       return;
     }
 
