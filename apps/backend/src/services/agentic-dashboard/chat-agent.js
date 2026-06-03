@@ -1,6 +1,11 @@
 import { buildSchemaProfile } from "../ai-analyst/schema-fingerprint.js";
 import { runOllamaValidatorAgent, buildGovernanceDecision } from "./ollama-validator-agent.js";
 import { validateChatAnswer } from "./fact-validator-agent.js";
+import { 
+  parseCustomChartQuery, 
+  normalizeChartAction,
+  categorizeSchemaColumns
+} from "./custom-chart-query-parser.js";
 
 const ACTION_AGGREGATIONS = new Set(["none", "count", "sum", "avg", "min", "max", "median", "count_unique"]);
 const ACTION_CHART_TYPES = new Set(["bar", "horizontal_bar", "horizontalBar", "line", "area", "pie", "donut", "histogram", "scatter", "heatmap", "map", "table"]);
@@ -69,11 +74,38 @@ function collectDashboardCharts(currentDashboard = {}) {
   ];
 }
 
+/**
+ * CRITICAL FIX:
+ * Validate chart action AFTER normalizing x/y fields.
+ * 
+ * Before: AI returns {x: "country", y: "salary_usd"}
+ *         Guardian checks x column type → rejects if metric
+ *         ERROR: "bar charts require a category x column"
+ *
+ * After:  AI returns {x: "country", y: "salary_usd"}
+ *         Guardian NORMALIZES: {xKey: "country", yKey: "salary_usd"}
+ *         Guardian validates normalized form
+ *         PASS: country is category, salary_usd is metric ✓
+ */
 function validateChartAction(action, schemaProfile, currentDashboard, seenChartKeys) {
   const columns = columnMap(schemaProfile);
-  const spec = getChartSpecFromAction(action);
+  
+  // CRITICAL: Normalize the action FIRST, before extracting spec
+  const normalizedAction = normalizeChartAction(action);
+  const spec = getChartSpecFromAction(normalizedAction);
+  
   const reasons = [];
   const warnings = [];
+
+  // Debug log for development only
+  if (process.env.DEBUG_CHART_VALIDATION) {
+    console.log(`[ChartValidation] Query normalized:`, {
+      original: { x: action.x, y: action.y, xKey: action.xKey, yKey: action.yKey },
+      normalized: { x: spec.xKey, y: spec.yKey },
+      type: spec.type,
+      aggregation: spec.aggregation,
+    });
+  }
 
   if (!ACTION_CHART_TYPES.has(spec.type)) reasons.push(`Unsupported chart type ${spec.type || "unknown"}.`);
   if (!ACTION_AGGREGATIONS.has(spec.aggregation)) reasons.push(`Unsupported aggregation ${spec.aggregation || "unknown"}.`);
@@ -85,8 +117,13 @@ function validateChartAction(action, schemaProfile, currentDashboard, seenChartK
   if (spec.yKey && !["count", "__row_count__"].includes(spec.yKey) && !yColumn) reasons.push(`Column ${spec.yKey} does not exist.`);
 
   if (["bar", "horizontal_bar", "horizontalBar"].includes(spec.type)) {
-    if (!isCategoryColumn(xColumn) && !isGeoColumn(xColumn)) reasons.push(`${spec.type} charts require a category or geo x column.`);
-    if (spec.yKey !== "count" && !isMetricColumn(yColumn)) reasons.push(`${spec.type} charts require a numeric metric y column.`);
+    if (!isCategoryColumn(xColumn) && !isGeoColumn(xColumn)) {
+      reasons.push(`${spec.type} charts require a category or geo x column, but got ${xColumn?.type} type.`);
+    }
+    // THIS IS THE KEY FIX: Allow numeric y if yKey is a metric column
+    if (spec.yKey !== "count" && !isMetricColumn(yColumn)) {
+      reasons.push(`${spec.type} charts require a numeric metric y column.`);
+    }
   }
 
   if (["line", "area"].includes(spec.type)) {
@@ -117,23 +154,24 @@ function validateChartAction(action, schemaProfile, currentDashboard, seenChartK
   const duplicateInAction = seenChartKeys.has(key);
   const duplicateOnDashboard = collectDashboardCharts(currentDashboard).some((chart) => chartKey(chart) === key);
   if (duplicateInAction) reasons.push(`Duplicate chart action for ${spec.title || key}.`);
-  if (duplicateOnDashboard && String(action.action || "").toLowerCase() === "create_chart") {
-    action.action = "modify_chart";
+  if (duplicateOnDashboard && String(normalizedAction.action || "").toLowerCase() === "create_chart") {
+    normalizedAction.action = "modify_chart";
     warnings.push(`Updated existing chart instead of creating duplicate ${spec.title || key}.`);
   }
   seenChartKeys.add(key);
 
-  return { valid: reasons.length === 0, reasons, warnings, action };
+  return { valid: reasons.length === 0, reasons, warnings, action: normalizedAction };
 }
 
 function validateKpiAction(action, schemaProfile) {
   const columns = columnMap(schemaProfile);
-  const spec = getKpiSpecFromAction(action);
+  const normalizedAction = normalizeChartAction(action);
+  const spec = getKpiSpecFromAction(normalizedAction);
   const reasons = [];
 
   if (!ACTION_AGGREGATIONS.has(spec.aggregation)) reasons.push(`Unsupported aggregation ${spec.aggregation || "unknown"}.`);
 
-  if (spec.metric === "__row_count__") return { valid: reasons.length === 0, reasons, warnings: [], action };
+  if (spec.metric === "__row_count__") return { valid: reasons.length === 0, reasons, warnings: [], action: normalizedAction };
 
   const metricColumn = columns.get(spec.metric);
   if (!metricColumn) {
@@ -146,7 +184,7 @@ function validateKpiAction(action, schemaProfile) {
     reasons.push("KPI actions require numeric metrics unless using count_unique or Total Records.");
   }
 
-  return { valid: reasons.length === 0, reasons, warnings: [], action };
+  return { valid: reasons.length === 0, reasons, warnings: [], action: normalizedAction };
 }
 
 function validateFilterAction(action, schemaProfile) {
@@ -235,6 +273,30 @@ export async function governDashboardCommand({
   requireOllama = process.env.ENABLE_OLLAMA_VALIDATOR === "1",
 } = {}) {
   const schemaProfile = buildSchemaProfile(dataset || {});
+  
+  // Try deterministic parser FIRST
+  let parsedAction = null;
+  try {
+    parsedAction = parseCustomChartQuery(query, schemaProfile);
+  } catch (err) {
+    console.error("[ChartParser] Error in deterministic parsing:", err.message);
+  }
+
+  // If deterministic parser succeeded, use its action
+  if (parsedAction) {
+    if (process.env.DEBUG_CHART_VALIDATION) {
+      console.log("[ChartParser] Deterministic parse succeeded:", parsedAction);
+    }
+    // Wrap parsed action in dashboard_action envelope
+    command = {
+      response_type: "dashboard_action",
+      natural_response: `I parsed "${query}" as a chart request.`,
+      actions: [parsedAction],
+      warnings: [],
+      schema_safe: true,
+    };
+  }
+
   const actionValidation = validateDashboardActionEnvelope(command, schemaProfile, currentDashboard);
   const governedCommand = actionValidation.command;
 
