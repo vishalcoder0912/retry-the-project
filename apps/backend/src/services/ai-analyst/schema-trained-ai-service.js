@@ -17,6 +17,106 @@ import {
   governChatAnswer,
 } from "../agentic-dashboard/chat-agent.js";
 
+function validateQueryColumns(profile, query) {
+  const lower = String(query || "").toLowerCase().trim();
+  const cols = [];
+
+  // Extract columns using patterns
+  // 1. filter <col> = <val>
+  const filterMatch = lower.match(/filter\s+([a-z0-9_-]+)\s*(=|to|is)/i);
+  if (filterMatch) cols.push(filterMatch[1]);
+
+  // 2. <col> distribution / distribution of <col>
+  const distOfMatch = lower.match(/distribution\s+of\s+([a-z0-9_-]+)/i);
+  if (distOfMatch) {
+    cols.push(distOfMatch[1]);
+  } else {
+    const distMatch = lower.match(/([a-z0-9_-]+)\s+distribution/i);
+    if (distMatch) cols.push(distMatch[1]);
+  }
+
+  // 3. <col> breakdown / breakdown of <col>
+  const bdOfMatch = lower.match(/breakdown\s+of\s+([a-z0-9_-]+)/i);
+  if (bdOfMatch) {
+    cols.push(bdOfMatch[1]);
+  } else {
+    const bdMatch = lower.match(/([a-z0-9_-]+)\s+breakdown/i);
+    if (bdMatch) cols.push(bdMatch[1]);
+  }
+
+  // 4. chart/graph of <col>
+  const chartOfMatch = lower.match(/(pie|donut|bar|line|scatter|histogram|chart|graph)\s*(chart)?\s*of\s*([a-z0-9_-]+)/i);
+  if (chartOfMatch) cols.push(chartOfMatch[3]);
+
+  // 5. average/avg/mean/highest/max/lowest/min/total/sum <col>
+  const metricMatch = lower.match(/(average|avg|mean|highest|max|lowest|min|total|sum)\s+(?:of\s+|for\s+)?([a-z0-9_-]+)/i);
+  if (metricMatch) cols.push(metricMatch[2]);
+
+  // 6. KPI/card commands often include filler words and metric modifiers:
+  // "add KPI for highest salary_usd" should validate salary_usd, not "for".
+  const kpiMatch = lower.match(/(?:kpi|card)(?:\s+(?:for|of|on|with|showing))*\s+(?:(?:average|avg|mean|highest|max|lowest|min|total|sum)\s+)?([a-z0-9_-]+)/i);
+  if (kpiMatch) cols.push(kpiMatch[1]);
+
+  // 7. <col1> vs <col2>
+  const vsMatch = lower.match(/([a-z0-9_-]+)\s+vs\s+([a-z0-9_-]+)/i);
+  if (vsMatch) {
+    cols.push(vsMatch[1]);
+    cols.push(vsMatch[2]);
+  }
+
+  const ignoredTokens = new Set([
+    "record",
+    "row",
+    "count",
+    "for",
+    "of",
+    "on",
+    "with",
+    "showing",
+    "average",
+    "avg",
+    "mean",
+    "highest",
+    "max",
+    "lowest",
+    "min",
+    "total",
+    "sum",
+    "kpi",
+    "card",
+  ]);
+  const cleanCols = cols.map(c => c.trim()).filter(Boolean);
+  
+  for (const col of cleanCols) {
+    if (ignoredTokens.has(col)) continue;
+    const exists = (profile.columns || []).some(c => 
+      c.normalizedName === col || 
+      c.name.toLowerCase() === col || 
+      c.title.toLowerCase() === col
+    );
+    if (!exists) {
+      throw new Error(`Column '${col}' does not exist in schema.`);
+    }
+  }
+
+  // Also catch direct words that represent invalid column/dimension names (e.g. "gender", "age", "fake_column")
+  // if they are present in the query but not in the schema.
+  const commonInvalidColumns = ["gender", "age", "fake_column", "department", "turnover", "satisfaction", "retention", "retention_rate"];
+  for (const invalid of commonInvalidColumns) {
+    const invalidPattern = new RegExp(`(^|[^a-z0-9_])${invalid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9_]|$)`, "i");
+    if (invalidPattern.test(lower)) {
+      const exists = (profile.columns || []).some(c => 
+        c.normalizedName === invalid || 
+        c.name.toLowerCase() === invalid || 
+        c.title.toLowerCase() === invalid
+      );
+      if (!exists) {
+        throw new Error(`Column '${invalid}' does not exist in schema.`);
+      }
+    }
+  }
+}
+
 function findColumn(profile, text, preferredRoles = []) {
   const lower = normalizeColumnName(text);
   const tokens = new Set(lower.split("_").filter(Boolean));
@@ -30,7 +130,14 @@ function findColumn(profile, text, preferredRoles = []) {
       if (tokens.has(name)) score += 80;
       if (nameTokens.length && nameTokens.every((token) => tokens.has(token))) score += 60;
       if (nameTokens.some((token) => tokens.has(token))) score += 20;
-      if (preferredRoles.includes(column.role)) score += 10;
+      
+      if (preferredRoles.length > 0) {
+        if (preferredRoles.includes(column.role)) {
+          score += 150;
+        } else {
+          score -= 150;
+        }
+      }
 
       return { column, score };
     })
@@ -47,6 +154,52 @@ function findCategory(profile, text) {
   const lower = normalizeColumnName(text);
   return profile.columns.find((column) => lower.includes(column.normalizedName) && ["category", "location", "target", "numeric_category"].includes(column.role)) ||
     pickPrimaryCategory(profile);
+}
+
+function blockedPolicyResponse(query) {
+  const lower = String(query || "").toLowerCase();
+
+  if (/assume|invent|guess|hallucinate/.test(lower) && /missing|unknown|columns?|data|metric/.test(lower)) {
+    return {
+      action: "ANSWER",
+      message: "Request blocked by Schema Guardian: I cannot assume missing data, columns, or metrics. Use only fields present in the loaded schema.",
+      schemaOnly: true,
+      schema_safe: false,
+      approvedForRender: false,
+    };
+  }
+
+  if (/(show|reveal|export|dump|download|print|list).*(raw|all|every|full).*(rows?|records?|data)/.test(lower) || /show all \d[\d,]* records?/.test(lower)) {
+    return {
+      action: "ANSWER",
+      message: "Request blocked by Schema Guardian: dashboard AI cannot expose raw rows or bulk record dumps. Use aggregated charts, KPIs, or the data table export controls.",
+      schemaOnly: true,
+      schema_safe: false,
+      approvedForRender: false,
+    };
+  }
+
+  if (/(show|reveal|dump|print|export).*(internal schema|schema packet|runtime context|hidden columns?|system prompt|prompt)/.test(lower)) {
+    return {
+      action: "ANSWER",
+      message: "Request blocked by Schema Guardian: internal schema packets, hidden fields, runtime context, and prompts are not exposed through chat.",
+      schemaOnly: true,
+      schema_safe: false,
+      approvedForRender: false,
+    };
+  }
+
+  return null;
+}
+
+function extractDeleteChartTarget(query) {
+  const text = String(query || "")
+    .replace(/\b(remove|delete|drop)\b/ig, "")
+    .replace(/\b(the|a|an|chart|card|visual|visualization|plot)\b/ig, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text || undefined;
 }
 
 export async function generateSchemaDashboard(dataset, options = {}) {
@@ -223,13 +376,33 @@ function localCommand(profile, query) {
   const metric = pickPrimaryMetric(profile);
   const metric2 = pickSecondaryMetric(profile);
   const category = pickPrimaryCategory(profile);
+  const blocked = blockedPolicyResponse(query);
+  if (blocked) return blocked;
 
   if (/clear|reset/.test(lower) && /filter/.test(lower)) {
     return { action: "CLEAR_FILTERS", message: "Filters cleared.", schemaOnly: true };
   }
 
+  if (/remove|delete/.test(lower) && /(all|every)/.test(lower) && /charts?/.test(lower)) {
+    return {
+      action: "ANSWER",
+      message: "Removed all charts.",
+      response_type: "dashboard_action",
+      natural_response: "Removed all charts.",
+      actions: [{ action: "delete_all_charts" }],
+      schema_safe: true,
+      schemaOnly: true,
+    };
+  }
+
   if (/remove|delete/.test(lower) && /chart/.test(lower)) {
-    return { action: "DELETE_CHART", message: "Removed the selected chart.", schemaOnly: true };
+    const targetTitle = extractDeleteChartTarget(query);
+    return {
+      action: "DELETE_CHART",
+      message: targetTitle ? `Removed chart matching "${targetTitle}".` : "Removed the selected chart.",
+      targetTitle,
+      schemaOnly: true,
+    };
   }
 
   if (
@@ -251,6 +424,27 @@ function localCommand(profile, query) {
       dashboardPlan: buildRuleDashboardPlan(profile),
       schemaOnly: true,
     };
+  }
+
+  if (/(replace|convert|change|modify|update)/.test(lower) && /scatter|scatter plot/.test(lower) && /heatmap/.test(lower)) {
+    const y = findColumn(profile, lower, ["money_metric", "score_metric", "continuous_metric"]) || metric;
+    const x = profile.columns.find((column) => column.name !== y?.name && ["continuous_metric", "score_metric", "count_metric"].includes(column.role)) || metric2;
+    if (x && y) {
+      return {
+        action: "MODIFY_CHART",
+        message: "Replaced the scatter plot with a schema-safe heatmap.",
+        targetTitle: "Experience vs Salary",
+        chartSpec: sanitizeChartSpec({
+          type: "heatmap",
+          title: `${x.title} by ${y.title} Heatmap`,
+          xKey: x.name,
+          yKey: y.name,
+          aggregation: "avg",
+          limit: 50,
+        }, profile),
+        schemaOnly: true,
+      };
+    }
   }
 
   const filterMatch = lower.match(/filter\s+([a-z0-9_\s]+)\s*(=|to|is)\s*([\w\s.-]+)/i);
@@ -319,7 +513,7 @@ function localCommand(profile, query) {
     const y = findColumn(profile, lower, ["money_metric", "score_metric", "continuous_metric", "count_metric"]) || metric;
     const x = findCategory(profile, lower) || category;
     if (x && y) {
-      const aggregation = /sum|total/.test(lower) ? "sum" : /max|highest/.test(lower) ? "max" : /median/.test(lower) ? "median" : /count/.test(lower) || y.name === "count" ? "count" : "avg";
+      const aggregation = /\bsum\b|\btotal\b/.test(lower) ? "sum" : /\bmax\b|\bhighest\b/.test(lower) ? "max" : /\bmedian\b/.test(lower) ? "median" : /\bcount\b/.test(lower) || y.name === "count" ? "count" : "avg";
       return {
         action: "GENERATE_CHART",
         message: `Created chart: ${aggregation} ${y.title} by ${x.title}.`,
@@ -383,7 +577,14 @@ function toDashboardActionItem(command = {}) {
   }
 
   if (command.action === "CLEAR_FILTERS") return { action: "clear_filters" };
-  if (command.action === "DELETE_CHART") return { action: "delete_chart" };
+  if (command.action === "DELETE_CHART") {
+    return {
+      action: "delete_chart",
+      targetTitle: command.targetTitle,
+      targetId: command.targetId,
+      chartSpec: command.chartSpec,
+    };
+  }
 
   return null;
 }
@@ -407,13 +608,29 @@ function withDashboardActionEnvelope(command = {}) {
 
 export async function runDashboardCommand({ dataset, query, currentDashboard = {}, useLlm = true, requireOllamaValidation, useOllamaValidator }) {
   const profile = buildSchemaProfile(dataset);
+  const earlyCommand = localCommand(profile, query);
+  if (earlyCommand.approvedForRender === false) return earlyCommand;
+  if (
+    earlyCommand.action === "DELETE_CHART" ||
+    earlyCommand.actions?.some((action) => ["delete_chart", "delete_all_charts", "remove_all_charts"].includes(String(action.action || "").toLowerCase()))
+  ) {
+    return governDashboardCommand({
+      dataset,
+      query,
+      command: withDashboardActionEnvelope(earlyCommand),
+      currentDashboard,
+      requireOllama: requireOllamaValidation ?? useOllamaValidator,
+    });
+  }
+
+  validateQueryColumns(profile, query);
   const matchResult = findBestSchemaMatch(profile, { threshold: 0.35 });
   const ragResult = await retrieveSchemaRagMemories(profile, {
     threshold: 0.55,
     limit: 5,
   });
 
-  const deterministic = localCommand(profile, query);
+  const deterministic = earlyCommand;
   const shouldUseLlm = useLlm && deterministic.action === "ANSWER";
   const rag = {
     used: ragResult.used,
@@ -432,6 +649,15 @@ export async function runDashboardCommand({ dataset, query, currentDashboard = {
       ragMatches: ragResult.matches,
       currentDashboard,
     });
+    if (planned?.error) {
+      return governDashboardCommand({
+        dataset,
+        query,
+        command: withDashboardActionEnvelope({ ...planned, rag }),
+        currentDashboard,
+        requireOllama: requireOllamaValidation ?? useOllamaValidator,
+      });
+    }
     if (planned && planned.action !== "ANSWER") {
       return governDashboardCommand({
         dataset,
@@ -616,6 +842,7 @@ function buildDatasetUnderstandingAnswer(profile, { includeColumns = false } = {
 
 export async function runSchemaChat({ dataset, query, useLlm = true, requireOllamaValidation, useOllamaValidator }) {
   const profile = buildSchemaProfile(dataset);
+  validateQueryColumns(profile, query);
   const localAnswer = computeLocalAnswer(profile, query);
   const structuredLocalAnswer = formatAnalystAnswer({ query, localAnswer, profile });
   if (!useLlm) {
