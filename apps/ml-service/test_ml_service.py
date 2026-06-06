@@ -1,4 +1,4 @@
-from fastapi.testclient import TestClient
+﻿from fastapi.testclient import TestClient
 
 from app import app
 
@@ -65,13 +65,9 @@ def test_compare_datasets():
     assert body["sameSchema"] is False
     assert body["missingColumns"] == ["b"]
     assert body["extraColumns"] == ["c"]
-<<<<<<< HEAD
 
 
 def test_bad_input():
     # Sending malformed input to profile endpoint should return unprocessable entity (422)
     response = client.post("/profile", json={"rows": "not an array"})
     assert response.status_code == 422
-
-=======
->>>>>>> origin/main
