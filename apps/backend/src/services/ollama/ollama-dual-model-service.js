@@ -1,10 +1,11 @@
 import { serviceUrls } from "../../config/serviceUrls.js";
+import { getModelForTask } from "../../config/model-router.js";
 
 const OLLAMA_BASE_URL = serviceUrls.ollama;
 
 export const OLLAMA_MODELS = {
-  dashboard: process.env.OLLAMA_DASHBOARD_MODEL || 'neural-chat:7b',
-  chat: process.env.OLLAMA_CHAT_MODEL || 'llama3.2',
+  dashboard: getModelForTask('dashboard_planner'),
+  chat: getModelForTask('chatbot'),
 };
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 120000);
