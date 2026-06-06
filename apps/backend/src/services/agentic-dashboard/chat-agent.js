@@ -194,7 +194,7 @@ function validateDashboardActionEnvelope(command = {}, schemaProfile = {}, curre
       result = validateKpiAction(action, schemaProfile);
     } else if (["filter", "add_filter", "apply_filter"].includes(actionName)) {
       result = validateFilterAction(action, schemaProfile);
-    } else if (["clear_filters", "reset_filters", "delete_chart", "remove_chart"].includes(actionName)) {
+    } else if (["clear_filters", "reset_filters", "delete_chart", "remove_chart", "delete_all_charts", "remove_all_charts", "clear_charts", "generate_code"].includes(actionName)) {
       result = { valid: true, reasons: [], warnings: [], action };
     } else {
       result = { valid: false, reasons: [`Unsupported dashboard action ${action.action || "unknown"}.`], warnings: [], action };

@@ -9,6 +9,10 @@ import { handleExportRoutes } from './export.js';
 import { handleMLRoutes } from './machine-learning.js';
 import { handleMlAnalyticsRoutes } from './ml-analytics.js';
 import { handleStateRoutes } from './state.js';
+import {
+  handleChartQueryRequest,
+  handleRemoveChartRequest,
+} from './dashboard-chart-handler.js';
 import { handleQrUploadRoutes } from './qr-upload.js';
 import { handlePlaybookAnalysisRoutes } from './playbook-analysis.js';
 import { handlePdfRoutes } from './pdf.js';
@@ -52,6 +56,14 @@ export async function setupRoutes(request, response) {
 
     // State routes (for frontend state management)
     if (await handleStateRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Dashboard chart query routes (RAG-powered chart generation)
+    if (await handleChartQueryRequest(request, response, pathname)) {
+      return;
+    }
+    if (await handleRemoveChartRequest(request, response, pathname)) {
       return;
     }
 
@@ -120,10 +132,8 @@ export async function setupRoutes(request, response) {
       return;
     }
 
-    // Python-backed deterministic analytics routes
-    if (await handleMlAnalyticsRoutes(request, response, pathname)) {
-      return;
-    }
+    // NOTE: handleMlAnalyticsRoutes is registered early (line 37) with higher priority.
+    // Do NOT call it again here — duplicate call removed to prevent double-response errors.
 
     // DataAnalyticsProjects playbook route
     if (await handlePlaybookAnalysisRoutes(request, response, pathname)) {

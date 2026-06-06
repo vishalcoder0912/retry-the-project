@@ -415,7 +415,8 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
       ok(response, result, "Dashboard command processed");
       return true;
     } catch (error) {
-      fail(response, 500, error.message || "Dashboard command failed");
+      const statusCode = error.message && error.message.includes("does not exist in schema") ? 400 : 500;
+      fail(response, statusCode, error.message || "Dashboard command failed");
       return true;
     }
   }
@@ -461,7 +462,8 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
       ok(response, chatResponse, "AI chat response generated");
       return true;
     } catch (error) {
-      fail(response, 500, error.message || "AI chat failed");
+      const statusCode = error.message && error.message.includes("does not exist in schema") ? 400 : 500;
+      fail(response, statusCode, error.message || "AI chat failed");
       return true;
     }
   }
