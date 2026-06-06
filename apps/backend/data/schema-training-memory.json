@@ -1335,5 +1335,76 @@
     "examplesSeen": 50,
     "updatedAt": "2026-05-30T08:32:57.395Z",
     "createdAt": "2026-05-30T08:32:57.010Z"
+  },
+  {
+    "id": "a894eb48-5863-4704-b9d5-d4f49c239205",
+    "name": "Salary Small",
+    "domain": "workforce_salary",
+    "source": "user-feedback",
+    "rating": "good",
+    "notes": "",
+    "schemaProfile": {
+      "datasetName": "Salary Small",
+      "rowCount": 3,
+      "columnCount": 3,
+      "domain": "workforce_salary",
+      "signature": "f6b80e22a8157ae09ff9756e",
+      "columns": [
+        {
+          "name": "country",
+          "normalizedName": "country",
+          "type": "string",
+          "role": "location",
+          "description": "",
+          "uniqueCount": 2,
+          "missingPct": 0,
+          "topValuesCount": 2
+        },
+        {
+          "name": "salary_usd",
+          "normalizedName": "salary_usd",
+          "type": "string",
+          "role": "money_metric",
+          "description": "",
+          "uniqueCount": 3,
+          "missingPct": 0,
+          "topValuesCount": 3
+        },
+        {
+          "name": "experience",
+          "normalizedName": "experience",
+          "type": "string",
+          "role": "continuous_metric",
+          "description": "",
+          "uniqueCount": 3,
+          "missingPct": 0,
+          "topValuesCount": 3
+        }
+      ]
+    },
+    "dashboardPlan": {
+      "kpis": [
+        {
+          "title": "Total Records",
+          "metric": "__row_count__",
+          "aggregation": "count"
+        }
+      ],
+      "charts": [
+        {
+          "title": "Average Salary by Country",
+          "type": "bar",
+          "xKey": "country",
+          "xRole": "location",
+          "yKey": "salary_usd",
+          "yRole": "money_metric",
+          "aggregation": "avg",
+          "limit": 10
+        }
+      ]
+    },
+    "examplesSeen": 46,
+    "updatedAt": "2026-06-05T14:00:29.800Z",
+    "createdAt": "2026-06-03T04:52:46.906Z"
   }
 ]
