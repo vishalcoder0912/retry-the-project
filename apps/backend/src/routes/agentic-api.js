@@ -241,7 +241,11 @@ export async function handleAgenticApiRoutes(request, response, pathname) {
       );
       return true;
     } catch (error) {
-      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, error.message || "Agentic analysis failed", ERROR_CODES.AI_GENERATION_FAILED);
+      const isSensitive = error.message?.includes("sqlite") || error.message?.includes("connect") || error.message?.includes(".js");
+      const message = isSensitive
+        ? "Agentic analysis failed due to an internal service error"
+        : error.message || "Agentic analysis failed";
+      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, message, ERROR_CODES.AI_GENERATION_FAILED);
       return true;
     }
   }

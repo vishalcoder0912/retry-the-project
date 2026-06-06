@@ -81,7 +81,9 @@ export async function handleChatRoutes(request, response, pathname) {
         return true;
       }
 
-      const result = await runDashboardAIAgent(dataset, query);
+      const result = await runDashboardAIAgent(dataset, query, {
+        dashboardCharts: body.currentDashboard?.charts || body.dashboardCharts || [],
+      });
 
       sendSuccess(response, result, 'Dashboard AI command completed');
       return true;
@@ -180,11 +182,14 @@ export async function handleChatRoutes(request, response, pathname) {
     } catch (error) {
       console.error('[AI CHAT ERROR]', error);
 
+      const statusCode = error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+      const errorCode = statusCode === 400 ? ERROR_CODES.VALIDATION_ERROR : ERROR_CODES.AI_GENERATION_FAILED;
+
       sendError(
         response,
-        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        statusCode,
         error.message || 'AI chat failed',
-        ERROR_CODES.AI_GENERATION_FAILED,
+        errorCode,
       );
 
       return true;
