@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/features/data/api/dataApi";
 import type { Dataset } from "@/features/data/model/dataStore";
 import { buildPremiumDashboardModel } from "@/features/dashboard/utils/premiumDashboardAnalytics";
@@ -243,6 +243,12 @@ export function usePremiumAgenticDashboard(dataset: Dataset | null) {
   const [loading, setLoading] = useState(false);
   const [deepResearch, setDeepResearch] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastAutoRefreshSignatureRef = useRef<string | null>(null);
+  const datasetSignature = useMemo(() => {
+    if (!dataset?.id) return null;
+    const columnSignature = dataset.columns.map((column) => `${column.name}:${column.type}`).join("|");
+    return `${dataset.id}:${dataset.rows.length}:${columnSignature}`;
+  }, [dataset?.id, dataset?.rows.length, dataset?.columns]);
 
   const dashboard = useMemo(() => {
     if (!dataset) return null;
@@ -286,6 +292,12 @@ export function usePremiumAgenticDashboard(dataset: Dataset | null) {
   }, [dataset]);
 
   useEffect(() => {
+    if (!datasetSignature || lastAutoRefreshSignatureRef.current === datasetSignature) {
+      return;
+    }
+
+    lastAutoRefreshSignatureRef.current = datasetSignature;
+
     const scheduleIdle =
       typeof window !== "undefined" && "requestIdleCallback" in window
         ? window.requestIdleCallback
@@ -302,7 +314,7 @@ export function usePremiumAgenticDashboard(dataset: Dataset | null) {
     return () => {
       cancelIdle(idleId);
     };
-  }, [refreshAiDashboard]);
+  }, [datasetSignature, refreshAiDashboard]);
 
   const runPrompt = useCallback(
     async (query: string) => {

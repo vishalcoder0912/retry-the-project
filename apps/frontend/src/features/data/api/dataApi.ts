@@ -422,6 +422,9 @@ export async function safeApiFetch<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  const startTime = Date.now();
+  const method = options?.method || "GET";
+
   try {
     const response = await fetch(`${apiBaseUrl}${path}`, {
       ...options,
@@ -443,6 +446,8 @@ export async function safeApiFetch<T>(
 
       throw new ApiError(message, response.status, payload?.error?.code || payload?.code);
     }
+
+    const duration = Date.now() - startTime;
 
     logger.debug(`API: ${method} ${path}`, {
       statusCode: response.status,
