@@ -11,9 +11,17 @@ export function getPdfReadiness(analysis = {}) {
   const hasDocumentSummary = hasText(summary.shortSummary) || hasText(summary.short) || hasText(summary.detailedSummary) || hasText(summary.long);
   const hasVectorIndex = Boolean(analysis.vectorIndex?.success || analysis.vectorIndex?.chunks?.indexed > 0);
   const canAskQuestions = Boolean(analysis.documentId && (hasVectorIndex || hasChunks || hasPageText || hasDocumentSummary));
+  const activePipelines = Object.entries(analysis.pipelineStatus || {})
+    .filter(([, value]) => ["queued", "running"].includes(value?.status))
+    .map(([type, value]) => ({ type, name: type.replace(/^pdf\./, ""), status: value.status, progress: value.progress ?? 0 }));
+  let status = "processing";
+  if (hasVectorIndex && canAskQuestions) status = "query_ready";
+  else if (canAskQuestions) status = "partially_query_ready";
+  else if (activePipelines.some((pipeline) => pipeline.type === "pdf.extractText")) status = "text_extraction_running";
+  else if (analysis.status === "failed") status = "failed";
   return {
     documentId: analysis.documentId || null,
-    status: hasVectorIndex ? "query_ready" : canAskQuestions ? "partially_query_ready" : analysis.status === "failed" ? "failed" : "processing",
+    status,
     hasUploadedPdf: Boolean(analysis.documentId),
     hasText: hasPageText,
     hasPageText,
@@ -33,6 +41,8 @@ export function getPdfReadiness(analysis = {}) {
         : "PDF is processing. I can answer from available extracted text if ready."
       : "Your PDF is uploaded but still processing. Text extraction has not produced query-ready content yet.",
     progress: analysis.progress ?? (canAskQuestions ? 80 : 0),
+    activePipelines,
+    isProcessing: activePipelines.length > 0 && !hasVectorIndex,
   };
 }
 

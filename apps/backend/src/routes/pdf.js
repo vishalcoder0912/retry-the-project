@@ -8,7 +8,7 @@ import { sendSuccess, sendError } from "../utils/response-utils.js";
 import { HTTP_STATUS, ERROR_CODES } from "../config/constants.js";
 import { createDataset } from "../database/dataset-repository.js";
 import { updateDataset, updateAnalysis } from "./state.js";
-import { analyzePdfWithMlService } from "../services/ml/pdf-intelligence-client.js";
+import { analyzePdfWithMlService } from "../services/pdf/pdf-intelligence-client.js";
 import { parsePdfWithOpenDataLoader } from "../services/pdf/pdf-loader-service.js";
 import { buildPdfDataset } from "../services/pdf/pdf-dataset-builder.js";
 import { getPdfKnowledgeBase, savePdfKnowledgeBase } from "../services/pdf/pdf-store.js";

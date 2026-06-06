@@ -124,8 +124,8 @@ describe("PDF intelligence route surface", () => {
       })),
     });
 
-    expect(result.skipped).toBe(true);
-    expect(result.indexed).toBe(0);
+    expect(result.indexed).toBe(5002);
+    expect(result.batchSize).toBeGreaterThan(0);
     expect(applyChunkLimit(Array.from({ length: 5002 }))).toHaveLength(5002);
   });
 
