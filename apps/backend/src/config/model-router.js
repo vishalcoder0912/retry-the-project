@@ -18,7 +18,7 @@ export const MODELS = Object.freeze({
   fast:              process.env.FAST_MODEL               || 'llama3.2:3b',
   quickChat:         process.env.QUICK_CHAT_MODEL         || 'llama3.2:3b',
 
-  embedding:         process.env.EMBEDDING_MODEL          || 'nomic-embed-text',
+  embedding:         process.env.EMBEDDING_MODEL          || 'nomic-embed-text:latest',
 });
 
 const TASK_TO_MODEL = Object.freeze({

@@ -64,6 +64,10 @@ function validateQueryColumns(profile, query) {
     cols.push(vsMatch[2]);
   }
 
+  // 8. chart/compare/show <metric> by <dimension>
+  const byMatch = lower.match(/(?:chart|graph|show|compare|create)\s+.+?\s+by\s+([a-z0-9_-]+)/i);
+  if (byMatch) cols.push(byMatch[1]);
+
   const ignoredTokens = new Set([
     "record",
     "row",
@@ -82,6 +86,9 @@ function validateQueryColumns(profile, query) {
     "min",
     "total",
     "sum",
+    "median",
+    "salary",
+    "usd",
     "kpi",
     "card",
   ]);
@@ -89,10 +96,12 @@ function validateQueryColumns(profile, query) {
   
   for (const col of cleanCols) {
     if (ignoredTokens.has(col)) continue;
+    if (findCategoryValue(profile, col)) continue;
     const exists = (profile.columns || []).some(c => 
       c.normalizedName === col || 
       c.name.toLowerCase() === col || 
-      c.title.toLowerCase() === col
+      c.title.toLowerCase() === col ||
+      c.normalizedName?.split("_").includes(col)
     );
     if (!exists) {
       throw new Error(`Column '${col}' does not exist in schema.`);
@@ -154,6 +163,97 @@ function findCategory(profile, text) {
   const lower = normalizeColumnName(text);
   return profile.columns.find((column) => lower.includes(column.normalizedName) && ["category", "location", "target", "numeric_category"].includes(column.role)) ||
     pickPrimaryCategory(profile);
+}
+
+const COUNTRY_ALIASES = new Map([
+  ["usa", ["usa", "us", "u_s", "united states", "united states of america", "america"]],
+  ["uk", ["uk", "u_k", "united kingdom", "great britain", "britain", "england"]],
+  ["uae", ["uae", "u_a_e", "united arab emirates"]],
+]);
+
+function normalizeValueText(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function columnValues(column = {}) {
+  return (column.topValues || [])
+    .map((item) => item?.value)
+    .filter((value) => value !== null && value !== undefined && String(value).trim());
+}
+
+function aliasesForValue(value) {
+  const normalized = normalizeValueText(value);
+  const direct = [normalized, normalized.replace(/\s+/g, "")].filter(Boolean);
+  const aliasGroup = COUNTRY_ALIASES.get(normalized) || [];
+  return new Set([...direct, ...aliasGroup.map(normalizeValueText), ...aliasGroup.map((item) => normalizeValueText(item).replace(/\s+/g, ""))]);
+}
+
+function findCategoryValue(profile, query) {
+  const lower = normalizeValueText(query);
+  const categoryColumns = (profile.columns || []).filter((column) =>
+    ["location", "category", "target", "numeric_category"].includes(column.role)
+  );
+
+  for (const column of categoryColumns) {
+    for (const value of columnValues(column)) {
+      const aliases = aliasesForValue(value);
+      if ([...aliases].some((alias) => alias && new RegExp(`(^|\\s)${alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`, "i").test(lower))) {
+        return { column, value: String(value) };
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractKpiValueCandidate(query) {
+  const match = String(query || "").match(/\b(?:add|create|show|make)?\s*(?:a\s+)?(?:kpi|card|metric)\s+(?:of|for|on|with)\s+([a-z][a-z\s.-]{1,40})/i);
+  if (!match) return null;
+  return match[1]
+    .replace(/[_-]+/g, " ")
+    .replace(/\b(average|avg|mean|median|highest|max|top|lowest|min|sum|total|salary|usd|revenue|amount|metric|kpi|card)\b/ig, "")
+    .trim();
+}
+
+function primaryBusinessMetric(profile) {
+  return (profile.columns || []).find((column) => column.role === "money_metric") || pickPrimaryMetric(profile);
+}
+
+function aggregationLabel(aggregation) {
+  if (aggregation === "avg") return "Avg";
+  if (aggregation === "median") return "Median";
+  if (aggregation === "sum") return "Total";
+  if (aggregation === "max") return "Highest";
+  if (aggregation === "min") return "Lowest";
+  if (aggregation === "count_unique") return "Unique";
+  return "Count";
+}
+
+function pluralizeTitle(title = "") {
+  if (/y$/i.test(title)) return title.replace(/y$/i, "ies");
+  if (/s$/i.test(title)) return title;
+  return `${title}s`;
+}
+
+function detectAggregation(lower, fallback = "avg") {
+  if (/highest|max|top/.test(lower)) return "max";
+  if (/lowest|min/.test(lower)) return "min";
+  if (/median/.test(lower)) return "median";
+  if (/sum|total/.test(lower)) return "sum";
+  if (/unique|distinct/.test(lower)) return "count_unique";
+  if (/count|records?|rows?/.test(lower)) return "count";
+  if (/average|avg|mean/.test(lower)) return "avg";
+  return fallback;
+}
+
+function availableValuesMessage(column) {
+  return columnValues(column).slice(0, 10).join(", ");
 }
 
 function blockedPolicyResponse(query) {
@@ -426,6 +526,31 @@ function localCommand(profile, query) {
     };
   }
 
+  if (/trend/.test(lower)) {
+    const hasDate = (profile.columns || []).some((column) => column.role === "date" || column.type === "date");
+    if (!hasDate) {
+      return {
+        action: "ANSWER",
+        message: "No date/time column exists, so trend over time is unavailable. I can explain salary distribution and country comparison instead.",
+        schemaOnly: true,
+        needsClarification: false,
+        skipGovernance: true,
+      };
+    }
+  }
+
+  if (/run\s+geo\s+intelligence|geo intelligence/.test(lower)) {
+    const geoColumn = (profile.columns || []).find((column) => column.role === "location" || /country|region|state|city/.test(column.normalizedName)) || category;
+    const geoMetric = primaryBusinessMetric(profile) || metric;
+    return {
+      action: "RUN_GEO_INTELLIGENCE",
+      message: geoColumn ? `Running Geo Intelligence using ${geoColumn.title}.` : "Geo Intelligence needs a location field in the dataset schema.",
+      geoColumn: geoColumn?.name,
+      metric: geoMetric?.name,
+      schemaOnly: true,
+    };
+  }
+
   if (/(replace|convert|change|modify|update)/.test(lower) && /scatter|scatter plot/.test(lower) && /heatmap/.test(lower)) {
     const y = findColumn(profile, lower, ["money_metric", "score_metric", "continuous_metric"]) || metric;
     const x = profile.columns.find((column) => column.name !== y?.name && ["continuous_metric", "score_metric", "count_metric"].includes(column.role)) || metric2;
@@ -459,8 +584,52 @@ function localCommand(profile, query) {
     };
   }
 
+  if (/filter\s+to\s+[\w\s.-]+/.test(lower)) {
+    const resolved = findCategoryValue(profile, query);
+    if (resolved) {
+      return {
+        action: "FILTER",
+        message: `Applied filter ${resolved.column.name} = ${resolved.value}.`,
+        filters: { [resolved.column.name]: resolved.value },
+        schemaOnly: true,
+      };
+    }
+  }
+
   if (/kpi|card|metric/.test(lower)) {
-    const aggregation = /highest|max|top/.test(lower) ? "max" : /median/.test(lower) ? "median" : /sum|total/.test(lower) ? "sum" : /average|avg|mean/.test(lower) ? "avg" : /unique|distinct/.test(lower) ? "count_unique" : "count";
+    const resolvedValue = findCategoryValue(profile, query);
+    if (resolvedValue) {
+      const aggregation = detectAggregation(lower, "avg");
+      const target = primaryBusinessMetric(profile) || metric;
+      const title = `${aggregationLabel(aggregation)} ${target?.title || target?.name || "Value"} - ${resolvedValue.value}`;
+      const filter = { column: resolvedValue.column.name, operator: "equals", value: resolvedValue.value };
+      return {
+        action: "GENERATE_KPI",
+        message: `Added KPI: ${title}.`,
+        kpiSpec: sanitizeKpiSpec({
+          title,
+          metric: target?.name || "__row_count__",
+          aggregation,
+          format: target?.role === "money_metric" ? "currency" : "number",
+          filters: [filter],
+          calculationSource: `${aggregation.toUpperCase()}(${target?.name || "rows"}) where ${resolvedValue.column.name} = ${resolvedValue.value}`,
+        }, profile),
+        schemaOnly: true,
+      };
+    }
+
+    const unknownValue = extractKpiValueCandidate(query);
+    const likelyValueOnlyKpi = unknownValue && !findColumn(profile, unknownValue, ["money_metric", "score_metric", "continuous_metric", "count_metric"])?.normalizedName?.includes(normalizeColumnName(unknownValue));
+    if (likelyValueOnlyKpi && category) {
+      return {
+        action: "ANSWER",
+        message: `I could not find '${unknownValue}' in available ${category.title} values. Please choose one of: ${availableValuesMessage(category) || "the values present in the dataset"}.`,
+        needsClarification: true,
+        schemaOnly: true,
+      };
+    }
+
+    const aggregation = detectAggregation(lower, "count");
     const target = aggregation === "count" && /record|row/.test(lower) ? { name: "__row_count__", title: "Records" } : findColumn(profile, lower, ["money_metric", "score_metric", "continuous_metric", "count_metric", "location", "category"]);
     const title = aggregation === "count" && target.name === "__row_count__" ? "Total Records" : `${aggregation === "avg" ? "Average" : aggregation === "max" ? "Highest" : aggregation === "sum" ? "Total" : aggregation === "median" ? "Median" : aggregation === "count_unique" ? "Unique" : "Count"} ${target?.title || target?.name}`;
     return {
@@ -509,15 +678,30 @@ function localCommand(profile, query) {
     }
   }
 
-  if (/chart|graph|show|average|avg|top/.test(lower)) {
+  if (/chart|graph|show|compare|average|avg|top/.test(lower)) {
     const y = findColumn(profile, lower, ["money_metric", "score_metric", "continuous_metric", "count_metric"]) || metric;
     const x = findCategory(profile, lower) || category;
     if (x && y) {
       const aggregation = /\bsum\b|\btotal\b/.test(lower) ? "sum" : /\bmax\b|\bhighest\b/.test(lower) ? "max" : /\bmedian\b/.test(lower) ? "median" : /\bcount\b/.test(lower) || y.name === "count" ? "count" : "avg";
+      const topMatch = lower.match(/top\s*(\d+)/);
+      const limit = topMatch ? Number(topMatch[1]) : 10;
+      const type = topMatch ? "horizontal_bar" : "bar";
+      const titlePrefix = topMatch ? `Top ${limit}` : aggregation === "avg" ? "Average" : aggregation.toUpperCase();
+      const pluralCategory = topMatch ? pluralizeTitle(x.title) : x.title;
       return {
         action: "GENERATE_CHART",
         message: `Created chart: ${aggregation} ${y.title} by ${x.title}.`,
-        chartSpec: sanitizeChartSpec({ type: "bar", title: `${aggregation === "avg" ? "Average" : aggregation.toUpperCase()} ${y.title} by ${x.title}`, xKey: x.name, yKey: y.name, aggregation, limit: /top\s*(\d+)/.test(lower) ? Number(lower.match(/top\s*(\d+)/)[1]) : 10 }, profile),
+        chartSpec: sanitizeChartSpec({
+          type,
+          title: `${titlePrefix} ${topMatch ? pluralCategory : y.title} by ${topMatch ? `${aggregationLabel(aggregation)} ${y.title}` : x.title}`,
+          xKey: x.name,
+          yKey: y.name,
+          aggregation,
+          limit,
+          filters: [],
+          sort: topMatch ? { by: "value", direction: "desc" } : undefined,
+          calculationSource: `${aggregation.toUpperCase()}(${y.name}) grouped by ${x.name}`,
+        }, profile),
         schemaOnly: true,
       };
     }
@@ -610,6 +794,7 @@ export async function runDashboardCommand({ dataset, query, currentDashboard = {
   const profile = buildSchemaProfile(dataset);
   const earlyCommand = localCommand(profile, query);
   if (earlyCommand.approvedForRender === false) return earlyCommand;
+  if (earlyCommand.skipGovernance || earlyCommand.needsClarification) return earlyCommand;
   if (
     earlyCommand.action === "DELETE_CHART" ||
     earlyCommand.actions?.some((action) => ["delete_chart", "delete_all_charts", "remove_all_charts"].includes(String(action.action || "").toLowerCase()))

@@ -16,7 +16,7 @@ export default function GeoRankingPanel({
   return (
     <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
       <h3 className="mb-3 text-sm font-bold text-[#0F172A]">
-        Top {Math.min(5, locations.length)} Locations
+        Top Locations
       </h3>
       <div className="space-y-2">
         {top5.map((loc, index) => {

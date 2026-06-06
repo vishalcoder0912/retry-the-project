@@ -308,9 +308,11 @@ export function buildCommandCharts(rows: Row[]): DashboardChart[] {
   }
 
   if (metric && dimension) {
+    const isSalaryCountry = normalize(metric).includes("salary") && normalize(dimension) === "country";
+    const chartTitle = isSalaryCountry ? "Average Salary by Country" : `${titleCase(metric)} by ${titleCase(dimension)}`;
     addChart({
       type: "bar",
-      title: `${titleCase(metric)} by ${titleCase(dimension)}`,
+      title: chartTitle,
       xKey: dimension,
       yKey: metric,
       aggregation: normalize(metric).includes("salary") ? "avg" : "sum",
@@ -320,9 +322,11 @@ export function buildCommandCharts(rows: Row[]): DashboardChart[] {
   }
 
   if (metric && geoField && geoField !== dimension) {
+    const isSalaryGeo = normalize(metric).includes("salary") && normalize(geoField) === "country";
+    const chartTitle = isSalaryGeo ? "Average Salary by Country" : `${titleCase(metric)} by ${titleCase(geoField)}`;
     addChart({
       type: "bar",
-      title: `${titleCase(metric)} by ${titleCase(geoField)}`,
+      title: chartTitle,
       xKey: geoField,
       yKey: metric,
       aggregation: normalize(metric).includes("salary") ? "avg" : "sum",
@@ -441,6 +445,35 @@ export function interpretCommand(query: string, rows: Row[]): InterpretedCommand
   const lower = text.toLowerCase();
   const profile = buildDatasetProfile(rows);
   const columns = profile.columns.map((column) => column.name);
+
+  // Check for invalid columns mentioned in the query
+  const stopWords = new Set([
+    "show", "average", "avg", "sum", "total", "median", "highest", "max", "min", "lowest", 
+    "by", "filter", "only", "where", "chart", "kpi", "value", "records", "count", 
+    "trend", "month", "time", "line", "pie", "donut", "share", "composition", 
+    "bar", "plot", "graph", "explain", "summary", "summarize", "describe", "why", 
+    "insight", "reset", "clear", "filters", "a", "an", "the", "of", "in", "on", "at", "for"
+  ]);
+
+  const queryWords = lower.match(/\b[a-z0-9_]+\b/g) || [];
+  for (const word of queryWords) {
+    if (stopWords.has(word)) continue;
+    const exists = columns.some(col => normalize(col) === normalize(word));
+    if (!exists) {
+      const isColumnCandidate = 
+        word.includes("_") || 
+        new RegExp(`\\b(average|avg|sum|total|median|highest|max|min|lowest|by|filter|only|where|show|compare|plot|chart|kpi|vs)\\s+${word}\\b`, "i").test(lower) ||
+        new RegExp(`\\b${word}\\s+(by|vs|filter|only|where)\\b`, "i").test(lower);
+        
+      if (isColumnCandidate) {
+        return {
+          message: `Column '${word}' does not exist in schema.`,
+          auditLabel: `Rejected command: invalid column ${word}`,
+        };
+      }
+    }
+  }
+
   const metric =
     pickBusinessMetric(profile, text) ||
     pickByText(columns, lower.match(/(?:salary|revenue|profit|sales|orders|customers|patients|risk score|score|amount)/i)?.[0] || "");
@@ -509,10 +542,12 @@ export function interpretCommand(query: string, rows: Row[]): InterpretedCommand
     };
   }
 
-  if (/kpi|card|median|average|avg/.test(lower) && metric && !/chart|graph|plot/.test(lower)) {
-    const aggregation = /median/.test(lower) ? "median" : /total|sum/.test(lower) ? "sum" : "avg";
+  if (/kpi|card|median|average|avg|highest|max/.test(lower) && metric && !/chart|graph|plot/.test(lower)) {
+    const aggregation = /median/.test(lower) ? "median" : /highest|max/.test(lower) ? "max" : /total|sum/.test(lower) ? "sum" : "avg";
+    const isSalary = normalize(metric).includes("salary");
+    const kpiTitle = isSalary && aggregation === "max" ? "Highest Salary" : isSalary && aggregation === "avg" ? "Average Salary" : `${titleCase(String(aggregation))} ${titleCase(metric)}`;
     const kpi = buildKpiFromSpec(rows, {
-      title: `${titleCase(String(aggregation))} ${titleCase(metric)}`,
+      title: kpiTitle,
       metric,
       aggregation,
       format: metricFormat(metric),
@@ -561,9 +596,11 @@ export function interpretCommand(query: string, rows: Row[]): InterpretedCommand
 
   if ((/chart|compare|top|by|bar|plot|graph/.test(lower) || lower.includes("show ")) && metric && (dimension || geoField)) {
     const xKey = /countr|geo|location|region|state|city/.test(lower) && geoField ? geoField : dimension || geoField!;
+    const isSalaryCountry = normalize(metric).includes("salary") && normalize(xKey) === "country";
+    const chartTitle = isSalaryCountry ? "Average Salary by Country" : `${titleCase(metric)} by ${titleCase(xKey)}`;
     const chart = buildChartFromSpec(rows, {
       type: /top|bar|compare|by/.test(lower) ? "bar" : "horizontalBar",
-      title: `${titleCase(metric)} by ${titleCase(xKey)}`,
+      title: chartTitle,
       xKey,
       yKey: metric,
       aggregation: normalize(metric).includes("salary") ? "avg" : "sum",
@@ -573,7 +610,7 @@ export function interpretCommand(query: string, rows: Row[]): InterpretedCommand
     return {
       message: `Created ${chart.title}. The chart is grounded in ${chart.xKey} and ${chart.yKey}.`,
       chart: { ...chart, createdBy: "ai" },
-      auditLabel: `Created ${chart.title}`,
+      auditLabel: isSalaryCountry ? `Created average salary_usd chart by country` : `Created ${chart.title}`,
     };
   }
 

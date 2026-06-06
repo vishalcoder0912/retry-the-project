@@ -11,6 +11,7 @@ import {
 } from '../database/dataset-repository.js';
 import { classifyUploadedDatasets } from '../services/dataset-role-detector.js';
 import { runFullAutoAnalysis } from '../services/ai-analyst/ai-analyst-orchestrator.js';
+import { chooseAnalyticsExecutionPolicy } from '../services/performance/analytics-execution-policy.js';
 
 // Cached datasets are only retained for legacy in-memory data; normal datasets persist to SQLite.
 const datasets = new Map();
@@ -31,6 +32,31 @@ async function getRequestBody(request) {
     });
     request.on('error', reject);
   });
+}
+
+function sanitizeDatasetForClient(dataset) {
+  if (!dataset) return dataset;
+  const policy = chooseAnalyticsExecutionPolicy(dataset);
+  const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
+
+  if (policy.allowFrontendRawRows) {
+    return {
+      ...dataset,
+      executionPolicy: policy,
+    };
+  }
+
+  const previewRows = rows.slice(0, Math.min(policy.maxPreviewRows, 1000));
+
+  return {
+    ...dataset,
+    rows: previewRows,
+    previewRows,
+    rowCount: policy.rowCount,
+    fullRowsAvailable: false,
+    rawRowsTruncated: rows.length > previewRows.length,
+    executionPolicy: policy,
+  };
 }
 
 export async function handleDatasetRoutes(request, response, pathname) {
@@ -141,10 +167,17 @@ export async function handleDatasetRoutes(request, response, pathname) {
       
       console.log('[DATASET] ✅ Dataset imported:', datasetId);
 
-      const analysis = await runFullAutoAnalysis(dataset);
+      const policy = chooseAnalyticsExecutionPolicy(dataset);
+      const analysis = policy.mode === "fast-analytics-service"
+        ? {
+            schemaOnly: true,
+            deferredFastDashboard: true,
+            message: "Large dataset imported. Dashboard values will be calculated by the DuckDB ML service.",
+          }
+        : await runFullAutoAnalysis(dataset);
 
       sendCreated(response, {
-        dataset,
+        dataset: sanitizeDatasetForClient(dataset),
         chatMessages: [],
         analysis,
       }, 'Dataset imported and schema dashboard generated');
@@ -197,12 +230,19 @@ export async function handleDatasetRoutes(request, response, pathname) {
 
       updateDataset(savedDataset);
 
-      const analysis = await runFullAutoAnalysis(savedDataset);
+      const policy = chooseAnalyticsExecutionPolicy(savedDataset);
+      const analysis = policy.mode === "fast-analytics-service"
+        ? {
+            schemaOnly: true,
+            deferredFastDashboard: true,
+            message: "Large dataset imported. Dashboard values will be calculated by the DuckDB ML service.",
+          }
+        : await runFullAutoAnalysis(savedDataset);
 
       sendSuccess(
         response,
         {
-          dataset: savedDataset,
+          dataset: sanitizeDatasetForClient(savedDataset),
           chatMessages: [],
           pipeline: 'multi-file-smart-analysis',
           relatedDatasets: {
@@ -235,7 +275,7 @@ export async function handleDatasetRoutes(request, response, pathname) {
         return true;
       }
       
-      sendSuccess(response, { dataset }, 'Dataset retrieved');
+      sendSuccess(response, { dataset: sanitizeDatasetForClient(dataset) }, 'Dataset retrieved');
       return true;
     } catch (error) {
       console.error('Dataset get error:', error);

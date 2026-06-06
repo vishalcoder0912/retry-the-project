@@ -1,5 +1,6 @@
 import { serviceUrls } from "../../config/serviceUrls.js";
 import { getModelForTask } from "../../config/model-router.js";
+import { assertNoRawRowsInString } from "../ai/llm-payload-sanitizer.js";
 
 const OLLAMA_BASE_URL = serviceUrls.ollama;
 
@@ -96,6 +97,13 @@ export async function callOllamaChat({
   topP = 0.9,
   numCtx = 8192,
 }) {
+  try {
+    assertNoRawRowsInString(JSON.stringify(messages));
+  } catch (error) {
+    console.error(`[OLLAMA DUAL MODEL BLOCKED] ${error.message}`);
+    throw new Error(`Blocked unsafe LLM payload: ${error.message}`);
+  }
+
   await assertOllamaModelAvailable(model);
 
   const timeout = makeTimeout();

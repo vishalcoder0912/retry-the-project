@@ -1,5 +1,6 @@
 import { serviceUrls } from "../../config/serviceUrls.js";
 import { findColumn } from "./schema-profiler.js";
+import { assertNoRawRowsInString } from "../ai/llm-payload-sanitizer.js";
 
 function deterministicCommand(schema, command) {
   const text = String(command || "").toLowerCase();
@@ -50,7 +51,15 @@ async function callLlmForPlan(schema, command) {
   const baseUrl = serviceUrls.ollama;
   const model = process.env.OLLAMA_MODEL || "llama3.2:latest";
 
+  try {
+    assertNoRawRowsInString(JSON.stringify({ schema, command }));
+  } catch (error) {
+    console.error(`[command-router BLOCKED] ${error.message}`);
+    throw new Error(`Blocked unsafe LLM payload: ${error.message}`);
+  }
+
   const prompt = `
+You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows.
 You are an AI data analyst planner.
 You do not calculate KPI values.
 You do not create chart data.

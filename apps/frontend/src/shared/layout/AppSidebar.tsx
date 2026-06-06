@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
 import { API_BASE_URL } from "@/config/apiConfig";
+import { useData } from "@/features/data/context/useData";
 
 type Props = {
   onNavigate?: () => void;
@@ -57,6 +58,7 @@ function ProviderPill({ online }: { online: boolean }) {
 }
 
 export default function AppSidebar({ onNavigate, className }: Props) {
+  const { dataset } = useData();
   const location = useLocation();
   const [health, setHealth] = useState<ProvidersHealth | null>(null);
   const [checking, setChecking] = useState(false);
@@ -101,7 +103,11 @@ export default function AppSidebar({ onNavigate, className }: Props) {
           </div>
           <div className="min-w-0">
             <h1 className="truncate text-lg font-semibold tracking-tight text-[#F8FAFC]">InsightFlow</h1>
-            <p className="mt-0.5 truncate text-xs font-medium text-[#94A3B8]">Agentic AI Analytics</p>
+            {dataset?.name ? (
+              <p className="mt-0.5 truncate text-xs font-bold text-violet-400">{dataset.name}</p>
+            ) : (
+              <p className="mt-0.5 truncate text-xs font-medium text-[#94A3B8]">Agentic AI Analytics</p>
+            )}
           </div>
         </Link>
       </div>

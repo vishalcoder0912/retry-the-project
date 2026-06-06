@@ -9,7 +9,7 @@ test("Dashboard AI command flow validates commands, updates charts, and updates 
   await expect(page.getByRole("heading", { name: "InsightFlow Agentic Dashboard" })).toBeVisible();
 
   // Find the AI input textbox
-  const input = page.getByPlaceholder("Ask InsightFlow AI...");
+  const input = page.getByPlaceholder(/Ask:/i);
   await expect(input).toBeVisible();
 
   // 1. Submit a valid command to generate a chart

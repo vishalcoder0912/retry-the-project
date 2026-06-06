@@ -238,9 +238,23 @@ export interface PdfImportResult {
     datasetId: string;
     fileName: string;
     jobId: string;
+    pageCount?: number;
     tableCount: number;
     chunkCount: number;
     textElementCount: number;
+    documentType?: string;
+    ocrUsed?: boolean;
+    qualityScore?: number;
+    ocrConfidence?: number | null;
+    warnings?: string[];
+  };
+  pdfIntelligence?: {
+    summary?: Record<string, any>;
+    pages?: Array<Record<string, any>>;
+    sections?: Array<Record<string, any>>;
+    quality?: Record<string, any>;
+    tables?: Array<Record<string, any>>;
+    readiness?: PdfPipelineStatus["readiness"];
   };
   dataset: Dataset;
   analysis: DatasetAnalysis;
@@ -262,7 +276,59 @@ export interface PdfAskResult {
     source: number;
     id: string;
     preview: string;
+    pageNumber?: number | null;
+    confidence?: number | null;
+    extractionMethod?: string;
+    chunkType?: string;
   }>;
+  intent?: string;
+  confidence?: number;
+  warnings?: string[];
+  model?: string;
+}
+
+export interface PdfUploadPipelineResult {
+  documentId: string;
+  status: string;
+  message: string;
+  next: {
+    statusUrl: string;
+    documentUrl: string;
+  };
+}
+
+export interface PdfPipelineStatus {
+  documentId: string;
+  status: string;
+  progress: number;
+  pipelines?: Record<string, {
+    status: string;
+    progress: number;
+    currentPage?: number | null;
+    totalPages?: number | null;
+    error?: string | null;
+  }>;
+  jobs?: Array<Record<string, any>>;
+  readiness?: {
+    documentId?: string | null;
+    status: string;
+    hasUploadedPdf?: boolean;
+    hasPageText?: boolean;
+    hasDocumentSummary?: boolean;
+    hasVectorIndex?: boolean;
+    hasTables?: boolean;
+    hasRealDataTables?: boolean;
+    canAskQuestions: boolean;
+    canExplainPdf: boolean;
+    canSummarizePage: boolean;
+    canShowMetrics: boolean;
+    processingMessage?: string;
+    activePipelines?: Array<Record<string, any>>;
+    progress?: number;
+  };
+  currentPage?: number | null;
+  totalPages?: number | null;
+  message?: string;
 }
 
 export interface AgenticConfigResponse {
@@ -430,10 +496,51 @@ export const api = {
     const payload = await response.json() as ApiEnvelope<PdfImportResult>;
     return payload.data as PdfImportResult;
   },
+  uploadPdfIntelligence: async (file: File): Promise<PdfUploadPipelineResult> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${apiBaseUrl}/api/pdf-intelligence/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      throw new ApiError(errorPayload?.error?.message || "PDF upload failed", response.status, errorPayload?.error?.code);
+    }
+
+    const payload = await response.json() as ApiEnvelope<PdfUploadPipelineResult>;
+    return payload.data as PdfUploadPipelineResult;
+  },
+  getPdfIntelligenceDocument: (pdfId: string): Promise<PdfImportResult["pdfIntelligence"] & { documentId: string; fileName?: string; pageCount?: number; tableCount?: number; chunkCount?: number; status?: string; progress?: number }> =>
+    request(`/api/pdf-intelligence/${pdfId}`),
+  getPdfPipelineStatus: (pdfId: string): Promise<PdfPipelineStatus> =>
+    request<PdfPipelineStatus>(`/api/pdf-intelligence/${pdfId}/status`),
   askPdf: (pdfId: string, query: string): Promise<PdfAskResult> =>
     request<PdfAskResult>(`/api/pdf/${pdfId}/ask`, {
       method: "POST",
       body: JSON.stringify({ query }),
+    }),
+  askPdfIntelligence: (pdfId: string, query: string, intent?: string): Promise<PdfAskResult> =>
+    request<PdfAskResult>(`/api/pdf-intelligence/${pdfId}/query`, {
+      method: "POST",
+      body: JSON.stringify({ query, intent }),
+    }),
+  explainPdf: (pdfId: string): Promise<PdfAskResult> =>
+    request<PdfAskResult>(`/api/pdf-intelligence/${pdfId}/explain`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  reindexPdf: (pdfId: string) =>
+    request(`/api/pdf-intelligence/${pdfId}/reindex`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  forceOcrPdf: (pdfId: string) =>
+    request<{ document: PdfImportResult["pdfIntelligence"] & { documentId?: string }; vectorIndex?: unknown }>(`/api/pdf-intelligence/${pdfId}/force-ocr`, {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
   updateRow: (datasetId: string, rowId: number, column: string, value: unknown) =>
     request<{ dataset: Dataset }>(`/api/datasets/${datasetId}/rows/${rowId}`, {

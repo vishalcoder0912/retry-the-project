@@ -1,7 +1,41 @@
 // Application state endpoint
+import fs from 'node:fs';
+import path from 'node:path';
 import { sendSuccess, sendError } from '../utils/response-utils.js';
 import { HTTP_STATUS } from '../config/constants.js';
 import { getChatMessages, getCurrentDataset } from '../database/dataset-repository.js';
+
+function findPdfIdByDatasetId(datasetId) {
+  try {
+    const intelStorePath = path.resolve('data', 'pdf-intelligence-store.json');
+    if (fs.existsSync(intelStorePath)) {
+      const intelStore = JSON.parse(fs.readFileSync(intelStorePath, 'utf8'));
+      for (const [pdfId, analysis] of Object.entries(intelStore)) {
+        if (analysis.datasetId === datasetId) {
+          return pdfId;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error reading pdf-intelligence-store:', e);
+  }
+
+  try {
+    const knowledgeStorePath = path.resolve('data', 'pdf-knowledge-store.json');
+    if (fs.existsSync(knowledgeStorePath)) {
+      const knowledgeStore = JSON.parse(fs.readFileSync(knowledgeStorePath, 'utf8'));
+      for (const [pdfId, payload] of Object.entries(knowledgeStore)) {
+        if (payload.datasetId === datasetId) {
+          return pdfId;
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error reading pdf-knowledge-store:', e);
+  }
+
+  return null;
+}
 
 // In-memory UI state. Datasets and chat history hydrate from SQLite; analysis
 // remains in memory until a persisted analysis store exists.
@@ -19,6 +53,14 @@ export async function handleStateRoutes(request, response, pathname) {
     try {
       const persistedDataset = getCurrentDataset();
       if (persistedDataset) {
+        const pdfId = findPdfIdByDatasetId(persistedDataset.id);
+        if (pdfId) {
+          persistedDataset.pdf = {
+            id: pdfId,
+            datasetId: persistedDataset.id,
+            fileName: persistedDataset.fileName,
+          };
+        }
         appState.dataset = persistedDataset;
         appState.chatMessages = getChatMessages(persistedDataset.id);
       }

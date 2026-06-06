@@ -1,465 +1,246 @@
-/**
- * custom-chart-query-parser.js
- *
- * Deterministic natural-language query parser for dashboard actions.
- * Runs BEFORE the AI model to resolve clear chart/filter/KPI intents
- * directly from the schema, avoiding hallucinations on column names.
- *
- * Usage:
- *   import { parseCustomChartQuery } from './custom-chart-query-parser.js';
- *   const action = parseCustomChartQuery(userQuery, schemaProfile);
- *   if (action) {
- *     // Use action directly — skip AI for this query
- *   }
- */
-
-// ---------------------------------------------------------------------------
-// Chart type keyword maps
-// ---------------------------------------------------------------------------
-const CHART_TYPE_KEYWORDS = {
-  bar: ['bar chart', 'bar graph', 'bar plot', 'column chart', 'grouped bar'],
-  horizontal_bar: ['horizontal bar', 'horizontal chart', 'hbar'],
-  line: ['line chart', 'line graph', 'line plot', 'trend', 'over time', 'time series'],
-  area: ['area chart', 'area graph', 'area plot', 'stacked area'],
-  pie: ['pie chart', 'pie graph', 'pie plot', 'proportion', 'share', 'breakdown'],
-  donut: ['donut chart', 'doughnut chart', 'donut graph'],
-  scatter: ['scatter', 'scatter plot', 'scatterplot', 'correlation', 'vs', 'versus', 'against', 'relationship between'],
-  histogram: ['histogram', 'distribution', 'frequency', 'spread'],
-  map: ['map', 'geo map', 'geographic', 'choropleth', 'world map', 'country map'],
-};
-
-// Aggregation aliases → canonical name
-const AGGREGATION_ALIASES = {
-  average: 'avg',
-  mean: 'avg',
-  avg: 'avg',
-  total: 'sum',
-  sum: 'sum',
-  count: 'count',
-  number: 'count',
-  minimum: 'min',
-  min: 'min',
-  maximum: 'max',
-  max: 'max',
-  median: 'median',
-  unique: 'count_unique',
-  distinct: 'count_unique',
-  count_unique: 'count_unique',
-};
-
-// Preposition patterns used in "show X by Y", "show X vs Y", etc.
-const BY_PREPOSITIONS = /\bby\b|\bper\b|\bfor each\b|\bfor every\b|\bgrouped by\b|\bbroken down by\b/i;
-const VS_PREPOSITIONS = /\bvs\.?\b|\bversus\b|\bagainst\b|\bcompared to\b|\band\b/i;
-const SHOW_VERBS = /\b(show|display|plot|draw|create|generate|visualize|chart|graph|make)\b/i;
-const FILTER_VERBS = /\b(filter|where|only|include|exclude|limit to|restrict to|find|search)\b/i;
-const KPI_VERBS = /\b(total|sum of|average|avg of|count of|mean|max|maximum|min|minimum|how many|how much|what is the)\b/i;
-
-// ---------------------------------------------------------------------------
-// Column fuzzy matcher
-// ---------------------------------------------------------------------------
-
-/**
- * Normalize a string for fuzzy matching: lowercase, strip punctuation/spaces.
- */
-function normalizeToken(str = '') {
-  return String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
+function normalize(text = "") {
+  return String(text).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-/**
- * Find the best-matching column name from schemaProfile given a raw token.
- * Returns the real column name (preserving original casing) or null.
- *
- * @param {string} token - A word or phrase from the user query
- * @param {import('../ai-analyst/schema-fingerprint.js').SchemaProfile} schemaProfile
- * @returns {string|null}
- */
-export function findColumnMatch(token, schemaProfile) {
-  if (!token || !schemaProfile?.columns?.length) return null;
+function columnName(column = {}) {
+  return column.name || column.key || column.id || "";
+}
 
-  const normToken = normalizeToken(token);
-  if (!normToken) return null;
-
-  const columns = schemaProfile.columns;
-
-  // 1. Exact name match
-  const exact = columns.find((c) => normalizeToken(c.name) === normToken);
-  if (exact) return exact.name;
-
-  // 2. Exact normalizedName match
-  const normalized = columns.find((c) => normalizeToken(c.normalizedName) === normToken);
-  if (normalized) return normalized.name;
-
-  // 3. Prefix / contains match — prefer the shortest column name that contains token
-  const contains = columns
-    .filter((c) => normalizeToken(c.name).includes(normToken))
-    .sort((a, b) => a.name.length - b.name.length);
-  if (contains.length) return contains[0].name;
-
+export function detectChartType(query = "") {
+  const lower = normalize(query);
+  if (/\bhorizontal\s+bar\b/.test(lower)) return "horizontal_bar";
+  if (/\b(line|trend|over time|time series)\b/.test(lower)) return "line";
+  if (/\b(pie|donut|breakdown|share)\b/.test(lower)) return lower.includes("donut") ? "donut" : "pie";
+  if (/\b(scatter|relationship|correlation)\b/.test(lower)) return "scatter";
+  if (/\b(histogram|distribution)\b/.test(lower)) return "histogram";
+  if (/\b(area)\b/.test(lower)) return "area";
+  if (/\b(bar|compare|by|vs|vary)\b/.test(lower)) return "bar";
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Chart type detector
-// ---------------------------------------------------------------------------
-
-/**
- * Detect chart type from the raw query text.
- * Returns a canonical chart type string or null.
- *
- * @param {string} query
- * @returns {string|null}
- */
-export function detectChartType(query) {
-  const lower = query.toLowerCase();
-  for (const [type, keywords] of Object.entries(CHART_TYPE_KEYWORDS)) {
-    if (keywords.some((kw) => lower.includes(kw))) return type;
-  }
+export function detectAggregation(query = "") {
+  const lower = normalize(query);
+  if (/\b(avg|average|mean)\b/.test(lower)) return "avg";
+  if (/\b(median)\b/.test(lower)) return "median";
+  if (/\b(min|minimum|lowest)\b/.test(lower)) return "min";
+  if (/\b(max|maximum|highest)\b/.test(lower)) return "max";
+  if (/\b(unique|distinct)\b/.test(lower)) return "count_unique";
+  if (/\b(count|number of|records)\b/.test(lower)) return "count";
+  if (/\b(sum|total)\b/.test(lower)) return "sum";
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// Aggregation detector
-// ---------------------------------------------------------------------------
-
-/**
- * Detect aggregation intent from the query.
- * Returns a canonical aggregation string or null.
- *
- * @param {string} query
- * @returns {string|null}
- */
-export function detectAggregation(query) {
-  const lower = query.toLowerCase();
-  for (const [alias, canonical] of Object.entries(AGGREGATION_ALIASES)) {
-    // Match as a whole word
-    const pattern = new RegExp(`\\b${alias}\\b`);
-    if (pattern.test(lower)) return canonical;
+function roleOf(column = {}) {
+  const name = normalize(columnName(column));
+  const type = normalize(column.type || column.inferredType || column.role || "");
+  const explicitRole = normalize(column.role || "");
+  if (explicitRole.includes("metric")) return "metric";
+  if (["category", "dimension", "location", "target", "numeric_category"].includes(explicitRole)) {
+    return explicitRole === "category" ? "dimension" : explicitRole;
   }
-  return null;
+  if (explicitRole === "date") return "date";
+  if (explicitRole === "id") return "id";
+  if (/date|time|timestamp|year|month/.test(name) || /date|time/.test(type)) return "date";
+  if (/number|numeric|int|float|double|decimal|metric/.test(type)) return "metric";
+  if (/country|state|city|region|market|location|geo/.test(name)) return "location";
+  return "dimension";
 }
 
-// ---------------------------------------------------------------------------
-// Column extractor: splits query into candidate tokens and matches against schema
-// ---------------------------------------------------------------------------
+function findMentionedColumn(query = "", columns = [], predicate = () => true) {
+  const lower = normalize(query);
+  const ranked = columns
+    .filter(predicate)
+    .map((column) => {
+      const name = columnName(column);
+      const normalizedName = normalize(name);
+      const compactName = normalizedName.replace(/\s+/g, "");
+      const compactQuery = lower.replace(/\s+/g, "");
+      const score =
+        lower === normalizedName ? 4 :
+        lower.includes(normalizedName) ? 3 :
+        compactQuery.includes(compactName) ? 2 :
+        normalizedName.split(" ").some((part) => part.length > 2 && lower.includes(part)) ? 1 :
+        0;
+      return { column, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
 
-/**
- * Extract up to two column candidates from a query given a schema.
- * Tries multi-word and single-word tokens.
- *
- * @param {string} query
- * @param {object} schemaProfile
- * @returns {{ left: string|null, right: string|null }}
- */
-function extractColumnCandidates(query, schemaProfile) {
-  // 1. Try splitting around prepositions first (on the raw query so prepositions aren't stripped)
-  const bySplit = query.split(BY_PREPOSITIONS).map((s) => s.trim()).filter(Boolean);
-  const vsSplit = query.split(VS_PREPOSITIONS).map((s) => s.trim()).filter(Boolean);
-
-  // Use whichever split gives two distinct parts
-  const parts = bySplit.length >= 2 ? bySplit : vsSplit.length >= 2 ? vsSplit : [query];
-
-  // Helper to strip noise words and find the best column match
-  function cleanAndMatch(phrase) {
-    const cleaned = phrase
-      .replace(SHOW_VERBS, '')
-      .replace(FILTER_VERBS, '')
-      .replace(KPI_VERBS, '')
-      .replace(/\b(chart|graph|plot|map|histogram|distribution|the|a|an|of|for|in|with|and|or|by|per|each)\b/gi, ' ')
-      .replace(/\s{2,}/g, ' ')
-      .trim();
-
-    const tokens = cleaned.split(/\s+/).filter(Boolean);
-    // Try full phrase, then decreasing n-grams
-    for (let len = tokens.length; len >= 1; len--) {
-      for (let start = 0; start <= tokens.length - len; start++) {
-        const candidate = tokens.slice(start, start + len).join(' ');
-        const match = findColumnMatch(candidate, schemaProfile);
-        if (match) return match;
-      }
-    }
-    return null;
-  }
-
-  const left = parts[0] ? cleanAndMatch(parts[0]) : null;
-  const right = parts[1] ? cleanAndMatch(parts[1]) : null;
-
-  return { left, right };
+  return ranked[0]?.column || null;
 }
 
-// ---------------------------------------------------------------------------
-// Column role helpers (mirrors chat-agent.js logic)
-// ---------------------------------------------------------------------------
-
-const METRIC_ROLES = new Set(['money_metric', 'score_metric', 'continuous_metric', 'count_metric', 'rate_metric']);
-const CATEGORY_ROLES = new Set(['category', 'location', 'target', 'numeric_category']);
-
-function isMetric(col) {
-  return col && (col.type === 'number' || METRIC_ROLES.has(col.role));
+function firstByRole(columns = [], roles = []) {
+  return columns.find((column) => roles.includes(roleOf(column))) || null;
 }
 
-function isCategory(col) {
-  return col && (CATEGORY_ROLES.has(col.role) || col.type === 'category' || col.type === 'boolean' || col.type === 'string' || col.role === 'dimension');
-}
-
-function isDate(col) {
-  return col && (col.type === 'date' || col.role === 'date' || /date|time|month|year|created|updated/i.test(col.name || ''));
-}
-
-function isGeo(col) {
-  return col && (col.role === 'location' || /country|state|city|region|territory|province|location|market/i.test(col.name || ''));
-}
-
-function getColumn(schemaProfile, name) {
-  if (!name) return null;
-  return (schemaProfile?.columns || []).find((c) => c.name === name) || null;
-}
-
-// ---------------------------------------------------------------------------
-// Chart type auto-selection based on column roles
-// ---------------------------------------------------------------------------
-
-/**
- * Given two matched columns (or one), pick the most suitable chart type.
- *
- * @param {object|null} xCol
- * @param {object|null} yCol
- * @param {string|null} explicit - User-specified chart type (already detected)
- * @returns {string}
- */
-function inferChartType(xCol, yCol, explicit) {
-  if (explicit) return explicit;
-  if (!xCol) return 'bar';
-
-  if (isGeo(xCol) && (!yCol || yCol === 'count')) return 'map';
-  if (isDate(xCol)) return 'line';
-  if (isMetric(xCol) && isMetric(yCol)) return 'scatter';
-  if (isCategory(xCol) && isMetric(yCol)) return 'bar';
-  if (isCategory(xCol) && !yCol) return 'pie';
-  return 'bar';
-}
-
-// ---------------------------------------------------------------------------
-// Filter intent parser
-// ---------------------------------------------------------------------------
-
-const FILTER_PATTERN = /\b(?:filter|where|only|find)\s+(\w[\w\s]*?)\s*(?:=|is|equals?|==)\s*["']?([^"',]+)["']?/i;
-const EXCLUDE_PATTERN = /\bexclude\s+(\w[\w\s]*?)\s*(?:=|is|equals?|==)\s*["']?([^"',]+)["']?/i;
-
-/**
- * Try to parse a filter intent from a query.
- *
- * @param {string} query
- * @param {object} schemaProfile
- * @returns {object|null}
- */
-function tryParseFilter(query, schemaProfile) {
-  const match = FILTER_PATTERN.exec(query) || EXCLUDE_PATTERN.exec(query);
-  if (!match) return null;
-
-  const rawColumn = match[1].trim();
-  const value = match[2].trim();
-  const colName = findColumnMatch(rawColumn, schemaProfile);
-  if (!colName) return null;
-
+export function categorizeSchemaColumns(schemaProfile = {}) {
+  const columns = Array.isArray(schemaProfile.columns) ? schemaProfile.columns : [];
   return {
-    action: 'filter',
-    filters: { [colName]: value },
-    schema_safe: true,
-    _parsed_by: 'custom-chart-query-parser',
+    metrics: columns.filter((column) => roleOf(column) === "metric").map(columnName).filter(Boolean),
+    categories: columns.filter((column) => ["dimension", "location"].includes(roleOf(column))).map(columnName).filter(Boolean),
+    dates: columns.filter((column) => roleOf(column) === "date").map(columnName).filter(Boolean),
   };
 }
 
-// ---------------------------------------------------------------------------
-// KPI intent parser
-// ---------------------------------------------------------------------------
-
-const KPI_PATTERN = /\b(?:total|sum|average|avg|mean|count|max|maximum|min|minimum|unique|distinct)\s+(?:of\s+)?(\w[\w\s]*)/i;
-
-/**
- * Try to parse a KPI intent from a query.
- *
- * @param {string} query
- * @param {object} schemaProfile
- * @returns {object|null}
- */
-function tryParseKpi(query, schemaProfile) {
-  const match = KPI_PATTERN.exec(query);
-  if (!match) return null;
-
-  const aggRaw = match[0].split(/\s+/)[0].toLowerCase();
-  const aggregation = AGGREGATION_ALIASES[aggRaw] || 'count';
-  const rawMetric = match[1].trim();
-
-  const colName = findColumnMatch(rawMetric, schemaProfile);
-  if (!colName) return null;
-
-  const col = getColumn(schemaProfile, colName);
-  if (col && !isMetric(col) && aggregation !== 'count' && aggregation !== 'count_unique') return null;
-
-  return {
-    action: 'create_kpi',
-    metric: colName,
-    aggregation,
-    title: `${aggRaw.charAt(0).toUpperCase() + aggRaw.slice(1)} of ${colName}`,
-    schema_safe: true,
-    _parsed_by: 'custom-chart-query-parser',
-  };
+export function findColumnMatch(text = "", schemaProfile = {}, predicate = () => true) {
+  const columns = Array.isArray(schemaProfile.columns) ? schemaProfile.columns : [];
+  const match = findMentionedColumn(text, columns, predicate);
+  return match ? columnName(match) : null;
 }
 
-// ---------------------------------------------------------------------------
-// Main export: parseCustomChartQuery
-// ---------------------------------------------------------------------------
-
-/**
- * Try to deterministically parse a user query into a dashboard action.
- *
- * Returns a fully-formed action object if the query is unambiguous, or null
- * if the query is too complex / ambiguous and should be forwarded to the AI.
- *
- * @param {string} query - Raw user query text
- * @param {object} schemaProfile - Schema profile from buildSchemaProfile()
- * @returns {object|null} A dashboard action or null
- */
-export function parseCustomChartQuery(query, schemaProfile) {
-  if (!query || typeof query !== 'string') return null;
-  if (!schemaProfile?.columns?.length) return null;
-
-  const q = query.trim();
-
-  // 1. Filter intent?
-  if (FILTER_VERBS.test(q)) {
-    const filterAction = tryParseFilter(q, schemaProfile);
-    if (filterAction) return filterAction;
-  }
-
-  // 2. KPI intent? (before chart, as "total salary" could match chart too)
-  if (KPI_VERBS.test(q) && !SHOW_VERBS.test(q)) {
-    const kpiAction = tryParseKpi(q, schemaProfile);
-    if (kpiAction) return kpiAction;
-  }
-
-  // 3. Chart intent
-  const { left, right } = extractColumnCandidates(q, schemaProfile);
-  if (!left && !right) return null; // Can't resolve any column → fall back to AI
-
-  let xCol = getColumn(schemaProfile, left);
-  let yCol = getColumn(schemaProfile, right);
-  let finalLeft = left;
-  let finalRight = right;
-
-  // Smart swap: if left is a metric and right is a category, swap them so category is on X and metric is on Y
-  if (isMetric(xCol) && isCategory(yCol)) {
-    finalLeft = right;
-    finalRight = left;
-    const temp = xCol;
-    xCol = yCol;
-    yCol = temp;
-  }
-
-  const explicitType = detectChartType(q);
-  const chartType = inferChartType(xCol, yCol, explicitType);
-  
-  let aggregation = detectAggregation(q);
-  if (!aggregation) {
-    if (yCol && isMetric(yCol)) {
-      if (yCol.role === 'money_metric' || yCol.role === 'count_metric' || /revenue|sales|profit|quantity|discount|orders|customers/i.test(yCol.name || '')) {
-        aggregation = 'sum';
-      } else {
-        aggregation = 'avg';
-      }
-    } else {
-      aggregation = 'count';
-    }
-  }
-
-  // For scatter, both must be metrics
-  if (chartType === 'scatter') {
-    if (!isMetric(xCol) || !isMetric(yCol)) return null; // Can't safely resolve → AI
-  }
-
-  // Build the action
-  const action = {
-    action: 'create_chart',
-    chart_type: chartType,
-    x: finalLeft || undefined,
-    y: finalRight || 'count',
-    xKey: finalLeft || undefined,
-    yKey: finalRight || 'count',
-    aggregation,
-    title: buildTitle(q, finalLeft, finalRight, chartType, aggregation),
-    schema_safe: true,
-    _parsed_by: 'custom-chart-query-parser',
-  };
-
-  if (process.env.DEBUG_CHART_VALIDATION === '1') {
-    console.log('[custom-chart-query-parser] Parsed action:', JSON.stringify(action, null, 2));
-  }
-
-  return action;
-}
-
-// ---------------------------------------------------------------------------
-// Utility: generate a readable chart title
-// ---------------------------------------------------------------------------
-
-function buildTitle(query, xCol, yCol, chartType, aggregation) {
-  if (xCol && yCol && yCol !== 'count') {
-    const aggLabel = aggregation === 'avg' ? 'Average' : aggregation === 'sum' ? 'Total' : aggregation.charAt(0).toUpperCase() + aggregation.slice(1);
-    return `${aggLabel} ${yCol} by ${xCol}`;
-  }
-  if (xCol && (!yCol || yCol === 'count')) {
-    return `${xCol} Distribution`;
-  }
-  // Fallback: capitalize first 60 chars of query
-  return query.slice(0, 60).replace(/^\w/, (c) => c.toUpperCase());
-}
-
-// ---------------------------------------------------------------------------
-// normalizeChartAction — ensures both x/xKey and y/yKey are populated
-// Call this on any action (AI or parser-generated) before Guardian validation
-// ---------------------------------------------------------------------------
-
-/**
- * Normalizes chart action field aliases so that both `x/xKey` and `y/yKey`
- * are consistently set, preventing Guardian from failing on missing fields.
- *
- * @param {object} action
- * @returns {object}
- */
 export function normalizeChartAction(action = {}) {
-  const x = action.xKey || action.x || action.column || undefined;
-  const y = action.yKey || action.y || action.metric || 'count';
-  const type = action.chart_type || action.type || 'bar';
+  const x = action.x ?? action.xKey ?? action.dimension ?? action.chartSpec?.xKey;
+  const y = action.y ?? action.yKey ?? action.metric ?? action.measure ?? action.chartSpec?.yKey;
+  const chartType = action.chart_type ?? action.chartType ?? action.type ?? action.chartSpec?.type;
 
   return {
     ...action,
-    x,
-    y,
-    xKey: x,
-    yKey: y,
-    chart_type: type,
-    type,
-    aggregation: action.aggregation || (y && y !== 'count' ? 'avg' : 'count'),
+    ...(x ? { x, xKey: x } : {}),
+    ...(y ? { y, yKey: y } : {}),
+    ...(chartType ? { chart_type: chartType, chartType, type: action.type || chartType } : {}),
   };
 }
 
-// ---------------------------------------------------------------------------
-// categorizeSchemaColumns — quick column classifier for external use
-// ---------------------------------------------------------------------------
-
-/**
- * Returns a categorized summary of schema columns by role class.
- *
- * @param {object} schemaProfile
- * @returns {{ metrics: string[], categories: string[], dates: string[], geo: string[], other: string[] }}
- */
-export function categorizeSchemaColumns(schemaProfile) {
-  const cols = schemaProfile?.columns || [];
+function parseFilter(query = "", schemaProfile = {}) {
+  const match = String(query).match(/filter\s+(.+?)\s*(?:=|is|to)\s*(.+)$/i);
+  if (!match) return null;
+  const column = findColumnMatch(match[1], schemaProfile);
+  if (!column) return null;
   return {
-    metrics: cols.filter(isMetric).map((c) => c.name),
-    categories: cols.filter((c) => isCategory(c) && !isGeo(c)).map((c) => c.name),
-    dates: cols.filter(isDate).map((c) => c.name),
-    geo: cols.filter(isGeo).map((c) => c.name),
-    other: cols.filter((c) => !isMetric(c) && !isCategory(c) && !isDate(c) && !isGeo(c)).map((c) => c.name),
+    action: "filter",
+    filters: {
+      [column]: match[2].trim().replace(/^["']|["']$/g, ""),
+    },
+    schemaOnly: true,
   };
 }
+
+function parseKpi(query = "", schemaProfile = {}) {
+  const aggregation = detectAggregation(query);
+  if (!aggregation || !/\b(total|sum|average|avg|mean|median|min|max|count|unique|distinct)\b/i.test(query)) {
+    return null;
+  }
+  const metric = findColumnMatch(query, schemaProfile, (column) => {
+    const role = roleOf(column);
+    return role === "metric" || (aggregation === "count_unique" && ["dimension", "location"].includes(role));
+  });
+  if (!metric) return null;
+  return {
+    action: "create_kpi",
+    metric,
+    aggregation,
+    title: `${aggregation} ${metric}`,
+    schemaOnly: true,
+  };
+}
+
+function queryParts(query = "") {
+  return normalize(query).split(/\s+(?:vs|by|over)\s+/).map((part) => part.trim()).filter(Boolean);
+}
+
+export function parseCustomChartQuery(query = "", schemaProfile = {}) {
+  const columns = Array.isArray(schemaProfile.columns) ? schemaProfile.columns : [];
+  if (!String(query).trim() || !columns.length) return null;
+
+  const filter = parseFilter(query, schemaProfile);
+  if (filter) return filter;
+
+  const explicitChartType = detectChartType(query);
+  const kpi = explicitChartType ? null : parseKpi(query, schemaProfile);
+  if (kpi) return kpi;
+
+  const chart_type = explicitChartType || "bar";
+  const aggregation = detectAggregation(query) || (/vary|relationship|compare|by/i.test(query) ? "avg" : "sum");
+  const parts = queryParts(query);
+  const metric =
+    findMentionedColumn(query, columns, (column) => roleOf(column) === "metric") ||
+    firstByRole(columns, ["metric"]);
+  const date = findMentionedColumn(query, columns, (column) => roleOf(column) === "date") || firstByRole(columns, ["date"]);
+  const dimension =
+    findMentionedColumn(query, columns, (column) => ["dimension", "location"].includes(roleOf(column))) ||
+    firstByRole(columns, ["location", "dimension"]);
+
+  let xColumn = dimension;
+  let yColumn = metric;
+
+  if (parts.length >= 2) {
+    const left = findMentionedColumn(parts[0], columns);
+    const right = findMentionedColumn(parts[1], columns);
+    if (left && right) {
+      const leftRole = roleOf(left);
+      const rightRole = roleOf(right);
+      if (["dimension", "location", "date"].includes(leftRole) && rightRole === "metric") {
+        xColumn = left;
+        yColumn = right;
+      } else if (leftRole === "metric" && ["dimension", "location", "date"].includes(rightRole)) {
+        xColumn = right;
+        yColumn = left;
+      } else {
+        xColumn = left;
+        yColumn = right;
+      }
+    }
+  }
+
+  if (chart_type === "line" && date) {
+    xColumn = date;
+  }
+
+  if (chart_type === "histogram" && metric) {
+    xColumn = metric;
+    yColumn = metric;
+  }
+
+  if (chart_type === "scatter") {
+    const numericColumns = columns.filter((column) => roleOf(column) === "metric");
+    const mentioned = numericColumns.filter((column) => normalize(query).includes(normalize(columnName(column)).split(" ")[0]));
+    xColumn = mentioned[0] || findMentionedColumn(query, numericColumns) || numericColumns[0] || metric;
+    yColumn = mentioned.find((column) => columnName(column) !== columnName(xColumn)) ||
+      numericColumns.find((column) => columnName(column) !== columnName(xColumn)) ||
+      metric;
+  }
+
+  if (!explicitChartType && !/\b(show|create|make|chart|plot|graph|distribution|scatter|vary|average|avg|sum|total|compare|by|vs)\b/i.test(query)) {
+    return null;
+  }
+
+  if (!xColumn && !yColumn) return null;
+
+  const xKey = columnName(xColumn);
+  let yKey = yColumn ? columnName(yColumn) : "count";
+
+  if (["pie", "donut"].includes(chart_type) && roleOf(xColumn) !== "metric") {
+    yKey = "count";
+  }
+
+  if (chart_type === "bar" && roleOf(yColumn) !== "metric") {
+    yKey = yKey || "count";
+  }
+
+  const safeAggregation = yKey === "count" || yKey === "__row_count__" || roleOf(yColumn) !== "metric" ? "count" : aggregation;
+
+  return normalizeChartAction({
+    action: "create_chart",
+    chart_type,
+    chartType: chart_type,
+    x: xKey,
+    xKey,
+    y: yKey,
+    yKey,
+    dimension: xKey,
+    measure: yKey,
+    aggregation: safeAggregation,
+    title: `${yKey === "__row_count__" ? "Records" : yKey} by ${xKey}`,
+    confidence: 0.9,
+    schemaOnly: true,
+  });
+}
+
+export default {
+  parseCustomChartQuery,
+  normalizeChartAction,
+  categorizeSchemaColumns,
+  findColumnMatch,
+  detectChartType,
+  detectAggregation,
+};

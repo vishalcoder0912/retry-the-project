@@ -29,6 +29,21 @@ type Message = {
   kpi?: DashboardKpi;
   table?: Row[];
   action?: InterpretedCommand;
+  dashboardAction?: {
+    available: boolean;
+    type?: "ADD_CHART" | "ADD_KPI" | "APPLY_FILTER" | "CLEAR_FILTER";
+    label?: string;
+    payload?: {
+      chart?: DashboardChart;
+      kpi?: DashboardKpi;
+      filters?: Array<{ column: string; operator?: string; value: string | number | boolean }>;
+    };
+  };
+  debug?: {
+    sql?: string | null;
+    queryPlan?: unknown;
+    safety?: unknown;
+  };
   timestamp: Date;
   loading?: boolean;
   error?: boolean;
@@ -150,6 +165,54 @@ export default function ChatInterface() {
     recordDashboardAction(dataset.id, result.auditLabel, "chat", nextState);
   }
 
+  async function persistDashboardAction(action: NonNullable<Message["dashboardAction"]>) {
+    if (!dataset?.id || !action.available) return;
+    try {
+      await fetch("/api/dashboard/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          datasetId: dataset.id,
+          action: {
+            type: action.type,
+            chart: action.payload?.chart,
+            kpi: action.payload?.kpi,
+            filters: action.payload?.filters,
+          },
+        }),
+      });
+    } catch (error) {
+      console.warn("Dashboard action endpoint unavailable; saving locally.", error);
+    }
+    const current = loadDashboardState(dataset.id);
+    const filtersFromAction = action.type === "APPLY_FILTER"
+      ? Object.fromEntries((action.payload?.filters || []).map((filter) => [filter.column, filter.value]))
+      : {};
+    const nextState = {
+      ...current,
+      filters: action.type === "CLEAR_FILTER" ? {} : { ...current.filters, ...filtersFromAction },
+      manualCharts: action.payload?.chart ? [action.payload.chart, ...current.manualCharts].slice(0, 8) : current.manualCharts,
+      manualKpis: action.payload?.kpi ? [action.payload.kpi, ...current.manualKpis].slice(0, 8) : current.manualKpis,
+    };
+    saveDashboardState(dataset.id, nextState);
+    recordDashboardAction(dataset.id, action.label || action.type || "Chat action", "chat", nextState);
+    setMessages((currentMessages) => [
+      ...currentMessages,
+      {
+        id: makeId(),
+        role: "assistant",
+        content: action.type === "ADD_CHART"
+          ? "Chart added to the dashboard."
+          : action.type === "ADD_KPI"
+            ? "KPI added to the dashboard."
+            : action.type === "CLEAR_FILTER"
+              ? "Dashboard filters cleared."
+              : "Dashboard filter applied.",
+        timestamp: new Date(),
+      },
+    ]);
+  }
+
   async function sendPrompt(prompt = input) {
     const query = prompt.trim();
     if (!query) return;
@@ -202,38 +265,48 @@ export default function ChatInterface() {
     ]);
 
     try {
-      // Call backend chat API
-      const response = await fetch(`/api/datasets/${dataset.id}/chat`, {
+      const response = await fetch(`/api/chat/analytics`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({
+          datasetId: dataset.id,
+          message: query,
+          activeFilters: stored.filters || {},
+          mode: "analysis",
+        }),
       });
 
       const data = await response.json();
+      const chatData = data.data || data;
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error?.message || "AI chat request failed");
+      if (!response.ok || !data.success || chatData.success === false) {
+        throw new Error(chatData.answer || data.error?.message || "I could not process that chat request.");
       }
 
-      // Parse local actions in case it's a dashboard command
-      const localResult = interpretCommand(query, model.filteredRows.length ? model.filteredRows : model.rows);
-      if (localResult.chart || localResult.kpi || localResult.filters || localResult.geoRequested) {
+      const localResult = !chatData.chart && !chatData.kpi
+        ? interpretCommand(query, model.filteredRows.length ? model.filteredRows : model.rows)
+        : null;
+      if (localResult && (localResult.chart || localResult.kpi || localResult.filters || localResult.geoRequested)) {
         persistAction(localResult);
       }
-
-      const assistantMsg = data.data.assistantMessage;
 
       setMessages((current) =>
         current.map((msg) => {
           if (msg.id === assistantMsgId) {
             return {
-              id: assistantMsg.id || makeId(),
+              id: chatData.messageId || makeId(),
               role: "assistant",
-              content: assistantMsg.content,
-              chart: assistantMsg.chart || localResult.chart || undefined,
-              kpi: assistantMsg.kpi || localResult.kpi || undefined,
-              table: assistantMsg.table || (/table|top|anomal/i.test(query) ? model.filteredRows.slice(0, 6) : undefined),
-              timestamp: new Date(assistantMsg.timestamp || Date.now()),
+              content: chatData.answer || "I prepared a schema-safe analytics response.",
+              chart: chatData.chart || localResult?.chart || undefined,
+              kpi: chatData.kpi || localResult?.kpi || undefined,
+              table: chatData.result?.rows && /table/i.test(query) ? chatData.result.rows : undefined,
+              dashboardAction: chatData.dashboardAction?.available ? chatData.dashboardAction : undefined,
+              debug: {
+                sql: chatData.sql,
+                queryPlan: chatData.queryPlan,
+                safety: chatData.safety,
+              },
+              timestamp: new Date(),
             };
           }
           return msg;
@@ -336,6 +409,24 @@ export default function ChatInterface() {
                   {message.chart && (
                     <div className="mt-3">
                       <SmartChartCard chart={message.chart} />
+                    </div>
+                  )}
+
+                  {message.dashboardAction?.available && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void persistDashboardAction(message.dashboardAction!)}
+                        className="rounded-xl bg-[#0F172A] px-4 py-2 text-sm font-bold text-white transition hover:bg-[#1E293B]"
+                      >
+                        {message.dashboardAction.label || "Add to Dashboard"}
+                      </button>
+                      {message.debug?.sql && (
+                        <details className="rounded-xl border border-[#E2E8F0] bg-white px-4 py-2 text-xs text-[#64748B]">
+                          <summary className="cursor-pointer font-bold text-[#334155]">Query plan</summary>
+                          <pre className="mt-2 max-w-full overflow-auto whitespace-pre-wrap">{JSON.stringify({ sql: message.debug.sql, plan: message.debug.queryPlan, safety: message.debug.safety }, null, 2)}</pre>
+                        </details>
+                      )}
                     </div>
                   )}
 

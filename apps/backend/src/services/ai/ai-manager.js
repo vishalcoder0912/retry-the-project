@@ -5,6 +5,7 @@ import { OpenAIProvider } from './providers/openai-provider.js';
 import { AnthropicProvider } from './providers/anthropic-provider.js';
 import { AIProviderError } from '../../middleware/error-handler.js';
 import config from '../../config/environment.js';
+import { assertNoRawRowsInString } from './llm-payload-sanitizer.js';
 
 class AIManager {
   constructor() {
@@ -106,6 +107,18 @@ class AIManager {
     await this.initialize();
     this.stats.totalRequests++;
 
+    try {
+      assertNoRawRowsInString(prompt);
+    } catch (error) {
+      this.stats.failedRequests++;
+      console.error(`[AI MANAGER BLOCKED CALL] ${error.message}`);
+      return {
+        success: false,
+        error: `Blocked unsafe LLM payload: ${error.message}`,
+        provider: this.activeProvider || 'none'
+      };
+    }
+
     if (!this.activeProvider) {
       this.stats.failedRequests++;
       throw new AIProviderError('No AI providers available', 'none');
@@ -144,6 +157,24 @@ class AIManager {
   async chat(messages, options = {}) {
     await this.initialize();
     this.stats.totalRequests++;
+
+    try {
+      if (Array.isArray(messages)) {
+        for (const msg of messages) {
+          if (msg && msg.content) {
+            assertNoRawRowsInString(msg.content);
+          }
+        }
+      }
+    } catch (error) {
+      this.stats.failedRequests++;
+      console.error(`[AI MANAGER BLOCKED CALL] ${error.message}`);
+      return {
+        success: false,
+        error: `Blocked unsafe LLM payload: ${error.message}`,
+        provider: this.activeProvider || 'none'
+      };
+    }
 
     if (!this.activeProvider) {
       this.stats.failedRequests++;

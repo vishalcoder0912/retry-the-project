@@ -186,7 +186,7 @@ OUTPUT_FORMAT:
     if (dataset && schema) {
       return buildSchemaOnlyPrompt('', extractSchemaForAI(dataset, schema));
     }
-    return 'You are an intelligent data analyst assistant.';
+    return 'You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows. You are an intelligent data analyst assistant.';
   }
 
   // Backward compatibility with legacy AIRouter interface

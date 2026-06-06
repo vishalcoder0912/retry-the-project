@@ -1,47 +1,16 @@
 import { buildSchemaProfile } from "./schema-fingerprint.js";
 import { applyTrainedTemplates, mergePlans } from "./dashboard-plan-engine.js";
-import { embedText, cosineSimilarity } from "./schema-rag-embeddings.js";
+import { embedText } from "./schema-rag-embeddings.js";
 import {
   buildSchemaRagMemoryEntry,
   removeEmbeddingsForPublicResponse,
   schemaProfileToRagText,
 } from "./schema-rag-memory-builder.js";
 import {
-  getSchemaRagStats,
-  readSchemaRagMemory,
-  upsertSchemaRagMemory,
+  getSchemaRagStatsSmart,
+  retrieveSchemaRagMemorySmart,
+  upsertSchemaRagMemorySmart,
 } from "./schema-rag-store.js";
-
-function tokenize(text = "") {
-  return new Set(
-    String(text)
-      .toLowerCase()
-      .replace(/[^a-z0-9_]+/g, " ")
-      .split(/\s+/)
-      .filter(Boolean)
-  );
-}
-
-function jaccardTextSimilarity(left = "", right = "") {
-  const a = tokenize(left);
-  const b = tokenize(right);
-
-  if (!a.size || !b.size) return 0;
-
-  let intersection = 0;
-
-  for (const token of a) {
-    if (b.has(token)) intersection += 1;
-  }
-
-  const union = new Set([...a, ...b]).size;
-
-  return union ? intersection / union : 0;
-}
-
-function normalizeCosine(value) {
-  return Math.max(0, Math.min(1, (Number(value || 0) + 1) / 2));
-}
 
 function toPublicMatch(match) {
   return {
@@ -50,63 +19,38 @@ function toPublicMatch(match) {
   };
 }
 
-function hasUsableDashboardPlan(entry = {}) {
-  const plan = entry.dashboardPlan || {};
-  return Array.isArray(plan.kpis) || Array.isArray(plan.charts);
-}
-
 export async function retrieveSchemaRagMemories(schemaProfile, options = {}) {
   const limit = Number(options.limit || 5);
   const threshold = Number(options.threshold ?? 0.55);
   const profile = schemaProfile?.columns ? schemaProfile : buildSchemaProfile(schemaProfile || {});
   const queryText = schemaProfileToRagText(profile);
 
-  const embeddingResult = await embedText(queryText, {
-    useOllama: options.useOllama,
-    allowFallback: true,
-  });
-
-  const memory = readSchemaRagMemory();
-
-  const matches = memory
-    .filter(hasUsableDashboardPlan)
-    .map((entry) => {
-      const vectorScore = Array.isArray(entry.embedding) && entry.embedding.length
-        ? normalizeCosine(cosineSimilarity(embeddingResult.embedding, entry.embedding))
-        : 0;
-
-      const textScore = jaccardTextSimilarity(queryText, entry.schemaText || "");
-      const domainBoost = entry.domain && entry.domain === profile.domain ? 0.08 : 0;
-      const signatureBoost =
-        entry.schemaSignature && entry.schemaSignature === profile.signature ? 0.12 : 0;
-      const score = Math.min(1, Math.max(vectorScore, textScore) + domainBoost + signatureBoost);
-
-      return {
-        entry,
-        score,
-        vectorScore,
-        textScore,
-        domainBoost,
-        signatureBoost,
-      };
-    })
-    .filter((match) => match.score >= threshold)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, limit);
+  const result = await retrieveSchemaRagMemorySmart(
+    {
+      id: profile.id || profile.signature,
+      domain: profile.domain,
+      schemaSignature: profile.signature,
+      schemaProfile: profile,
+      schemaText: queryText,
+      memoryText: queryText,
+      columns: profile.columns || [],
+    },
+    {
+      limit,
+      minScore: threshold,
+      useOllama: options.useOllama,
+    }
+  );
 
   return {
-    used: matches.length > 0,
+    used: result.matches.length > 0,
     threshold,
-    query: {
-      domain: profile.domain,
-      signature: profile.signature,
-      embeddingProvider: embeddingResult.provider,
-      embeddingModel: embeddingResult.model,
-      embeddingFallback: embeddingResult.fallback,
-      embeddingError: embeddingResult.error,
-    },
-    matches: matches.map(toPublicMatch),
-    stats: getSchemaRagStats(),
+    query: result.query,
+    matches: result.matches.map(toPublicMatch),
+    mode: result.mode,
+    fallback: result.fallback,
+    vectorError: result.vectorError,
+    stats: await getSchemaRagStatsSmart(),
   };
 }
 
@@ -162,7 +106,7 @@ export async function trainSchemaRagMemoryFromDataset({
     source,
   });
 
-  const saved = upsertSchemaRagMemory(entry);
+  const saved = await upsertSchemaRagMemorySmart(entry);
 
   return {
     entry: removeEmbeddingsForPublicResponse(saved),
@@ -172,6 +116,6 @@ export async function trainSchemaRagMemoryFromDataset({
       fallback: embeddingResult.fallback,
       error: embeddingResult.error,
     },
-    stats: getSchemaRagStats(),
+    stats: await getSchemaRagStatsSmart(),
   };
 }

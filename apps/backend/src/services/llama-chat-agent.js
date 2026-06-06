@@ -120,6 +120,7 @@ export async function runLlamaDatasetChat(dataset, query) {
   };
 
   const prompt = `
+You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows.
 You are InsightFlow AI Chat.
 
 You answer questions about an uploaded dataset.

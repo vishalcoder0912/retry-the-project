@@ -1,11 +1,13 @@
 import { makeSchemaOnlyPacket } from "./schema-fingerprint.js";
 import { critiqueDashboard, sanitizeChartSpec, sanitizeKpiSpec } from "./dashboard-plan-engine.js";
+import { assertNoRawRowsInString } from "../ai/llm-payload-sanitizer.js";
 
 const DEFAULT_OLLAMA_BASE_URL = process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const DASHBOARD_MODEL = process.env.DASHBOARD_LLM_MODEL || "qwen3:4b";
 const CHAT_MODEL = process.env.CHAT_LLM_MODEL || "llama3.2";
 
-const INSIGHTFLOW_DASHBOARD_SYSTEM_PROMPT = `You are Dashboard AI Copilot, a schema-aware analytics assistant.
+const INSIGHTFLOW_DASHBOARD_SYSTEM_PROMPT = `You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows.
+You are Dashboard AI Copilot, a schema-aware analytics assistant.
 
 Core mission:
 Convert user requests into dashboard actions, insights, visualizations, filters, calculations, and code updates.
@@ -118,6 +120,13 @@ function extractJson(text = "") {
 }
 
 async function callOllama({ model, prompt, temperature = 0.1 }) {
+  try {
+    assertNoRawRowsInString(prompt);
+  } catch (error) {
+    console.error(`[llm-schema-dashboard-planner callOllama BLOCKED] ${error.message}`);
+    throw new Error(`Blocked unsafe LLM payload: ${error.message}`);
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
 

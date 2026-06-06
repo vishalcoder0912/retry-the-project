@@ -17,6 +17,7 @@ import {
 import GeoIntelligence from "@/features/dashboard/geo/GeoIntelligence";
 import SmartChartCard from "@/features/dashboard/components/SmartChartCard";
 import { useData } from "@/features/data/context/useData";
+import { api, ApiError } from "@/features/data/api/dataApi";
 import {
   buildCommandCenterModel,
   interpretCommand,
@@ -31,6 +32,8 @@ import type {
 } from "@/features/dashboard/utils/dashboardAnalytics";
 import type { ChartType } from "@/features/dashboard/types/dashboardTypes";
 import {
+  buildChartFromSpec,
+  buildKpiFromSpec,
   getUniqueValues,
 } from "@/features/dashboard/utils/dashboardAnalytics";
 import {
@@ -106,12 +109,14 @@ function KpiCard({ kpi, index }: { kpi: DashboardKpi; index: number }) {
 function DashboardAiChatPanel({
   model,
   stored,
+  datasetId,
   onRunCommand,
   onPersistMessages,
 }: {
   model: CommandCenterModel;
   stored: StoredState;
-  onRunCommand: (command: string, source?: "dashboard" | "agent" | "chat") => string;
+  datasetId?: string;
+  onRunCommand: (command: string, source?: "dashboard" | "agent" | "chat") => Promise<string>;
   onPersistMessages: (messages: NonNullable<StoredState["aiChatMessages"]>) => void;
 }) {
   const [input, setInput] = useState("");
@@ -126,7 +131,7 @@ function DashboardAiChatPanel({
         },
       ];
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
     const text = input.trim();
     if (!text) return;
@@ -136,37 +141,49 @@ function DashboardAiChatPanel({
       content: text,
       timestamp: new Date().toISOString(),
     };
-    const response = onRunCommand(text, "chat");
-    const assistantMessage = {
-      id: crypto.randomUUID?.() || `${Date.now()}-assistant`,
-      role: "assistant" as const,
-      content: response,
-      timestamp: new Date().toISOString(),
-      actionLabel: response.startsWith("I cannot") ? undefined : "Dashboard updated from chat command",
-    };
-    onPersistMessages([userMessage, assistantMessage, ...(stored.aiChatMessages || [])].slice(0, 16));
+    onPersistMessages([userMessage, ...(stored.aiChatMessages || [])].slice(0, 16));
     setInput("");
+    
+    try {
+      const response = await onRunCommand(text, "chat");
+      const assistantMessage = {
+        id: crypto.randomUUID?.() || `${Date.now()}-assistant`,
+        role: "assistant" as const,
+        content: response,
+        timestamp: new Date().toISOString(),
+        actionLabel: response.startsWith("I cannot") ? undefined : "Dashboard updated from chat command",
+      };
+      const latest = loadDashboardState(datasetId);
+      onPersistMessages([assistantMessage, ...(latest.aiChatMessages || [])].slice(0, 16));
+    } catch (error) {
+      // ignore
+    }
   }
 
-  function runSuggestedCommand(command: string) {
-    const response = onRunCommand(command, "agent");
+  async function runSuggestedCommand(command: string) {
     const timestamp = new Date().toISOString();
-    onPersistMessages([
-      {
-        id: crypto.randomUUID?.() || `${Date.now()}-suggested-user`,
-        role: "user",
-        content: command,
-        timestamp,
-      },
-      {
+    const userMessage = {
+      id: crypto.randomUUID?.() || `${Date.now()}-suggested-user`,
+      role: "user",
+      content: command,
+      timestamp,
+    };
+    onPersistMessages([userMessage, ...(stored.aiChatMessages || [])].slice(0, 16));
+    
+    try {
+      const response = await onRunCommand(command, "agent");
+      const assistantMessage = {
         id: crypto.randomUUID?.() || `${Date.now()}-suggested-ai`,
         role: "assistant",
         content: response,
         timestamp,
         actionLabel: "Suggested action applied",
-      },
-      ...(stored.aiChatMessages || []),
-    ].slice(0, 16));
+      };
+      const latest = loadDashboardState(datasetId);
+      onPersistMessages([assistantMessage, ...(latest.aiChatMessages || [])].slice(0, 16));
+    } catch (error) {
+      // ignore
+    }
   }
 
   return (
@@ -211,10 +228,10 @@ function DashboardAiChatPanel({
               value={input}
               aria-label="Ask InsightFlow AI"
               onChange={(event) => setInput(event.target.value)}
-              placeholder="Ask InsightFlow AI..."
+              placeholder="Ask: Ask InsightFlow AI..."
               className="h-11 w-full rounded-2xl border border-[#E2E8F0] bg-white pl-4 pr-12 text-sm text-[#0F172A] outline-none transition placeholder:text-[#94A3B8] focus:border-[#7C3AED]"
             />
-            <button type="submit" className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-white" aria-label="Send AI command">
+            <button type="submit" className="absolute right-1.5 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-white" aria-label="Send dashboard command">
               <Send className="size-4" />
             </button>
           </div>
@@ -308,13 +325,13 @@ export default function EliteDashboardPage() {
     geoActive?: boolean;
   }) {
     if (!datasetId) return;
+    const latest = loadDashboardState(datasetId);
     const state = {
+      ...latest,
       filters: next.filters || filters,
       manualCharts: next.manualCharts || manualCharts,
       manualKpis: next.manualKpis || manualKpis,
-      auditTrail: stored.auditTrail || [],
-      aiChatMessages: stored.aiChatMessages || [],
-      geoActive: next.geoActive || stored.geoActive,
+      geoActive: next.geoActive || latest.geoActive,
     };
     saveDashboardState(datasetId, state);
     recordDashboardAction(datasetId, next.label, "dashboard", state);
@@ -323,8 +340,9 @@ export default function EliteDashboardPage() {
 
   function persistMessages(messages: NonNullable<StoredState["aiChatMessages"]>) {
     if (!datasetId) return;
+    const latest = loadDashboardState(datasetId);
     saveDashboardState(datasetId, {
-      ...stored,
+      ...latest,
       filters,
       manualCharts,
       manualKpis,
@@ -333,38 +351,94 @@ export default function EliteDashboardPage() {
     setAuditVersion((value) => value + 1);
   }
 
-  function runCommand(command: string, source: "dashboard" | "agent" | "chat" = "dashboard") {
+  async function runCommand(command: string, source: "dashboard" | "agent" | "chat" = "dashboard"): Promise<string> {
     if (!datasetId) return "No dataset is loaded. Upload a dataset to activate dashboard control.";
-    const result = interpretCommand(command, model.filteredRows.length ? model.filteredRows : model.rows);
-    const nextFilters = result.clearFilters ? {} : result.filters ? { ...filters, ...result.filters } : filters;
-    const nextCharts = result.removeChartId
-      ? manualCharts.slice(1)
-      : result.chart
-        ? [result.chart, ...manualCharts].slice(0, 8)
-        : manualCharts;
-    const nextKpis = result.removeKpiId
-      ? manualKpis.slice(1)
-      : result.kpi
-        ? [result.kpi, ...manualKpis].slice(0, 8)
-        : manualKpis;
-    setFilters(nextFilters);
-    setManualCharts(nextCharts);
-    setManualKpis(nextKpis);
-    if (result.removeChartId && !manualCharts.length && visibleCharts[0]) {
-      setHiddenCharts((current) => new Set([...current, visibleCharts[0].id]));
+    
+    try {
+      const response = await api.sendDashboardCommand(
+        datasetId,
+        command,
+        { kpis: manualKpis, charts: manualCharts, filters },
+        dataset
+      );
+      
+      const cmd = response.data || response;
+      let nextFilters = filters;
+      let nextCharts = manualCharts;
+      let nextKpis = manualKpis;
+      let geoRequested = false;
+      
+      if (cmd.action === "CLEAR_FILTERS") {
+        nextFilters = {};
+      } else if (cmd.action === "FILTER" && cmd.filters) {
+        nextFilters = { ...filters, ...cmd.filters };
+      } else if (cmd.action === "DELETE_CHART" || cmd.action === "REMOVE_CHART") {
+        nextCharts = manualCharts.slice(1);
+      } else if (cmd.action === "GENERATE_CHART" && (cmd.chartSpec || cmd.chart)) {
+        const spec = cmd.chartSpec || cmd.chart;
+        const chart = buildChartFromSpec(model.filteredRows, spec);
+        nextCharts = [{ ...chart, createdBy: "ai" }, ...manualCharts].slice(0, 8);
+      } else if (cmd.action === "GENERATE_KPI" && (cmd.kpiSpec || cmd.kpi)) {
+        const spec = cmd.kpiSpec || cmd.kpi;
+        const kpi = buildKpiFromSpec(model.filteredRows, spec);
+        nextKpis = [{ ...kpi, createdBy: "ai" }, ...manualKpis].slice(0, 8);
+      }
+      
+      setFilters(nextFilters);
+      setManualCharts(nextCharts);
+      setManualKpis(nextKpis);
+      
+      const latest = loadDashboardState(datasetId);
+      const state = {
+        ...latest,
+        filters: nextFilters,
+        manualCharts: nextCharts,
+        manualKpis: nextKpis,
+        geoActive: geoRequested || latest.geoActive,
+      };
+      saveDashboardState(datasetId, state);
+      recordDashboardAction(datasetId, cmd.message || `AI Action: ${cmd.action}`, source, state);
+      setAuditVersion((value) => value + 1);
+      
+      return cmd.message;
+    } catch (error) {
+      console.warn("Backend command failed, using offline fallback", error);
+      const result = interpretCommand(command, model.filteredRows.length ? model.filteredRows : model.rows);
+      const nextFilters = result.clearFilters ? {} : result.filters ? { ...filters, ...result.filters } : filters;
+      const nextCharts = result.removeChartId
+        ? manualCharts.slice(1)
+        : result.chart
+          ? [result.chart, ...manualCharts].slice(0, 8)
+          : manualCharts;
+      const nextKpis = result.removeKpiId
+        ? manualKpis.slice(1)
+        : result.kpi
+          ? [result.kpi, ...manualKpis].slice(0, 8)
+          : manualKpis;
+      setFilters(nextFilters);
+      setManualCharts(nextCharts);
+      setManualKpis(nextKpis);
+      if (result.removeChartId && !manualCharts.length && visibleCharts[0]) {
+        setHiddenCharts((current) => new Set([...current, visibleCharts[0].id]));
+      }
+      const latest = loadDashboardState(datasetId);
+      const state = {
+        ...latest,
+        filters: nextFilters,
+        manualCharts: nextCharts,
+        manualKpis: nextKpis,
+        geoActive: result.geoRequested || latest.geoActive,
+      };
+      saveDashboardState(datasetId, state);
+      
+      const isValidationError = error instanceof ApiError || (error instanceof Error && error.message.includes("does not exist"));
+      const finalMessage = isValidationError ? error.message : result.message;
+      const auditLabel = isValidationError ? `Rejected command: ${error.message}` : result.auditLabel;
+      
+      recordDashboardAction(datasetId, auditLabel, source, state);
+      setAuditVersion((value) => value + 1);
+      return finalMessage;
     }
-    const state = {
-      filters: nextFilters,
-      manualCharts: nextCharts,
-      manualKpis: nextKpis,
-      auditTrail: stored.auditTrail || [],
-      aiChatMessages: stored.aiChatMessages || [],
-      geoActive: result.geoRequested || stored.geoActive,
-    };
-    saveDashboardState(datasetId, state);
-    recordDashboardAction(datasetId, result.auditLabel, source, state);
-    setAuditVersion((value) => value + 1);
-    return result.message;
   }
 
   function removeChart(chart: DashboardChart) {
@@ -438,7 +512,12 @@ export default function EliteDashboardPage() {
               <Sparkles className="size-8" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-[#0F172A]">InsightFlow Agentic Dashboard</h1>
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-3xl font-bold tracking-tight text-[#0F172A]">InsightFlow Agentic Dashboard</h1>
+                {dataset?.name && (
+                  <h2 className="text-xl font-bold text-violet-600 px-3 py-1 rounded-2xl bg-violet-50 border border-violet-100 shadow-sm">{dataset.name}</h2>
+                )}
+              </div>
               <p className="mt-1 text-sm text-[#64748B]">
                 Your AI agent analyzes real uploaded data and controls KPIs, charts, filters, and insights.
               </p>
@@ -620,6 +699,7 @@ export default function EliteDashboardPage() {
           <DashboardAiChatPanel
             model={model}
             stored={stored}
+            datasetId={datasetId}
             onRunCommand={runCommand}
             onPersistMessages={persistMessages}
           />

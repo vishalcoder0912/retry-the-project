@@ -25,6 +25,44 @@ function extractNumericValues(rows, metric) {
     .filter(v => v !== null);
 }
 
+function matchesFilter(row, filter) {
+  if (!filter || !filter.column) return true;
+  const actual = row[filter.column];
+  const expected = filter.value;
+  const operator = String(filter.operator || 'equals').toLowerCase();
+  const actualText = String(actual ?? '').trim().toLowerCase();
+  const expectedText = String(expected ?? '').trim().toLowerCase();
+  const actualNumber = safeNumber(actual);
+  const expectedNumber = safeNumber(expected);
+
+  switch (operator) {
+    case 'not_equals':
+      return actualText !== expectedText;
+    case 'contains':
+      return actualText.includes(expectedText);
+    case 'gt':
+      return actualNumber !== null && expectedNumber !== null && actualNumber > expectedNumber;
+    case 'gte':
+      return actualNumber !== null && expectedNumber !== null && actualNumber >= expectedNumber;
+    case 'lt':
+      return actualNumber !== null && expectedNumber !== null && actualNumber < expectedNumber;
+    case 'lte':
+      return actualNumber !== null && expectedNumber !== null && actualNumber <= expectedNumber;
+    case 'equals':
+    default:
+      return actualText === expectedText;
+  }
+}
+
+function applyConfigFilters(rows, config = {}) {
+  const filters = Array.isArray(config.filters)
+    ? config.filters
+    : Object.entries(config.filters || {}).map(([column, value]) => ({ column, operator: 'equals', value }));
+
+  if (!filters.length) return rows;
+  return rows.filter((row) => filters.every((filter) => matchesFilter(row, filter)));
+}
+
 /**
  * Calculate KPI values from dataset
  */
@@ -33,18 +71,19 @@ export function calculateKPI(dataset, kpiConfig) {
     return { value: null, calculated: false, reason: 'Invalid dataset' };
   }
 
+  const rows = applyConfigFilters(dataset.rows, kpiConfig);
   const { metric, aggregation } = kpiConfig;
   const aggregationLower = (aggregation || 'avg').toLowerCase();
 
   if (metric === '__row_count__') {
-    return { value: dataset.rows.length, calculated: true };
+    return { value: rows.length, calculated: true, rowsProcessed: rows.length };
   }
 
   if (metric === '__column_count__') {
     return { value: (dataset.columns || []).length, calculated: true };
   }
 
-  const values = extractNumericValues(dataset.rows, metric);
+  const values = extractNumericValues(rows, metric);
 
   if (values.length === 0) {
     return { value: null, calculated: false, reason: `No numeric values found for "${metric}"` };
@@ -82,9 +121,9 @@ export function calculateKPI(dataset, kpiConfig) {
   return {
     value: Number.isFinite(value) ? Number(value.toFixed(2)) : value,
     calculated: true,
-    rowsProcessed: dataset.rows.length,
+    rowsProcessed: rows.length,
     validValuesFound: values.length,
-    missingValuesSkipped: dataset.rows.length - values.length,
+    missingValuesSkipped: rows.length - values.length,
   };
 }
 
@@ -97,6 +136,7 @@ export function calculateChartData(dataset, chartConfig) {
     return { data: [], rowsProcessed: 0, groupsCreated: 0, groupsShown: 0 };
   }
 
+  const rows = applyConfigFilters(dataset.rows, chartConfig);
   const {
     x,
     y,
@@ -116,7 +156,7 @@ export function calculateChartData(dataset, chartConfig) {
 
   const grouped = new Map();
 
-  for (const row of dataset.rows) {
+  for (const row of rows) {
     const xVal = row[xKey] !== null && row[xKey] !== undefined ? String(row[xKey]) : 'Unknown';
 
     if (!grouped.has(xVal)) {
@@ -182,7 +222,7 @@ export function calculateChartData(dataset, chartConfig) {
 
   return {
     data: limited,
-    rowsProcessed: dataset.rows.length,
+    rowsProcessed: rows.length,
     groupsCreated: grouped.size,
     groupsShown: limited.length,
     aggregation: aggregationLower,

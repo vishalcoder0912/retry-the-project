@@ -11,7 +11,7 @@
     "grepInvert": null,
     "maxFailures": 0,
     "metadata": {
-      "actualWorkers": 6
+      "actualWorkers": 1
     },
     "preserveOutput": "always",
     "projects": [
@@ -20,7 +20,7 @@
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 6
+          "actualWorkers": 1
         },
         "id": "chromium",
         "name": "chromium",
@@ -61,7 +61,7 @@
     "updateSnapshots": "missing",
     "updateSourceMethod": "patch",
     "version": "1.59.1",
-    "workers": 6,
+    "workers": 1,
     "webServer": null
   },
   "suites": [
@@ -87,12 +87,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 10620,
+                  "duration": 3221,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-06-04T12:28:11.199Z",
+                  "startTime": "2026-06-06T10:12:47.600Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -126,15 +126,15 @@
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 1,
-                  "parallelIndex": 1,
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 11955,
+                  "duration": 2275,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-06-04T12:28:11.173Z",
+                  "startTime": "2026-06-06T10:12:51.015Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -150,13 +150,13 @@
       ]
     },
     {
-      "title": "dashboard-chat-custom-chart.spec.ts",
-      "file": "dashboard-chat-custom-chart.spec.ts",
+      "title": "analytics-schema-flow.spec.ts",
+      "file": "analytics-schema-flow.spec.ts",
       "column": 0,
       "line": 0,
       "specs": [
         {
-          "title": "E2E Dashboard chat commands for custom charts",
+          "title": "Analytics Page schema flow renders KPIs, correlation metrics, and anomaly detection charts",
           "ok": true,
           "tags": [],
           "tests": [
@@ -168,20 +168,149 @@
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 2,
-                  "parallelIndex": 2,
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 9590,
+                  "duration": 1864,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-06-04T12:28:11.724Z",
+                  "startTime": "2026-06-06T10:12:53.361Z",
                   "annotations": [],
                   "attachments": []
                 }
               ],
               "status": "expected"
+            }
+          ],
+          "id": "993f13281094cc1619cc-a1850172b52da038fc0a",
+          "file": "analytics-schema-flow.spec.ts",
+          "line": 4,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "dashboard-ai-schema-command-flow.spec.ts",
+      "file": "dashboard-ai-schema-command-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Dashboard AI command flow validates commands, updates charts, and updates audit logs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2855,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-06T10:12:55.292Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "9bfad04e735401d0df6c-6824dba70e37373d51b8",
+          "file": "dashboard-ai-schema-command-flow.spec.ts",
+          "line": 4,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "dashboard-chat-custom-chart.spec.ts",
+      "file": "dashboard-chat-custom-chart.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "E2E Dashboard chat commands for custom charts",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 8834,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Chart Average Salary by Country created.')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Chart Average Salary by Country created.')\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Chart Average Salary by Country created.')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Chart Average Salary by Country created.')\u001b[22m\n\n    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\dashboard-chat-custom-chart.spec.ts:81:76",
+                    "location": {
+                      "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\dashboard-chat-custom-chart.spec.ts",
+                      "column": 76,
+                      "line": 81
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 79 |\u001b[39m\n \u001b[90m 80 |\u001b[39m   \u001b[90m// Verify chart appears and chat response confirms creation\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 81 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"Chart Average Salary by Country created.\"\u001b[39m))\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                                            \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 82 |\u001b[39m\n \u001b[90m 83 |\u001b[39m   \u001b[90m// Type: Create pie chart of country\u001b[39m\n \u001b[90m 84 |\u001b[39m   \u001b[36mawait\u001b[39m chatInput\u001b[33m.\u001b[39mfill(\u001b[32m\"Create pie chart of country\"\u001b[39m)\u001b[33m;\u001b[39m\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\dashboard-chat-custom-chart.spec.ts",
+                        "column": 76,
+                        "line": 81
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator: getByText('Chart Average Salary by Country created.')\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('Chart Average Salary by Country created.')\u001b[22m\n\n\n  79 |\n  80 |   // Verify chart appears and chat response confirms creation\n> 81 |   await expect(page.getByText(\"Chart Average Salary by Country created.\")).toBeVisible();\n     |                                                                            ^\n  82 |\n  83 |   // Type: Create pie chart of country\n  84 |   await chatInput.fill(\"Create pie chart of country\");\n    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\dashboard-chat-custom-chart.spec.ts:81:76"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-06T10:12:58.223Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\dashboard-chat-custom-char-cbc07--commands-for-custom-charts-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\dashboard-chat-custom-char-cbc07--commands-for-custom-charts-chromium\\video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\dashboard-chat-custom-char-cbc07--commands-for-custom-charts-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\dashboard-chat-custom-char-cbc07--commands-for-custom-charts-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\dashboard-chat-custom-chart.spec.ts",
+                    "column": 76,
+                    "line": 81
+                  }
+                }
+              ],
+              "status": "unexpected"
             }
           ],
           "id": "c2d9d85f48471235f421-2563ee6367078628cc8a",
@@ -210,15 +339,15 @@
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 3,
-                  "parallelIndex": 3,
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 11907,
+                  "duration": 3056,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-06-04T12:28:11.140Z",
+                  "startTime": "2026-06-06T10:13:09.058Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -229,6 +358,93 @@
           "id": "a38ca1b2dc0027160652-988430f918026d6cbc79",
           "file": "dashboard-upload-flow.spec.ts",
           "line": 5,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "geo-intelligence-flow.spec.ts",
+      "file": "geo-intelligence-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "Geo Intelligence Flow displays the geo card with locations for geo datasets and shows fallback text for non-geo datasets",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 8452,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByText('India').first()\nExpected: visible\nReceived: hidden\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('India').first()\u001b[22m\n\u001b[2m    8 × locator resolved to <option value=\"India\">India</option>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByText('India').first()\nExpected: visible\nReceived: hidden\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('India').first()\u001b[22m\n\u001b[2m    8 × locator resolved to <option value=\"India\">India</option>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n\n    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\geo-intelligence-flow.spec.ts:12:49",
+                    "location": {
+                      "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\geo-intelligence-flow.spec.ts",
+                      "column": 49,
+                      "line": 12
+                    },
+                    "snippet": "\u001b[0m \u001b[90m 10 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"Geo Intelligence\"\u001b[39m)\u001b[33m.\u001b[39mfirst())\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m 11 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"Top Locations\"\u001b[39m)\u001b[33m.\u001b[39mfirst())\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 12 |\u001b[39m   \u001b[36mawait\u001b[39m expect(page\u001b[33m.\u001b[39mgetByText(\u001b[32m\"India\"\u001b[39m)\u001b[33m.\u001b[39mfirst())\u001b[33m.\u001b[39mtoBeVisible()\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                                 \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 13 |\u001b[39m\n \u001b[90m 14 |\u001b[39m   \u001b[90m// 2. Test WITHOUT geo dimensions\u001b[39m\n \u001b[90m 15 |\u001b[39m   \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mroute(\u001b[32m\"**/api/state\"\u001b[39m\u001b[33m,\u001b[39m \u001b[36masync\u001b[39m (route) \u001b[33m=>\u001b[39m {\u001b[0m"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\geo-intelligence-flow.spec.ts",
+                        "column": 49,
+                        "line": 12
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mlocator\u001b[39m\u001b[2m).\u001b[22mtoBeVisible\u001b[2m(\u001b[22m\u001b[2m)\u001b[22m failed\n\nLocator:  getByText('India').first()\nExpected: visible\nReceived: hidden\nTimeout:  5000ms\n\nCall log:\n\u001b[2m  - Expect \"toBeVisible\" with timeout 5000ms\u001b[22m\n\u001b[2m  - waiting for getByText('India').first()\u001b[22m\n\u001b[2m    8 × locator resolved to <option value=\"India\">India</option>\u001b[22m\n\u001b[2m      - unexpected value \"hidden\"\u001b[22m\n\n\n  10 |   await expect(page.getByText(\"Geo Intelligence\").first()).toBeVisible();\n  11 |   await expect(page.getByText(\"Top Locations\").first()).toBeVisible();\n> 12 |   await expect(page.getByText(\"India\").first()).toBeVisible();\n     |                                                 ^\n  13 |\n  14 |   // 2. Test WITHOUT geo dimensions\n  15 |   await page.route(\"**/api/state\", async (route) => {\n    at C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\geo-intelligence-flow.spec.ts:12:49"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-06T10:13:12.310Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\geo-intelligence-flow-Geo--79c1f-k-text-for-non-geo-datasets-chromium\\test-failed-1.png"
+                    },
+                    {
+                      "name": "video",
+                      "contentType": "video/webm",
+                      "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\geo-intelligence-flow-Geo--79c1f-k-text-for-non-geo-datasets-chromium\\video.webm"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\geo-intelligence-flow-Geo--79c1f-k-text-for-non-geo-datasets-chromium\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\reports\\playwright-artifacts\\geo-intelligence-flow-Geo--79c1f-k-text-for-non-geo-datasets-chromium\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\e2e\\geo-intelligence-flow.spec.ts",
+                    "column": 49,
+                    "line": 12
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "0fbe6e50ac1b4e518452-4641f8d009b53d52e244",
+          "file": "geo-intelligence-flow.spec.ts",
+          "line": 4,
           "column": 1
         }
       ]
@@ -252,15 +468,15 @@
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 4,
-                  "parallelIndex": 4,
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 9182,
+                  "duration": 2610,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-06-04T12:28:11.973Z",
+                  "startTime": "2026-06-06T10:13:23.905Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -294,15 +510,15 @@
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 5,
-                  "parallelIndex": 5,
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 9098,
+                  "duration": 1610,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-06-04T12:28:12.221Z",
+                  "startTime": "2026-06-06T10:13:26.730Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -337,14 +553,14 @@
               "results": [
                 {
                   "workerIndex": 2,
-                  "parallelIndex": 2,
+                  "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 6285,
+                  "duration": 3117,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-06-04T12:28:23.919Z",
+                  "startTime": "2026-06-06T10:13:28.426Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -378,15 +594,15 @@
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 5,
-                  "parallelIndex": 5,
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 5749,
+                  "duration": 3351,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-06-04T12:28:24.077Z",
+                  "startTime": "2026-06-06T10:13:31.596Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -404,11 +620,11 @@
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-06-04T12:28:01.565Z",
-    "duration": 98601.444,
-    "expected": 8,
+    "startTime": "2026-06-06T10:12:45.987Z",
+    "duration": 49218.776000000005,
+    "expected": 9,
     "skipped": 0,
-    "unexpected": 0,
+    "unexpected": 2,
     "flaky": 0
   }
 }

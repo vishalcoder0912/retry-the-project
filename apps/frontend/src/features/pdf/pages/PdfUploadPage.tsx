@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SVGProps } from "react";
 import {
   BarChart3,
@@ -7,13 +7,14 @@ import {
   Download,
   FileText,
   Loader2,
+  RefreshCw,
   Search,
   Send,
   Sparkles,
   Table2,
   Upload,
 } from "lucide-react";
-import { api, type PdfAskResult, type PdfImportResult } from "@/features/data/api/dataApi";
+import { api, type PdfAskResult, type PdfImportResult, type PdfPipelineStatus } from "@/features/data/api/dataApi";
 import { useData } from "@/features/data/context/useData";
 import SmartChartCard from "@/features/dashboard/components/SmartChartCard";
 import {
@@ -46,18 +47,23 @@ function downloadFile(fileName: string, content: string, mime: string) {
 }
 
 export default function PdfUploadPage() {
-  const { importPdfFile, isProcessing, dataset } = useData();
+  const { dataset } = useData();
   const inputRef = useRef<HTMLInputElement>(null);
   const [result, setResult] = useState<PdfImportResult | null>(null);
   const [activeTab, setActiveTab] = useState("Overview");
   const [query, setQuery] = useState("");
   const [asking, setAsking] = useState(false);
+  const [maintenanceBusy, setMaintenanceBusy] = useState("");
   const [messages, setMessages] = useState<PdfMessage[]>([]);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
-
+  const [pipelineStatus, setPipelineStatus] = useState<PdfPipelineStatus | null>(null);
+  const uploadingRef = useRef(false);
   const activeDataset = result?.dataset || (dataset?.sourceType === "pdf" ? dataset : null);
+  const activePdfDocumentId = result?.pdf?.id || pipelineStatus?.documentId || activeDataset?.pdf?.id || "";
+  const readiness = pipelineStatus?.readiness || result?.pdfIntelligence?.readiness;
+
   const rows = useMemo(() => cleanDatasetRows((activeDataset?.rows || []) as Row[]), [activeDataset?.rows]);
   const model = useMemo(() => buildCommandCenterModel(activeDataset), [activeDataset]);
   const charts = useMemo(() => buildDefaultCharts(rows).slice(0, 3), [rows]);
@@ -67,21 +73,159 @@ export default function PdfUploadPage() {
     const pageNumber = Number(row.__pageNumber);
     return Number.isFinite(pageNumber) ? Math.max(maxPage, pageNumber) : maxPage;
   }, 0);
-  const pageCount = Math.max(result?.knowledgeBaseSummary.chunkCount ? 1 : 0, maxExtractedPage, result ? 1 : 0);
+  const pageCount = Math.max(result?.pdf.pageCount || 0, result?.knowledgeBaseSummary.chunkCount ? 1 : 0, maxExtractedPage, result ? 1 : 0);
   const dataPoints = rows.length * Math.max(columns.length, 1);
   const visibleRows = rows.filter((row) => search.trim() ? columns.some((column) => String(row[column] ?? "").toLowerCase().includes(search.toLowerCase())) : true);
+  const documentSummary = result?.pdfIntelligence?.summary;
+  const extractionWarnings = result?.pdf.warnings || (result?.pdfIntelligence?.quality?.warnings as string[] | undefined) || [];
+  const ocrStatus = result?.pdf.ocrUsed ? "OCR used" : extractionWarnings.some((warning) => /ocr recommended|ocr.*risk|corruption/i.test(warning)) ? "OCR recommended" : "OCR not needed";
+  const pipelineCards = [
+    ["Preview", "pdf.preview"],
+    ["Text Extraction", "pdf.extractText"],
+    ["OCR", "pdf.ocr"],
+    ["Tables", "pdf.extractTables"],
+    ["Cleaning", "pdf.clean"],
+    ["Indexing", "pdf.index"],
+    ["Summary", "pdf.summarize"],
+    ["Visualizations", "pdf.visualize"],
+    ["Query Ready", "query.ready"],
+  ].map(([label, key]) => {
+    const status = pipelineStatus?.pipelines?.[key];
+    if (key === "query.ready") {
+      return {
+        label,
+        key,
+        status: readiness?.canAskQuestions ? readiness.hasVectorIndex ? "yes" : "partial" : "no",
+        progress: readiness?.canAskQuestions ? readiness.hasVectorIndex ? 100 : 65 : 0,
+        error: null,
+      };
+    }
+    return {
+      label,
+      key,
+      status: status?.status || (key === "pdf.ocr" && !result?.pdf.ocrUsed ? "skipped" : result?.pdf.id ? "queued" : "waiting"),
+      progress: status?.progress ?? 0,
+      error: status?.error,
+    };
+  });
+
+  useEffect(() => {
+    if (!activePdfDocumentId) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await api.getPdfPipelineStatus(activePdfDocumentId);
+        if (cancelled) return;
+        setPipelineStatus(status);
+        const document = await api.getPdfIntelligenceDocument(activePdfDocumentId).catch(() => null);
+        if (document && !cancelled) {
+          setResult((current) => {
+            if (current) {
+              return {
+                ...current,
+                pdf: {
+                  ...current.pdf,
+                  fileName: document.fileName || current.pdf.fileName,
+                  pageCount: document.pageCount || current.pdf.pageCount,
+                  tableCount: document.tableCount ?? current.pdf.tableCount,
+                  chunkCount: document.chunkCount ?? current.pdf.chunkCount,
+                  textElementCount: document.pages?.length ?? current.pdf.textElementCount,
+                  documentType: document.documentType || current.pdf.documentType,
+                  qualityScore: typeof document.quality?.overallScore === "number" ? document.quality.overallScore : current.pdf.qualityScore,
+                  warnings: document.quality?.warnings || current.pdf.warnings,
+                },
+                pdfIntelligence: document,
+                knowledgeBaseSummary: {
+                  tableCount: document.tableCount || 0,
+                  chunkCount: document.chunkCount || 0,
+                  textElementCount: document.pages?.length || 0,
+                },
+              };
+            }
+            return {
+              pdf: {
+                id: activePdfDocumentId,
+                datasetId: activeDataset?.id || "",
+                fileName: document.fileName || activeDataset?.fileName || "",
+                jobId: activePdfDocumentId,
+                pageCount: document.pageCount || 0,
+                tableCount: document.tableCount || 0,
+                chunkCount: document.chunkCount || 0,
+                textElementCount: document.pages?.length || 0,
+                documentType: document.documentType,
+                qualityScore: document.quality?.overallScore,
+                warnings: document.quality?.warnings || [],
+              },
+              dataset: activeDataset,
+              analysis: null,
+              pdfIntelligence: document,
+              knowledgeBaseSummary: {
+                tableCount: document.tableCount || 0,
+                chunkCount: document.chunkCount || 0,
+                textElementCount: document.pages?.length || 0,
+              },
+              privacy: {
+                rawPdfSentToLLM: false,
+                extractedTextCanBeUsedForRAG: true,
+                dashboardValuesCalculatedLocally: true,
+              },
+            } as any;
+          });
+        }
+      } catch {
+        // keep the last known status visible
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activePdfDocumentId]);
 
   async function uploadPdf(file?: File) {
-    if (!file || isProcessing) return;
+    if (!file || uploadingRef.current) return;
     setError("");
     setMessages([]);
+    uploadingRef.current = true;
     try {
-      const data = await importPdfFile(file);
+      const uploaded = await api.uploadPdfIntelligence(file);
+      const data = {
+        pdf: {
+          id: uploaded.documentId,
+          datasetId: "",
+          fileName: file.name,
+          jobId: uploaded.documentId,
+          pageCount: 0,
+          tableCount: 0,
+          chunkCount: 0,
+          textElementCount: 0,
+          warnings: [],
+        },
+        dataset: null,
+        analysis: null,
+        knowledgeBaseSummary: { tableCount: 0, chunkCount: 0, textElementCount: 0 },
+        privacy: {
+          rawPdfSentToLLM: false,
+          extractedTextCanBeUsedForRAG: true,
+          dashboardValuesCalculatedLocally: true,
+        },
+        pdfIntelligence: {
+          documentId: uploaded.documentId,
+          fileName: file.name,
+          status: uploaded.status,
+          progress: 0,
+        },
+      } as unknown as PdfImportResult;
       setResult(data);
       setPage(1);
-      setMessages([{ role: "assistant", content: `Processed ${data.pdf.fileName}. Extracted ${data.pdf.tableCount} table(s) and ${data.pdf.textElementCount} text element(s).` }]);
+      setPipelineStatus({ documentId: uploaded.documentId, status: uploaded.status, progress: 0, message: uploaded.message });
+      setMessages([{ role: "assistant", content: `${file.name} uploaded. Text extraction, summaries, tables, and indexing are running as separate background pipelines.` }]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "PDF upload failed.");
+    } finally {
+      uploadingRef.current = false;
     }
   }
 
@@ -91,14 +235,17 @@ export default function PdfUploadPage() {
     setQuery("");
     setMessages((current) => [...current, { role: "user", content: text }]);
 
-    if (!result?.pdf?.id) {
-      setMessages((current) => [...current, { role: "assistant", content: "Upload and process a PDF before asking questions about it." }]);
+    if (!activePdfDocumentId) {
+      setMessages((current) => [...current, { role: "assistant", content: "Upload a PDF before asking questions about it." }]);
       return;
     }
 
     setAsking(true);
     try {
-      const response = await api.askPdf(result.pdf.id, text);
+      const isExplanation = /\b(explain|overview|summarize|summary|what is this pdf about)\b/i.test(text);
+      const response = isExplanation
+        ? await api.explainPdf(activePdfDocumentId)
+        : await api.askPdfIntelligence(activePdfDocumentId, text);
       setMessages((current) => [...current, { role: "assistant", content: response.answer, sources: response.sources }]);
     } catch (err) {
       setMessages((current) => [...current, { role: "assistant", content: err instanceof Error ? err.message : "Could not answer PDF question.", sources: [] }]);
@@ -107,11 +254,29 @@ export default function PdfUploadPage() {
     }
   }
 
+  async function runPdfMaintenance(action: "reindex" | "force-ocr") {
+    if (!activePdfDocumentId || maintenanceBusy) return;
+    setMaintenanceBusy(action);
+    try {
+      if (action === "force-ocr") {
+        await api.forceOcrPdf(activePdfDocumentId);
+        setMessages((current) => [...current, { role: "assistant", content: "Forced OCR was queued. This runs separately and will update the pipeline status as pages finish." }]);
+      } else {
+        await api.reindexPdf(activePdfDocumentId);
+        setMessages((current) => [...current, { role: "assistant", content: "PDF vector reindex was queued from stored chunks. OCR will not run." }]);
+      }
+    } catch (err) {
+      setMessages((current) => [...current, { role: "assistant", content: err instanceof Error ? err.message : "PDF maintenance action failed." }]);
+    } finally {
+      setMaintenanceBusy("");
+    }
+  }
+
   function exportCsv() {
     downloadFile(`${activeDataset?.name || "pdf-extraction"}.csv`, exportRowsToCsv(rows), "text/csv;charset=utf-8");
   }
 
-  const ready = Boolean(activeDataset && rows.length);
+  const ready = Boolean(result?.pdf?.id);
 
   return (
     <div className="min-h-screen bg-[#F6F8FC] px-5 py-6 xl:px-8">
@@ -140,7 +305,7 @@ export default function PdfUploadPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-wider text-[#64748B]">Document</p>
                   <p className="mt-1 truncate font-bold text-[#0F172A]">{result?.pdf.fileName || activeDataset?.fileName || "No PDF uploaded"}</p>
-                  <p className="mt-1 text-sm text-[#64748B]">{ready ? "Processed successfully" : "Upload a PDF to begin"}</p>
+                  <p className="mt-1 text-sm text-[#64748B]">{ready ? pipelineStatus?.message || "Processing pipelines started" : "Upload a PDF to begin"}</p>
                 </div>
               </div>
             </div>
@@ -162,6 +327,31 @@ export default function PdfUploadPage() {
           </section>
 
           {error && <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{error}</div>}
+
+          {result?.pdf.id ? (
+            <section className={`${CARD} p-5`}>
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="font-bold text-[#0F172A]">Pipeline Status</h2>
+                <span className="text-sm font-semibold text-[#64748B]">{pipelineStatus?.status || result.pdfIntelligence?.status || "uploaded"}</span>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {pipelineCards.map((item) => (
+                  <div key={item.key} className="rounded-xl border border-[#E2E8F0] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-[#334155]">{item.label}</span>
+                      <span className={`text-xs font-bold ${item.status === "failed" ? "text-rose-600" : item.status === "completed" ? "text-emerald-600" : "text-[#64748B]"}`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-[#7C3AED]" style={{ width: `${Math.min(Math.max(item.progress, item.status === "completed" ? 100 : 0), 100)}%` }} />
+                    </div>
+                    {item.error ? <p className="mt-2 text-xs text-rose-600">{item.error}</p> : null}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {!ready && (
             <section className={`${CARD} grid min-h-[260px] place-items-center border-dashed border-violet-300 p-8 text-center`}>
@@ -194,6 +384,11 @@ export default function PdfUploadPage() {
                       ["File Name", result?.pdf.fileName || activeDataset?.fileName],
                       ["Pages", String(pageCount)],
                       ["Status", "Processed"],
+                      ["PDF Type", result?.pdf.documentType ? titleCase(result.pdf.documentType.replace(/_/g, " ")) : "-"],
+                      ["OCR Used", result?.pdf.ocrUsed ? "Yes" : "No"],
+                      ["OCR Status", result ? ocrStatus : "-"],
+                      ["Quality", typeof result?.pdf.qualityScore === "number" ? `${Math.round(result.pdf.qualityScore * 100)}%` : "-"],
+                      ["OCR Confidence", typeof result?.pdf.ocrConfidence === "number" ? `${Math.round(result.pdf.ocrConfidence * 100)}%` : "-"],
                       ["Tables", String(tableCount)],
                       ["Columns", String(columns.length)],
                       ["Primary Metric", model.profile.primaryMetric ? titleCase(model.profile.primaryMetric.name) : "-"],
@@ -204,14 +399,25 @@ export default function PdfUploadPage() {
                 </div>
 
                 <div className={`${CARD} p-5`}>
-                  <h2 className="font-bold text-[#0F172A]">Key Insights</h2>
+                  <h2 className="font-bold text-[#0F172A]">Document Summary</h2>
                   <div className="mt-4 space-y-3">
-                    {model.insights.map((insight) => (
-                      <div key={insight.id} className="rounded-2xl border border-[#E2E8F0] p-4">
-                        <p className="font-bold text-[#0F172A]">{insight.title}</p>
-                        <p className="mt-2 text-sm leading-6 text-[#64748B]">{insight.description}</p>
+                    {documentSummary?.shortSummary || documentSummary?.short ? (
+                      <div className="rounded-2xl border border-[#E2E8F0] p-4">
+                        <p className="font-bold text-[#0F172A]">{String(documentSummary.documentTitle || "PDF Overview")}</p>
+                        <p className="mt-2 text-sm leading-6 text-[#64748B]">{String(documentSummary.shortSummary || documentSummary.short)}</p>
+                      </div>
+                    ) : null}
+                    {(documentSummary?.keyPoints?.length ? documentSummary.keyPoints : model.insights.map((item) => item.description)).slice(0, 4).map((insight: any, index: number) => (
+                      <div key={typeof insight === "string" ? `summary-point-${index}` : insight.id || `summary-point-${index}`} className="rounded-2xl border border-[#E2E8F0] p-4">
+                        <p className="font-bold text-[#0F172A]">{typeof insight === "string" ? `Point ${index + 1}` : insight.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-[#64748B]">{typeof insight === "string" ? insight : insight.description}</p>
                       </div>
                     ))}
+                    {extractionWarnings.length ? (
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                        Some content may be uncertain due to OCR/extraction quality. {extractionWarnings.slice(0, 2).join(" ")}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -290,10 +496,35 @@ export default function PdfUploadPage() {
           <p className="mt-3 text-sm leading-6 text-[#64748B]">Ask questions about your PDF document and get cited answers from extracted content.</p>
 
           <div className="mt-4 flex flex-wrap gap-2">
-            {["List all tables", "What are the key insights?", "Show extracted metrics"].map((prompt) => (
-              <button key={prompt} type="button" onClick={() => void askPdf(prompt)} className="rounded-full border border-violet-200 px-3 py-1 text-xs font-semibold text-[#7C3AED]">{prompt}</button>
-            ))}
+            {["Explain the PDF", "List all tables", "Summarize page 1", "What are the key insights?", "Show extracted metrics"].map((prompt) => {
+              const disabled = prompt === "Show extracted metrics" && readiness?.canShowMetrics === false;
+              return (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => void askPdf(prompt)}
+                  disabled={disabled}
+                  title={disabled ? "No real analyzable PDF tables are ready yet." : undefined}
+                  className="rounded-full border border-violet-200 px-3 py-1 text-xs font-semibold text-[#7C3AED] disabled:border-slate-200 disabled:text-[#94A3B8]"
+                >
+                  {prompt}
+                </button>
+              );
+            })}
           </div>
+
+          {result?.pdf.id ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void runPdfMaintenance("reindex")} disabled={Boolean(maintenanceBusy)} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-[#334155] disabled:opacity-50">
+                <RefreshCw className={`mr-1 inline size-3 ${maintenanceBusy === "reindex" ? "animate-spin" : ""}`} />
+                Rebuild PDF Index
+              </button>
+              <button type="button" onClick={() => void runPdfMaintenance("force-ocr")} disabled={Boolean(maintenanceBusy)} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-[#334155] disabled:opacity-50">
+                <RefreshCw className={`mr-1 inline size-3 ${maintenanceBusy === "force-ocr" ? "animate-spin" : ""}`} />
+                Force OCR and Re-index
+              </button>
+            </div>
+          ) : null}
 
           <div className="mt-5 space-y-3">
             {messages.map((message) => (
@@ -303,7 +534,10 @@ export default function PdfUploadPage() {
                   <div className="mt-3 space-y-2">
                     {message.sources.map((source) => (
                       <div key={source.id} className="rounded-xl bg-[#F8FAFC] p-2 text-xs text-[#64748B]">
-                        Source {source.source}: {source.preview}
+                        Source {source.source}
+                        {source.pageNumber ? ` page ${source.pageNumber}` : ""}
+                        {source.chunkType ? ` ${source.chunkType}` : ""}
+                        {typeof source.confidence === "number" ? ` confidence ${Math.round(source.confidence * 100)}%` : ""}: {source.preview}
                       </div>
                     ))}
                   </div>

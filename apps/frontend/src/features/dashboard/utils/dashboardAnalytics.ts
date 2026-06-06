@@ -780,6 +780,29 @@ function expandMultiValueRows(rows: Row[], xKey: string) {
   return expanded;
 }
 
+function rowMatchesSpecFilter(row: Row, filter: NonNullable<KpiSpec["filters"]>[number]) {
+  const actual = row[filter.column];
+  const expected = filter.value;
+  const operator = String(filter.operator || "equals").toLowerCase();
+  const actualText = String(actual ?? "").trim().toLowerCase();
+  const expectedText = String(expected ?? "").trim().toLowerCase();
+  const actualNumber = safeNumber(actual);
+  const expectedNumber = safeNumber(expected);
+
+  if (operator === "not_equals") return actualText !== expectedText;
+  if (operator === "contains") return actualText.includes(expectedText);
+  if (operator === "gt") return actualNumber !== null && expectedNumber !== null && actualNumber > expectedNumber;
+  if (operator === "gte") return actualNumber !== null && expectedNumber !== null && actualNumber >= expectedNumber;
+  if (operator === "lt") return actualNumber !== null && expectedNumber !== null && actualNumber < expectedNumber;
+  if (operator === "lte") return actualNumber !== null && expectedNumber !== null && actualNumber <= expectedNumber;
+  return actualText === expectedText;
+}
+
+function applySpecFilters<T extends Row>(rows: T[], filters: KpiSpec["filters"] = []) {
+  if (!filters.length) return rows;
+  return rows.filter((row) => filters.every((filter) => rowMatchesSpecFilter(row, filter)));
+}
+
 function makeChart(
   spec: ChartSpec,
   data: Array<Record<string, string | number>>,
@@ -801,7 +824,7 @@ function makeChart(
 }
 
 export function buildChartFromSpec(rows: Row[], chartSpec: ChartSpec): DashboardChart {
-  const withIndex = buildRowIndexRows(cleanDatasetRows(rows));
+  const withIndex = buildRowIndexRows(applySpecFilters(cleanDatasetRows(rows), chartSpec.filters));
   const limit = chartSpec.limit ?? 10;
   const xKey = chartSpec.xKey || "";
   const yKey = chartSpec.yKey || "count";
@@ -848,7 +871,7 @@ export function buildChartFromSpec(rows: Row[], chartSpec: ChartSpec): Dashboard
 }
 
 export function buildKpiFromSpec(rows: Row[], kpiSpec: KpiSpec): DashboardKpi {
-  const cleanRows = cleanDatasetRows(rows);
+  const cleanRows = applySpecFilters(cleanDatasetRows(rows), kpiSpec.filters);
   const quality = buildDataQualityScore(cleanRows);
   let rawValue: number | string = 0;
   const metricValues =

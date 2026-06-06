@@ -1,7 +1,7 @@
 import { humanize, normalizeColumnName } from "./schema-fingerprint.js";
 import { buildSalaryDashboardPlan } from "./salary-dashboard-engine.js";
 
-const CHART_TYPES = new Set(["bar", "horizontalBar", "line", "area", "pie", "donut", "histogram", "scatter", "radar", "composed", "heatmap"]);
+const CHART_TYPES = new Set(["bar", "horizontalBar", "horizontal_bar", "line", "area", "pie", "donut", "histogram", "scatter", "radar", "composed", "heatmap"]);
 const AGGREGATIONS = new Set([
   "none",
   "count",
@@ -248,6 +248,9 @@ export function sanitizeChartSpec(spec = {}, profile) {
     limit: Number.isFinite(Number(spec.limit)) ? Math.max(1, Math.min(50, Number(spec.limit))) : 10,
     reason: spec.reason || "",
     intent: spec.intent,
+    filters: Array.isArray(spec.filters) ? spec.filters : [],
+    sort: spec.sort && typeof spec.sort === "object" ? spec.sort : undefined,
+    calculationSource: spec.calculationSource || undefined,
   };
 
   if (profile?.columns?.length) {
@@ -295,6 +298,8 @@ export function sanitizeKpiSpec(spec = {}, profile) {
     format: spec.format || undefined,
     description: spec.description || "",
     businessKpi: spec.businessKpi === true,
+    filters: Array.isArray(spec.filters) ? spec.filters : [],
+    calculationSource: spec.calculationSource || undefined,
   };
 }
 

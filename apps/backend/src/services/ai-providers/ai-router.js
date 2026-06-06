@@ -2,6 +2,7 @@ import { geminiService } from './gemini-service.js';
 import { ollamaService } from './ollama-service.js';
 import { localNLPService } from './local-nlp-service.js';
 import { validateDashboardActions, assessDashboardHealth } from '../guardian/dashboard-guardian.js';
+import { assertNoRawRowsInString } from '../ai/llm-payload-sanitizer.js';
 
 class AIRouter {
   constructor() {
@@ -125,6 +126,24 @@ class AIRouter {
   }
 
   async runAITask(params) {
+    // Ensure no raw rows exist in the task inputs
+    try {
+      assertNoRawRowsInString(JSON.stringify(params));
+    } catch (error) {
+      console.error(`[AI ROUTER BLOCKED runAITask] ${error.message}`);
+      return {
+        success: false,
+        error: `Blocked unsafe LLM payload: ${error.message}`,
+        provider: 'safe_fallback',
+        response_type: 'chat',
+        natural_response: 'Blocked unsafe payload. Raw rows cannot be sent to the AI.',
+        actions: [],
+        warnings: [error.message],
+        errors: [],
+        schema_safe: true
+      };
+    }
+
     const {
       taskType = 'dashboard_planner',
       schemaPacket,
@@ -325,6 +344,19 @@ class AIRouter {
   }
 
   async generateResponse(prompt, context = {}) {
+    try {
+      assertNoRawRowsInString(prompt);
+      assertNoRawRowsInString(JSON.stringify(context));
+    } catch (error) {
+      console.error(`[AI ROUTER BLOCKED generateResponse] ${error.message}`);
+      return {
+        success: false,
+        error: `Blocked unsafe LLM payload: ${error.message}`,
+        provider: 'none',
+        content: `I apologize, but raw rows are blocked from AI queries.`
+      };
+    }
+
     const availableProviders = await this.getAvailableProviders();
     if (availableProviders.length === 0) {
       return {
