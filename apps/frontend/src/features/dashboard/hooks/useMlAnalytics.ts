@@ -9,9 +9,28 @@ type AsyncState<T> = {
 
 const idle = { data: null, error: null, loading: false };
 
+<<<<<<< HEAD
+type MlProfileResult = {
+  measures?: string[];
+  dimensions?: string[];
+  numericSummary?: Record<string, unknown>;
+};
+
+type MlResponse = {
+  result?: MlProfileResult | {
+    profile?: MlProfileResult;
+  };
+  auditTrail?: unknown[];
+};
+
+export function useMlAnalytics(datasetId?: string) {
+  const [profile, setProfile] = useState<AsyncState<MlResponse>>(idle);
+  const [fullAnalysis, setFullAnalysis] = useState<AsyncState<MlResponse>>(idle);
+=======
 export function useMlAnalytics(datasetId?: string) {
   const [profile, setProfile] = useState<AsyncState<any>>(idle);
   const [fullAnalysis, setFullAnalysis] = useState<AsyncState<any>>(idle);
+>>>>>>> origin/main
 
   const loadProfile = useCallback(async () => {
     if (!datasetId) return;
@@ -48,7 +67,12 @@ export function useMlAnalytics(datasetId?: string) {
     [datasetId],
   );
 
+<<<<<<< HEAD
+  const fullResult = fullAnalysis.data?.result;
+  const profileResult = (fullResult && "profile" in fullResult ? fullResult.profile : undefined) ?? profile.data?.result;
+=======
   const profileResult = (fullAnalysis.data as any)?.result?.profile ?? (profile.data as any)?.result;
+>>>>>>> origin/main
   const measures = useMemo(
     () => profileResult?.measures ?? Object.keys(profileResult?.numericSummary ?? {}),
     [profileResult],

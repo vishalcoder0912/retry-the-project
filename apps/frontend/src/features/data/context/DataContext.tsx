@@ -1,16 +1,42 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { api, DatasetImportPayload } from '@/features/data/api/dataApi';
-import { ChatMessage, Dataset, DatasetAnalysis, DatasetCellValue, DatasetRow } from '@/features/data/model/dataStore';
+import { ChatMessage, DataColumn, Dataset, DatasetAnalysis, DatasetCellValue, DatasetRow } from '@/features/data/model/dataStore';
 import { DataContext } from '@/features/data/context/data-context-store';
 
-function inferType(values: string[]): 'string' | 'number' | 'date' {
-  const sample = values.filter(Boolean).slice(0, 20);
-  if (sample.length === 0) return 'string';
-  if (sample.every(v => !isNaN(Number(v)))) return 'number';
-  if (sample.every(v => !isNaN(Date.parse(v)))) return 'date';
-  return 'string';
+const toNumber = (value: string) => {
+  const normalized = value.replace(/[$,€£₹%\s]/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+function inferType(name: string, values: string[]): DataColumn["type"] {
+  const normalizedName = name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  if (/^(lat|latitude)$/.test(normalizedName)) return "latitude";
+  if (/^(lng|lon|long|longitude)$/.test(normalizedName)) return "longitude";
+  if (/country|nation/.test(normalizedName)) return "country";
+  if (/city|town|municipality/.test(normalizedName)) return "city";
+
+  const sample = values.map((value) => String(value ?? "").trim()).filter(Boolean).slice(0, 50);
+  if (sample.length === 0) return "string";
+
+  const numericCount = sample.filter((value) => toNumber(value) !== null).length;
+  const dateCount = sample.filter((value) => !Number.isNaN(Date.parse(value))).length;
+  const booleanCount = sample.filter((value) => /^(true|false|yes|no|0|1)$/i.test(value)).length;
+  const uniqueCount = new Set(sample.map((value) => value.toLowerCase())).size;
+
+  if (booleanCount / sample.length > 0.85) return "boolean";
+  if (dateCount / sample.length > 0.85) {
+    return sample.some((value) => /:\d{2}/.test(value)) ? "datetime" : "date";
+  }
+  if (numericCount / sample.length > 0.85) {
+    if (sample.some((value) => /%/.test(value)) || /percent|rate|ratio/.test(normalizedName)) return "percentage";
+    if (sample.some((value) => /[$€£₹]/.test(value)) || /salary|revenue|sales|profit|amount|price|cost|income|usd|inr/.test(normalizedName)) return "currency";
+    return "number";
+  }
+  if (uniqueCount <= Math.max(12, sample.length * 0.45)) return "category";
+  return sample.some((value) => value.length > 80) ? "text" : "string";
 }
 
 const getErrorMessage = (error: unknown) =>
@@ -133,13 +159,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error("File contains no analyzable data rows after removing schema/dictionary rows");
     }
 
-    const columns: Array<{
-      name: string;
-      type: 'string' | 'number' | 'date';
-      sample: string[];
-    }> = fields.map(name => ({
+    const columns: DataColumn[] = fields.map(name => ({
       name,
-      type: inferType(rows.slice(0, 20).map(r => String(r[name] ?? ''))),
+      type: inferType(name, rows.slice(0, 50).map(r => String(r[name] ?? ''))),
       sample: rows.slice(0, 3).map(r => String(r[name] ?? '')),
     }));
 
@@ -371,25 +393,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [dataset]);
 
+  const contextValue = useMemo(() => ({
+    dataset,
+    chatMessages,
+    analysis,
+    isProcessing,
+    isHydrating,
+    apiError,
+    uploadFile,
+    uploadFiles,
+    importPdfFile,
+    loadDemo,
+    sendChatQuery,
+    updateDatasetCell,
+    replaceDatasetLocally,
+    deleteDataset,
+    resetAppState,
+    retryHydrate: hydrateState,
+  }), [
+    dataset,
+    chatMessages,
+    analysis,
+    isProcessing,
+    isHydrating,
+    apiError,
+    uploadFile,
+    uploadFiles,
+    importPdfFile,
+    loadDemo,
+    sendChatQuery,
+    updateDatasetCell,
+    replaceDatasetLocally,
+    deleteDataset,
+    resetAppState,
+    hydrateState,
+  ]);
+
   return (
-    <DataContext.Provider value={{
-      dataset,
-      chatMessages,
-      analysis,
-      isProcessing,
-      isHydrating,
-      apiError,
-      uploadFile,
-      uploadFiles,
-      importPdfFile,
-      loadDemo,
-      sendChatQuery,
-      updateDatasetCell,
-      replaceDatasetLocally,
-      deleteDataset,
-      resetAppState,
-      retryHydrate: hydrateState,
-    }}>
+    <DataContext.Provider value={contextValue}>
       {children}
     </DataContext.Provider>
   );

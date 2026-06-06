@@ -14,7 +14,8 @@ interface AppProvidersProps {
 const AppProviders = ({ children }: AppProvidersProps) => (
   <ThemeProvider
     attribute="class"
-    defaultTheme="dark"
+    defaultTheme="light"
+    forcedTheme="light"
     enableSystem={false}
     storageKey="insightflow-theme"
     disableTransitionOnChange

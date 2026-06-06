@@ -1,11 +1,19 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+<<<<<<< HEAD
+import { DataColumn, DatasetRow } from '@/features/data/model/dataStore';
+=======
 import { DatasetRow } from '@/features/data/model/dataStore';
+>>>>>>> origin/main
 
 export interface LocalFileProcessResult {
   columns: Array<{
     name: string;
+<<<<<<< HEAD
+    type: DataColumn["type"];
+=======
     type: 'string' | 'number' | 'date';
+>>>>>>> origin/main
     sample: string[];
   }>;
   rowCount: number;
@@ -21,12 +29,44 @@ export interface LocalFileChunk {
 /**
  * Infers data type from sample values
  */
+<<<<<<< HEAD
+const numericValue = (value: string) => {
+  const parsed = Number(value.replace(/[$,€£₹%\s]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const inferType = (name: string, values: string[]): DataColumn["type"] => {
+  const normalizedName = name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+  if (/^(lat|latitude)$/.test(normalizedName)) return "latitude";
+  if (/^(lng|lon|long|longitude)$/.test(normalizedName)) return "longitude";
+  if (/country|nation/.test(normalizedName)) return "country";
+  if (/city|town|municipality/.test(normalizedName)) return "city";
+
+  const sample = values.map((value) => String(value ?? "").trim()).filter(Boolean).slice(0, 50);
+  if (sample.length === 0) return "string";
+
+  const numericCount = sample.filter((value) => numericValue(value) !== null).length;
+  const dateCount = sample.filter((value) => !Number.isNaN(Date.parse(value))).length;
+  const booleanCount = sample.filter((value) => /^(true|false|yes|no|0|1)$/i.test(value)).length;
+  const uniqueCount = new Set(sample.map((value) => value.toLowerCase())).size;
+
+  if (booleanCount / sample.length > 0.85) return "boolean";
+  if (dateCount / sample.length > 0.85) return sample.some((value) => /:\d{2}/.test(value)) ? "datetime" : "date";
+  if (numericCount / sample.length > 0.85) {
+    if (sample.some((value) => /%/.test(value)) || /percent|rate|ratio/.test(normalizedName)) return "percentage";
+    if (sample.some((value) => /[$€£₹]/.test(value)) || /salary|revenue|sales|profit|amount|price|cost|income|usd|inr/.test(normalizedName)) return "currency";
+    return "number";
+  }
+  if (uniqueCount <= Math.max(12, sample.length * 0.45)) return "category";
+  return sample.some((value) => value.length > 80) ? "text" : "string";
+=======
 const inferType = (values: string[]): 'string' | 'number' | 'date' => {
   const sample = values.filter(Boolean).slice(0, 20);
   if (sample.length === 0) return 'string';
   if (sample.every(v => !isNaN(Number(v)))) return 'number';
   if (sample.every(v => !isNaN(Date.parse(v)))) return 'date';
   return 'string';
+>>>>>>> origin/main
 };
 
 /**
@@ -58,7 +98,11 @@ const normalizeDatasetRow = (value: unknown): DatasetRow => {
 export const extractSchema = (rows: DatasetRow[], fields: string[]): LocalFileProcessResult['columns'] => {
   return fields.map(name => ({
     name,
+<<<<<<< HEAD
+    type: inferType(name, rows.slice(0, 50).map(r => String(r[name] ?? ''))),
+=======
     type: inferType(rows.slice(0, 20).map(r => String(r[name] ?? ''))),
+>>>>>>> origin/main
     sample: rows.slice(0, 3).map(r => String(r[name] ?? '')),
   }));
 };

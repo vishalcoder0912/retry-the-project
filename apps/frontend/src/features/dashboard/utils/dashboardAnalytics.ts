@@ -69,6 +69,14 @@ export interface DashboardChart extends ChartSpec {
   subtitle: string;
   data: Array<Record<string, string | number>>;
   warning?: string;
+<<<<<<< HEAD
+  metricUsed?: string;
+  dimensionUsed?: string;
+  calculationSource?: string;
+  createdBy?: "system" | "ai";
+  filtersApplied?: DashboardFilters;
+=======
+>>>>>>> origin/main
 }
 
 export interface DashboardKpi extends KpiSpec {
@@ -78,6 +86,13 @@ export interface DashboardKpi extends KpiSpec {
   subtitle: string;
   status?: "good" | "warning" | "critical";
   insight?: string;
+<<<<<<< HEAD
+  change?: number;
+  sparkline?: number[];
+  source?: string;
+  createdBy?: "system" | "ai";
+=======
+>>>>>>> origin/main
 }
 
 export interface DataQualityScore {
@@ -410,7 +425,16 @@ export function applyFilters(rows: Row[], filters: DashboardFilters = {}) {
       const cell = String(row[key] ?? "").toLowerCase();
       const expected = String(rawValue).toLowerCase();
 
+<<<<<<< HEAD
+      if (key === "languages" || key === "frameworks") {
+        const parts = cell.split(/[;,]/).map((p) => p.trim());
+        if (!parts.includes(expected)) return false;
+      } else {
+        if (cell !== expected) return false;
+      }
+=======
       if (cell !== expected) return false;
+>>>>>>> origin/main
     }
 
     for (const condition of conditions) {
@@ -766,18 +790,62 @@ function expandMultiValueRows(rows: Row[], xKey: string) {
   return expanded;
 }
 
+<<<<<<< HEAD
+function rowMatchesSpecFilter(row: Row, filter: NonNullable<KpiSpec["filters"]>[number]) {
+  const actual = row[filter.column];
+  const expected = filter.value;
+  const operator = String(filter.operator || "equals").toLowerCase();
+  const actualText = String(actual ?? "").trim().toLowerCase();
+  const expectedText = String(expected ?? "").trim().toLowerCase();
+  const actualNumber = safeNumber(actual);
+  const expectedNumber = safeNumber(expected);
+
+  if (operator === "not_equals") return actualText !== expectedText;
+  if (operator === "contains") return actualText.includes(expectedText);
+  if (operator === "gt") return actualNumber !== null && expectedNumber !== null && actualNumber > expectedNumber;
+  if (operator === "gte") return actualNumber !== null && expectedNumber !== null && actualNumber >= expectedNumber;
+  if (operator === "lt") return actualNumber !== null && expectedNumber !== null && actualNumber < expectedNumber;
+  if (operator === "lte") return actualNumber !== null && expectedNumber !== null && actualNumber <= expectedNumber;
+  return actualText === expectedText;
+}
+
+function applySpecFilters<T extends Row>(rows: T[], filters: KpiSpec["filters"] = []) {
+  if (!filters.length) return rows;
+  return rows.filter((row) => filters.every((filter) => rowMatchesSpecFilter(row, filter)));
+}
+
+function makeChart(
+  spec: ChartSpec,
+  data: Array<Record<string, string | number>>,
+  warning?: string,
+  extras: Partial<DashboardChart> = {},
+): DashboardChart {
+=======
 function makeChart(spec: ChartSpec, data: Array<Record<string, string | number>>, warning?: string): DashboardChart {
+>>>>>>> origin/main
   return {
     id: crypto.randomUUID(),
     ...spec,
     subtitle: `${spec.aggregation.toUpperCase()} - ${titleCase(spec.xKey)} vs ${titleCase(spec.yKey)}`,
     data,
     warning,
+<<<<<<< HEAD
+    metricUsed: spec.yKey,
+    dimensionUsed: spec.xKey,
+    calculationSource: `${spec.aggregation.toUpperCase()}(${spec.yKey}) grouped by ${spec.xKey}`,
+    createdBy: "system",
+    ...extras,
+=======
+>>>>>>> origin/main
   };
 }
 
 export function buildChartFromSpec(rows: Row[], chartSpec: ChartSpec): DashboardChart {
+<<<<<<< HEAD
+  const withIndex = buildRowIndexRows(applySpecFilters(cleanDatasetRows(rows), chartSpec.filters));
+=======
   const withIndex = buildRowIndexRows(cleanDatasetRows(rows));
+>>>>>>> origin/main
   const limit = chartSpec.limit ?? 10;
   const xKey = chartSpec.xKey || "";
   const yKey = chartSpec.yKey || "count";
@@ -824,9 +892,21 @@ export function buildChartFromSpec(rows: Row[], chartSpec: ChartSpec): Dashboard
 }
 
 export function buildKpiFromSpec(rows: Row[], kpiSpec: KpiSpec): DashboardKpi {
+<<<<<<< HEAD
+  const cleanRows = applySpecFilters(cleanDatasetRows(rows), kpiSpec.filters);
+  const quality = buildDataQualityScore(cleanRows);
+  let rawValue: number | string = 0;
+  const metricValues =
+    kpiSpec.metric && !kpiSpec.metric.startsWith("__")
+      ? cleanRows
+          .map((row) => safeNumber(row[kpiSpec.metric!]))
+          .filter((value): value is number => value !== null)
+      : [];
+=======
   const cleanRows = cleanDatasetRows(rows);
   const quality = buildDataQualityScore(cleanRows);
   let rawValue: number | string = 0;
+>>>>>>> origin/main
 
   if (kpiSpec.metric === "__row_count__" || !kpiSpec.metric) {
     rawValue = cleanRows.length;
@@ -841,6 +921,17 @@ export function buildKpiFromSpec(rows: Row[], kpiSpec: KpiSpec): DashboardKpi {
     );
   }
 
+<<<<<<< HEAD
+  const midpoint = Math.floor(metricValues.length / 2);
+  const previous = midpoint ? aggregateValues(metricValues.slice(0, midpoint), kpiSpec.aggregation || "avg") : 0;
+  const current = midpoint ? aggregateValues(metricValues.slice(midpoint), kpiSpec.aggregation || "avg") : 0;
+  const change =
+    typeof previous === "number" && previous !== 0 && typeof current === "number"
+      ? Number((((current - previous) / Math.abs(previous)) * 100).toFixed(1))
+      : undefined;
+
+=======
+>>>>>>> origin/main
   return {
     ...kpiSpec,
     id: crypto.randomUUID(),
@@ -848,6 +939,19 @@ export function buildKpiFromSpec(rows: Row[], kpiSpec: KpiSpec): DashboardKpi {
     value: formatMetric(rawValue, kpiSpec.format),
     subtitle: kpiSpec.metric === "__quality_score__" ? "Data quality" : `${(kpiSpec.aggregation || "count").toUpperCase()} - ${titleCase(kpiSpec.metric || "Rows")}`,
     status: typeof rawValue === "number" && rawValue < 0 ? "critical" : "good",
+<<<<<<< HEAD
+    createdBy: "system",
+    change,
+    sparkline: metricValues.length
+      ? Array.from({ length: Math.min(14, metricValues.length) }, (_, index) => {
+          const start = Math.floor((index / Math.min(14, metricValues.length)) * metricValues.length);
+          const end = Math.max(start + 1, Math.floor(((index + 1) / Math.min(14, metricValues.length)) * metricValues.length));
+          return average(metricValues.slice(start, end));
+        })
+      : undefined,
+    source: kpiSpec.metric === "__quality_score__" ? "Schema quality checks" : `${kpiSpec.aggregation || "count"}(${kpiSpec.metric || "rows"})`,
+=======
+>>>>>>> origin/main
   };
 }
 

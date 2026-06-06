@@ -1,3 +1,9 @@
+<<<<<<< HEAD
+import MLPage from "@/features/ml/pages/MLPage";
+
+export default MLPage;
+
+=======
 import { useMemo, useState } from "react";
 import { AgenticAuditTrail } from "@/features/dashboard/components/AgenticAuditTrail";
 import { DataScienceSummaryCards } from "@/features/dashboard/components/DataScienceSummaryCards";
@@ -102,3 +108,4 @@ export default function AgenticDataSciencePage() {
     </main>
   );
 }
+>>>>>>> origin/main

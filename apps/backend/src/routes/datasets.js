@@ -1,4 +1,6 @@
 // Dataset-related routes
+import fs from 'fs';
+import readline from 'readline';
 import { sendSuccess, sendCreated, sendError } from '../utils/response-utils.js';
 import { HTTP_STATUS, ERROR_CODES } from '../config/constants.js';
 import { updateDataset } from './state.js';
@@ -11,9 +13,124 @@ import {
 } from '../database/dataset-repository.js';
 import { classifyUploadedDatasets } from '../services/dataset-role-detector.js';
 import { runFullAutoAnalysis } from '../services/ai-analyst/ai-analyst-orchestrator.js';
+import { chooseAnalyticsExecutionPolicy } from '../services/performance/analytics-execution-policy.js';
 
 // Cached datasets are only retained for legacy in-memory data; normal datasets persist to SQLite.
 const datasets = new Map();
+
+// Helper to stream-profile a local file up to 200GB+ without loading it into memory
+async function profileLocalFileStream(filePath) {
+  return new Promise((resolve, reject) => {
+    try {
+      if (!fs.existsSync(filePath)) {
+        return reject(new Error(`File not found: ${filePath}`));
+      }
+      
+      const fileStream = fs.createReadStream(filePath);
+      const rl = readline.createInterface({
+        input: fileStream,
+        crlfDelay: Infinity
+      });
+
+      let columns = [];
+      let rowsSample = [];
+      let rowCount = 0;
+      const isCsv = filePath.endsWith('.csv') || filePath.endsWith('.txt');
+
+      rl.on('line', (line) => {
+        rowCount++;
+        if (rowCount === 1) {
+          if (isCsv) {
+            columns = line.split(',').map(name => ({
+              name: name.trim().replace(/^"|"$/g, ''),
+              type: 'string',
+              sample: []
+            }));
+          }
+          return;
+        }
+
+        // Collect up to 100 sample rows
+        if (rowCount <= 101) {
+          if (isCsv) {
+            const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            const row = {};
+            columns.forEach((col, idx) => {
+              row[col.name] = values[idx] || '';
+            });
+            rowsSample.push(row);
+          }
+        } else if (!isCsv && rowCount > 1000) {
+          rl.close();
+        }
+      });
+
+      rl.on('close', () => {
+        try {
+          if (columns.length === 0 && rowsSample.length > 0) {
+            const firstRow = rowsSample[0];
+            columns = Object.keys(firstRow).map(name => ({
+              name,
+              type: 'string',
+              sample: []
+            }));
+          }
+
+          // Type inference based on sample values
+          columns.forEach(col => {
+            let isNumeric = true;
+            let isDate = true;
+            let nonNullCount = 0;
+            
+            for (const row of rowsSample) {
+              const val = row[col.name];
+              if (val === undefined || val === null || val === '') continue;
+              nonNullCount++;
+              if (isNaN(Number(val))) isNumeric = false;
+              if (isNaN(Date.parse(val))) isDate = false;
+            }
+            
+            if (nonNullCount === 0) {
+              col.type = 'string';
+            } else if (isNumeric) {
+              col.type = 'number';
+            } else if (isDate) {
+              col.type = 'date';
+            } else {
+              col.type = 'string';
+            }
+
+            // Populate sample
+            col.sample = rowsSample.map(r => r[col.name]).filter(v => v !== undefined && v !== null);
+          });
+
+          // Estimate total rows based on file stats and average line length
+          const stats = fs.statSync(filePath);
+          const fileSize = stats.size;
+          let estimatedRows = rowCount;
+          
+          if (rowCount > 100 && rowsSample.length > 0) {
+            const sampleBytes = Buffer.byteLength(JSON.stringify(rowsSample));
+            const avgLineLength = sampleBytes / rowsSample.length;
+            estimatedRows = Math.floor(fileSize / avgLineLength) || rowCount;
+          }
+
+          resolve({
+            columns,
+            rows: rowsSample,
+            rowCount: estimatedRows
+          });
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      rl.on('error', (err) => reject(err));
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
 
 // Helper to read request body
 async function getRequestBody(request) {
@@ -31,6 +148,31 @@ async function getRequestBody(request) {
     });
     request.on('error', reject);
   });
+}
+
+function sanitizeDatasetForClient(dataset) {
+  if (!dataset) return dataset;
+  const policy = chooseAnalyticsExecutionPolicy(dataset);
+  const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
+
+  if (policy.allowFrontendRawRows) {
+    return {
+      ...dataset,
+      executionPolicy: policy,
+    };
+  }
+
+  const previewRows = rows.slice(0, Math.min(policy.maxPreviewRows, 1000));
+
+  return {
+    ...dataset,
+    rows: previewRows,
+    previewRows,
+    rowCount: policy.rowCount,
+    fullRowsAvailable: false,
+    rawRowsTruncated: rows.length > previewRows.length,
+    executionPolicy: policy,
+  };
 }
 
 export async function handleDatasetRoutes(request, response, pathname) {
@@ -114,26 +256,48 @@ export async function handleDatasetRoutes(request, response, pathname) {
     try {
       const body = await getRequestBody(request);
       
+      let finalRows = body.rows;
+      let finalColumns = body.columns;
+      let finalRowCount = null;
+      let finalSourceType = body.sourceType || 'upload';
+      let finalFileName = body.fileName || null;
+
+      if (body.filePath) {
+        console.log('[DATASET] Streaming import for local path:', body.filePath);
+        try {
+          const profile = await profileLocalFileStream(body.filePath);
+          finalColumns = profile.columns;
+          finalRows = profile.rows;
+          finalRowCount = profile.rowCount;
+          finalSourceType = 'local_stream';
+          finalFileName = body.filePath.split(/[/\\]/).pop();
+        } catch (err) {
+          sendError(response, HTTP_STATUS.BAD_REQUEST, 
+            `Failed to access or stream local file: ${err.message}`, ERROR_CODES.VALIDATION_ERROR);
+          return true;
+        }
+      }
+
       console.log('[DATASET] Import request:', {
         name: body.name,
-        rowCount: body.rows?.length,
-        columnCount: body.columns?.length
+        rowCount: finalRowCount !== null ? finalRowCount : finalRows?.length,
+        columnCount: finalColumns?.length,
+        sourceType: finalSourceType
       });
       
-      // Validate required fields
-      if (!body.name || !body.rows || !body.columns) {
+      if (!body.name || !finalRows || !finalColumns) {
         sendError(response, HTTP_STATUS.BAD_REQUEST, 
-          'Missing required fields: name, rows, columns', ERROR_CODES.VALIDATION_ERROR);
+          'Missing required fields: name, rows, columns (or filePath)', ERROR_CODES.VALIDATION_ERROR);
         return true;
       }
       
-      // Create dataset
       const dataset = createDataset({
         name: body.name,
-        fileName: body.fileName || null,
-        sourceType: body.sourceType || 'upload',
-        columns: body.columns,
-        rows: body.rows,
+        fileName: finalFileName,
+        sourceType: finalSourceType,
+        columns: finalColumns,
+        rows: finalRows,
+        rowCount: finalRowCount,
       });
       
       updateDataset(dataset);
@@ -141,10 +305,17 @@ export async function handleDatasetRoutes(request, response, pathname) {
       
       console.log('[DATASET] ✅ Dataset imported:', datasetId);
 
-      const analysis = await runFullAutoAnalysis(dataset);
+      const policy = chooseAnalyticsExecutionPolicy(dataset);
+      const analysis = policy.mode === "fast-analytics-service"
+        ? {
+            schemaOnly: true,
+            deferredFastDashboard: true,
+            message: "Large dataset imported. Dashboard values will be calculated by the DuckDB ML service.",
+          }
+        : await runFullAutoAnalysis(dataset);
 
       sendCreated(response, {
-        dataset,
+        dataset: sanitizeDatasetForClient(dataset),
         chatMessages: [],
         analysis,
       }, 'Dataset imported and schema dashboard generated');
@@ -197,12 +368,19 @@ export async function handleDatasetRoutes(request, response, pathname) {
 
       updateDataset(savedDataset);
 
-      const analysis = await runFullAutoAnalysis(savedDataset);
+      const policy = chooseAnalyticsExecutionPolicy(savedDataset);
+      const analysis = policy.mode === "fast-analytics-service"
+        ? {
+            schemaOnly: true,
+            deferredFastDashboard: true,
+            message: "Large dataset imported. Dashboard values will be calculated by the DuckDB ML service.",
+          }
+        : await runFullAutoAnalysis(savedDataset);
 
       sendSuccess(
         response,
         {
-          dataset: savedDataset,
+          dataset: sanitizeDatasetForClient(savedDataset),
           chatMessages: [],
           pipeline: 'multi-file-smart-analysis',
           relatedDatasets: {
@@ -235,7 +413,7 @@ export async function handleDatasetRoutes(request, response, pathname) {
         return true;
       }
       
-      sendSuccess(response, { dataset }, 'Dataset retrieved');
+      sendSuccess(response, { dataset: sanitizeDatasetForClient(dataset) }, 'Dataset retrieved');
       return true;
     } catch (error) {
       console.error('Dataset get error:', error);

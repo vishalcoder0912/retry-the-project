@@ -1,5 +1,6 @@
 import { serviceUrls } from "../../config/serviceUrls.js";
 import { findColumn } from "./schema-profiler.js";
+import { assertNoRawRowsInString } from "../ai/llm-payload-sanitizer.js";
 
 function deterministicCommand(schema, command) {
   const text = String(command || "").toLowerCase();
@@ -50,14 +51,25 @@ async function callLlmForPlan(schema, command) {
   const baseUrl = serviceUrls.ollama;
   const model = process.env.OLLAMA_MODEL || "llama3.2:latest";
 
+  try {
+    assertNoRawRowsInString(JSON.stringify({ schema, command }));
+  } catch (error) {
+    console.error(`[command-router BLOCKED] ${error.message}`);
+    throw new Error(`Blocked unsafe LLM payload: ${error.message}`);
+  }
+
   const prompt = `
+You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows.
 You are an AI data analyst planner.
 You do not calculate KPI values.
 You do not create chart data.
 You only return JSON dashboard actions.
 
-Allowed actions:
+Allowed legacy actions:
 GENERATE_CHART, MODIFY_CHART, DELETE_CHART, FILTER, CLEAR_FILTERS, ADD_KPI, ANSWER
+
+Allowed structured intents:
+add_chart, remove_chart, update_chart, add_kpi, filter, explain, answer
 
 Allowed chart types:
 bar, line, pie, area, histogram, scatter
@@ -69,6 +81,9 @@ Use only columns from schema.
 
 Return JSON only:
 {
+  "intent": "add_chart",
+  "answer": "I added a revenue by region chart.",
+  "reason": "Region is a dimension and sales is a measure.",
   "action": "GENERATE_CHART",
   "message": "short message",
   "chartSpec": {
@@ -89,7 +104,7 @@ Schema:
 ${JSON.stringify(schema.safePacket)}
 `;
 
-  const response = await fetch(`${baseUrl}/api/chat`, {
+  const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -105,8 +120,11 @@ ${JSON.stringify(schema.safePacket)}
         },
       ],
       options: {
-        temperature: 0,
+        temperature: OLLAMA_OPTIONS.temperature,
+        num_ctx: OLLAMA_OPTIONS.num_ctx,
+        num_predict: OLLAMA_OPTIONS.num_predict,
       },
+      keep_alive: OLLAMA_OPTIONS.keep_alive,
     }),
   });
 
@@ -123,7 +141,12 @@ ${JSON.stringify(schema.safePacket)}
 export async function routeAnalystCommand({ schema, command }) {
   const deterministic = deterministicCommand(schema, command);
 
-  if (deterministic) return deterministic;
+  if (deterministic) {
+    return {
+      ...deterministic,
+      structured: toStructuredCommand(deterministic),
+    };
+  }
 
   try {
     const plan = await callLlmForPlan(schema, command);
@@ -133,9 +156,10 @@ export async function routeAnalystCommand({ schema, command }) {
       message: plan.message || "Done.",
       chartSpec: plan.chartSpec || plan.chart || null,
       filters: plan.filters || {},
+      structured: toStructuredCommand(plan),
     };
   } catch {
-    return {
+    const fallback = {
       action: "GENERATE_CHART",
       message: "Created a chart using local fallback rules.",
       chartSpec: {
@@ -146,6 +170,10 @@ export async function routeAnalystCommand({ schema, command }) {
         aggregation: command.toLowerCase().includes("average") ? "avg" : "sum",
         limit: 10,
       },
+    };
+    return {
+      ...fallback,
+      structured: toStructuredCommand(fallback),
     };
   }
 }

@@ -9,6 +9,7 @@ import { isOllamaConfigured } from "./ollama-ai-service.js";
 import { createChatResponse, classifyChatQuery } from "./analytics-service.js";
 import { getCachedQuery, cacheQuery } from "./query-cache.js";
 import { aiManager } from "./ai/ai-manager.js";
+import { getModelForTask } from "../config/model-router.js";
 
 const hasGeminiApiKey = () =>
   Boolean(process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim());
@@ -92,9 +93,11 @@ async function tryOllamaAnalysis(dataset, query, queryType) {
 Dataset: ${dataset.name}. Rows: ${dataset.rowCount || dataset.rows?.length || 0}. Columns: ${schemaSummary}.
 Question: ${query}`;
 
+    const cascadeModel = getModelForTask("main_analyst");
+
     const aiResponse = await aiManager.generateResponse(prompt, {
       preferredProvider: "ollama",
-      preferredModel: process.env.OLLAMA_MODEL || "llama3.2",
+      preferredModel: cascadeModel,
       maxTokens: 40,
       temperature: 0.2,
       timeout: 10000,

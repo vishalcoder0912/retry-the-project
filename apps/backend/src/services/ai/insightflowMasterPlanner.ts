@@ -99,6 +99,7 @@ export interface MasterPlannerResponse {
 }
 
 import { serviceUrls } from "../../config/serviceUrls.js";
+import { assertNoRawRowsInString } from "./llm-payload-sanitizer.js";
 
 const OLLAMA_BASE_URL = serviceUrls.ollama;
 
@@ -242,7 +243,7 @@ const dashboardPlanSchema = {
   },
 };
 
-function compactSchema(schemaProfile: SchemaProfile) {
+export function compactSchema(schemaProfile: SchemaProfile) {
   return {
     datasetName: schemaProfile.datasetName,
     rowCount: schemaProfile.rowCount,
@@ -512,6 +513,14 @@ export async function generateMasterDashboardPlan({
 }): Promise<MasterPlannerResponse> {
   const schemaOnlyPacket = compactSchema(schemaProfile);
 
+  // Assert no raw rows are sent to LLM
+  try {
+    assertNoRawRowsInString(JSON.stringify({ schemaOnlyPacket, userGoal }));
+  } catch (error) {
+    console.error(`[insightflowMasterPlanner BLOCKED] ${error.message}`);
+    return fallbackPlan(schemaProfile);
+  }
+
   try {
     const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
       method: "POST",
@@ -532,7 +541,7 @@ export async function generateMasterDashboardPlan({
           {
             role: "system",
             content:
-              "You are InsightFlow AI, a Chief Data Analyst, RAG-aware Schema Engine, and dashboard architect. You do not see raw rows. Return strict JSON only. Never include chart.data, KPI values, fake numbers, sample records, or raw rows. Use only schema columns. Infer business KPIs, charts, executive summary, geo analysis only when location fields exist, AI insights, recommendations, story mode, and confidence from schema semantics.",
+              "You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows. You are InsightFlow AI, a Chief Data Analyst, RAG-aware Schema Engine, and dashboard architect. You do not see raw rows. Return strict JSON only. Never include chart.data, KPI values, fake numbers, sample records, or raw rows. Use only schema columns. Infer business KPIs, charts, executive summary, geo analysis only when location fields exist, AI insights, recommendations, story mode, and confidence from schema semantics.",
           },
           {
             role: "user",

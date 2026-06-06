@@ -7,9 +7,10 @@ function normalizeName(value = "") {
 }
 
 export function safeNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
   if (typeof value === "number" && Number.isFinite(value)) return value;
 
-  const cleaned = String(value ?? "")
+  const cleaned = String(value)
     .replace(/[₹$,%]/g, "")
     .replace(/,/g, "")
     .trim();

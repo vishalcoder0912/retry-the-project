@@ -107,11 +107,11 @@ function inferRole(name, type, uniqueCount, rowCount) {
   if (/country|state|city|region|location|address|market|territory/.test(n)) return "location";
   if (/salary|revenue|sales|amount|price|cost|profit|income|spend|budget|value|gmv|arr|mrr/.test(n) && !/rate|ratio|percent|margin/.test(n)) return "money_metric";
   if (/score|rating|marks|grade|performance|level|index|rank|gpa/.test(n)) return "score_metric";
-  if (/age|experience|years|tenure|duration/.test(n)) return "continuous_metric";
   if (/quantity|qty|units|orders|count|visits|clicks|sessions/.test(n)) return "count_metric";
   if (/rate|ratio|percent|percentage|margin|conversion|churn/.test(n)) return "rate_metric";
   if (/target|label|outcome|class|status|result/.test(n)) return "target";
   if (/language|framework|skill|tag|category|product|education|gender|platform|segment|department|company_size/.test(n)) return "category";
+  if (/(^|_)(age|experience|years|tenure|duration)(_|$)/.test(n)) return "continuous_metric";
 
   if (type === "number") return uniqueCount <= Math.max(20, rowCount * 0.03) ? "numeric_category" : "continuous_metric";
   if (type === "category") return "category";
@@ -193,6 +193,36 @@ export function buildSchemaProfile(dataset = {}) {
       acc[column.role] = (acc[column.role] || 0) + 1;
       return acc;
     }, {}),
+    measures: columns
+      .filter((column) => ["number", "metric", "money_metric", "score_metric", "count_metric", "continuous_metric"].includes(column.type) || String(column.role || "").includes("metric"))
+      .map((column) => column.name),
+    dimensions: columns
+      .filter((column) => ["string", "category", "dimension", "location", "target"].includes(column.type) || ["dimension", "category", "location", "target"].includes(column.role))
+      .map((column) => column.name),
+    dateColumns: columns
+      .filter((column) => column.type === "date" || column.role === "date")
+      .map((column) => column.name),
+    idColumns: columns
+      .filter((column) => /(^id$|_id$|uuid|identifier)/i.test(column.name || ""))
+      .map((column) => column.name),
+    financialColumns: columns
+      .filter((column) => /sales|revenue|salary|price|amount|cost|profit|income|budget|compensation/i.test(column.name || "") || column.role === "money_metric")
+      .map((column) => column.name),
+    geoColumns: columns
+      .filter((column) => /country|city|state|region|location|geo|address|lat|lng/i.test(column.name || "") || column.role === "location")
+      .map((column) => column.name),
+    customerColumns: columns
+      .filter((column) => /customer|client|user|buyer|member/i.test(column.name || ""))
+      .map((column) => column.name),
+    productColumns: columns
+      .filter((column) => /product|item|category|subcategory|sku/i.test(column.name || ""))
+      .map((column) => column.name),
+    qualityIssues: columns
+      .filter((column) => Number(column.nullCount || 0) > 0 || Number(column.missingRate || 0) > 0.2)
+      .map((column) => ({
+        column: column.name,
+        issue: Number(column.missingRate || 0) > 0.2 ? "high_missing_rate" : "missing_values",
+      })),
   };
 }
 

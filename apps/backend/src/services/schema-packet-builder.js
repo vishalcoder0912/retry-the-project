@@ -337,6 +337,227 @@ export function formatSchemaForPrompt(schemaPacket) {
   return text;
 }
 
+/**
+ * Detect dataset domain from column names
+ */
+export function detectDomain(dataset) {
+  const colNames = (dataset.columns || []).map(c => (c.name || '').toLowerCase());
+  const allNames = colNames.join(' ');
+
+  const patterns = {
+    workforce_salary: /salary|compensation|income|payroll|experience|years_coding|education|employer|company_size/i,
+    finance: /revenue|cost|profit|expense|income|budget|financial|transaction|invoice|payment/i,
+    healthcare: /patient|diagnosis|treatment|doctor|hospital|medical|symptom|disease|prescription/i,
+    ecommerce: /product|category|price|quantity|order|customer|purchase|cart|inventory|sales/i,
+    education: /student|grade|course|class|enrollment|teacher|school|university|degree|exam/i,
+    logistics: /shipment|delivery|warehouse|inventory|transport|supply|chain|courier|tracking/i,
+    hr: /employee|hire|attrition|tenure|department|manager|promotion|review|attendance/i,
+    marketing: /campaign|click|impression|conversion|lead|traffic|seo|advertisement|engagement/i,
+  };
+
+  let bestDomain = 'generic';
+  let bestScore = 0;
+
+  for (const [domain, pattern] of Object.entries(patterns)) {
+    const matches = (allNames.match(pattern) || []).length;
+    if (matches > bestScore) {
+      bestScore = matches;
+      bestDomain = domain;
+    }
+  }
+
+  return bestDomain;
+}
+
+/**
+ * Detect semantic roles for columns
+ */
+export function detectSemanticRoles(dataset) {
+  const roles = { ids: [], metrics: [], dimensions: [], dates: [], geography: [], identifiers: [] };
+
+  for (const col of (dataset.columns || [])) {
+    const name = (col.name || '').toLowerCase();
+
+    if (/^id$|_id$|^uuid|identifier|key$/i.test(name)) {
+      roles.ids.push(col.name);
+    } else if (col.type === 'number' || /amount|price|cost|revenue|salary|count|rate|score|total|avg|min|max|sum/i.test(name)) {
+      roles.metrics.push(col.name);
+    } else if (/date|time|year|month|day|timestamp|period/i.test(name)) {
+      if (/date|time|timestamp|period/i.test(name)) {
+        roles.dates.push(col.name);
+      } else {
+        roles.dimensions.push(col.name);
+      }
+    } else if (/country|city|state|region|zip|postal|address|location|geo|lat|lon|longitude|latitude/i.test(name)) {
+      roles.geography.push(col.name);
+    } else if (/^name$|title|label|description|comment|note/i.test(name)) {
+      roles.identifiers.push(col.name);
+    } else if (col.type === 'number') {
+      roles.metrics.push(col.name);
+    } else {
+      roles.dimensions.push(col.name);
+    }
+  }
+
+  return roles;
+}
+
+/**
+ * Detect categorical options (limited to 50)
+ */
+export function detectCategories(dataset) {
+  const categories = {};
+  const maxOptions = Number(process.env.SCHEMA_PACKET_MAX_CATEGORY_OPTIONS || 50);
+
+  for (const col of (dataset.columns || [])) {
+    if (col.type !== 'category' && col.type !== 'string') continue;
+
+    const values = new Set();
+    for (const row of (dataset.rows || [])) {
+      const val = row[col.name];
+      if (val !== null && val !== undefined && val !== '') {
+        values.add(String(val));
+        if (values.size >= maxOptions) break;
+      }
+    }
+
+    if (values.size > 0 && values.size <= 200) {
+      categories[col.name] = Array.from(values).slice(0, maxOptions);
+    }
+  }
+
+  return categories;
+}
+
+/**
+ * Detect date ranges in dataset
+ */
+export function detectDateRanges(dataset) {
+  const ranges = {};
+
+  for (const col of (dataset.columns || [])) {
+    if (!/date|time|year|month|day|timestamp/i.test(col.name || '')) continue;
+
+    let min = null;
+    let max = null;
+
+    for (const row of (dataset.rows || [])) {
+      const val = row[col.name];
+      if (val === null || val === undefined || val === '') continue;
+      const ts = new Date(val).getTime();
+      if (Number.isNaN(ts)) continue;
+      if (min === null || ts < min) min = ts;
+      if (max === null || ts > max) max = ts;
+    }
+
+    if (min !== null && max !== null) {
+      ranges[col.name] = { min: new Date(min).toISOString().split('T')[0], max: new Date(max).toISOString().split('T')[0] };
+    }
+  }
+
+  return ranges;
+}
+
+/**
+ * Generate data quality warnings
+ */
+export function generateDataWarnings(schemaPacket) {
+  const warnings = [];
+
+  if (!schemaPacket || !Array.isArray(schemaPacket.columns)) return warnings;
+
+  for (const col of schemaPacket.columns) {
+    if (!col.isValid) {
+      warnings.push(`Column "${col.name}" has insufficient valid data for analysis`);
+      continue;
+    }
+
+    const nullRate = col.nullCount && schemaPacket.rowCount
+      ? col.nullCount / schemaPacket.rowCount
+      : 0;
+
+    if (nullRate > 0.5) {
+      warnings.push(`Column "${col.name}" has ${Math.round(nullRate * 100)}% missing values`);
+    }
+
+    if (col.type === 'numeric' && col.uniqueCount === 1) {
+      warnings.push(`Column "${col.name}" is constant (single value)`);
+    }
+
+    if (col.type === 'categorical' && col.uniqueCount > 100) {
+      warnings.push(`Column "${col.name}" has high cardinality (${col.uniqueCount} unique values)`);
+    }
+  }
+
+  if (schemaPacket.columns.length === 0) {
+    warnings.push('Dataset has no columns');
+  }
+
+  if (schemaPacket.rowCount === 0) {
+    warnings.push('Dataset has no rows');
+  }
+
+  return warnings;
+}
+
+/**
+ * Build a comprehensive schema packet for AI consumption
+ * Contains NO raw rows, only safe metadata
+ */
+export function buildSchemaPacketV2(dataset, options = {}) {
+  const basePacket = buildSchemaPacket(dataset, options);
+
+  // Use rows for extended detection but never include them in output
+  return {
+    datasetId: dataset.id,
+    datasetName: dataset.name || basePacket.name,
+    rowCount: basePacket.rowCount,
+    columnCount: basePacket.columnCount,
+
+    columns: basePacket.columns.map(col => ({
+      name: col.name,
+      type: col.type === 'numeric' ? 'number' : (col.type === 'categorical' ? 'category' : col.type),
+      isValid: col.isValid || false,
+      uniqueCount: col.uniqueCount || 0,
+      nullCount: col.nullCount || 0,
+      missingRate: col.nullCount && basePacket.sampledRowCount
+        ? Number((col.nullCount / basePacket.sampledRowCount).toFixed(4))
+        : 0,
+      stats: col.type === 'numeric' && col.isValid ? {
+        min: col.min,
+        max: col.max,
+        mean: col.mean,
+        median: col.median,
+        stdDev: col.stdDev,
+      } : null,
+      topValues: col.type === 'categorical' && col.topValues ? col.topValues : undefined,
+    })),
+
+    detectedDomain: detectDomain(dataset),
+
+    categories: detectCategories(dataset),
+
+    dateRanges: detectDateRanges(dataset),
+
+    numericColumns: (dataset.columns || [])
+      .filter(c => c.type === 'number')
+      .map(c => c.name),
+
+    categoricalColumns: (dataset.columns || [])
+      .filter(c => c.type === 'category' || c.type === 'string')
+      .map(c => c.name),
+
+    dateColumns: (dataset.columns || [])
+      .filter(c => /date|time|year|month|day|timestamp/i.test(c.name || ''))
+      .map(c => c.name),
+
+    semanticRoles: detectSemanticRoles(dataset),
+
+    qualityScore: getDataQualityScore(basePacket),
+    warnings: generateDataWarnings(basePacket),
+  };
+}
+
 export function getDataQualityScore(schemaPacket) {
   if (!schemaPacket || !Array.isArray(schemaPacket.columns) || schemaPacket.columns.length === 0) {
     return 0;

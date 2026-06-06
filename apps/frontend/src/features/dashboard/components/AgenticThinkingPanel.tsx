@@ -1,10 +1,26 @@
 import React from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+<<<<<<< HEAD
+import { Brain, Workflow, ShieldCheck, Network, TextSelect } from 'lucide-react';
+
+type AgentPlan = {
+  goal?: string;
+  tasks?: string[];
+};
+
+type DashboardSpecSummary = {
+  executiveSummary?: string[];
+};
+
+interface AgenticThinkingPanelProps {
+  agentPlan?: AgentPlan;
+=======
 import { AlertTriangle, CheckCircle, Brain, Workflow, ShieldCheck, Network, TextSelect } from 'lucide-react';
 
 interface AgenticThinkingPanelProps {
   agentPlan?: any;
+>>>>>>> origin/main
   agentTools?: string[];
   critic?: {
     score: number;
@@ -17,7 +33,11 @@ interface AgenticThinkingPanelProps {
     canonicalTerms: string[];
     mapping: Record<string, string>;
   };
+<<<<<<< HEAD
+  dashboardSpec?: DashboardSpecSummary;
+=======
   dashboardSpec?: any;
+>>>>>>> origin/main
 }
 
 export function AgenticThinkingPanel({ agentPlan, agentTools, critic, ontologyMapping, dashboardSpec }: AgenticThinkingPanelProps) {
@@ -86,7 +106,11 @@ export function AgenticThinkingPanel({ agentPlan, agentTools, critic, ontologyMa
               <div className="mt-2 space-y-1">
                 <div className="text-xs font-semibold text-rose-400">Detected Issues:</div>
                 <ul className="text-xs text-slate-400 list-disc pl-4 space-y-1">
+<<<<<<< HEAD
+                  {critic.issues.map((issue) => <li key={issue}>{issue}</li>)}
+=======
                   {critic.issues.map((i, idx) => <li key={idx}>{i}</li>)}
+>>>>>>> origin/main
                 </ul>
               </div>
             )}
@@ -95,7 +119,11 @@ export function AgenticThinkingPanel({ agentPlan, agentTools, critic, ontologyMa
               <div className="mt-2 space-y-1">
                 <div className="text-xs font-semibold text-emerald-400">Auto-Fixes Suggested:</div>
                 <ul className="text-xs text-slate-400 list-disc pl-4 space-y-1">
+<<<<<<< HEAD
+                  {critic.improvements.map((improvement) => <li key={improvement}>{improvement}</li>)}
+=======
                   {critic.improvements.map((i, idx) => <li key={idx}>{i}</li>)}
+>>>>>>> origin/main
                 </ul>
               </div>
             )}
@@ -133,8 +161,13 @@ export function AgenticThinkingPanel({ agentPlan, agentTools, critic, ontologyMa
             <TextSelect className="w-4 h-4 text-amber-400" /> Executive Summary
           </h3>
           <ul className="space-y-2">
+<<<<<<< HEAD
+            {dashboardSpec.executiveSummary.map((sentence: string) => (
+              <li key={sentence} className="text-sm text-slate-300 flex items-start gap-2">
+=======
             {dashboardSpec.executiveSummary.map((sentence: string, idx: number) => (
               <li key={idx} className="text-sm text-slate-300 flex items-start gap-2">
+>>>>>>> origin/main
                 <span className="text-amber-500 mt-1">•</span>
                 <span>{sentence}</span>
               </li>

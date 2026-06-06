@@ -8,6 +8,7 @@ const AgenticPage = lazy(() => import("@/features/analytics/pages/AgenticPage"))
 const ChatPage = lazy(() => import("@/features/chat/pages/ChatPage"));
 const LocalChatPage = lazy(() => import("@/features/chat/pages/LocalChatPage"));
 const EliteDashboardPage = lazy(() => import("@/features/dashboard/pages/EliteDashboardPage"));
+const PremiumAgenticDashboardPage = lazy(() => import("@/features/dashboard/pages/PremiumAgenticDashboardPage"));
 const DataTablePage = lazy(() => import("@/features/dashboard/pages/DataTablePage"));
 const UploadPage = lazy(() => import("@/features/data/pages/UploadPage"));
 const MobileUploadPortal = lazy(() => import("@/features/data/pages/MobileUploadPortal"));
@@ -31,8 +32,9 @@ const AppRouter = () => (
     <Suspense fallback={<StatusPanel title="Loading" message="Preparing this workspace." />}>
       <Routes>
         <Route element={<AppLayout />}>
-          <Route path="/" element={<EliteDashboardPage />} />
-          <Route path="/dashboard" element={<EliteDashboardPage />} />
+          <Route path="/" element={<PremiumAgenticDashboardPage />} />
+          <Route path="/dashboard" element={<PremiumAgenticDashboardPage />} />
+          <Route path="/elite-dashboard" element={<EliteDashboardPage />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/pdf" element={<PdfUploadPage />} />
           <Route path="/pdf-upload" element={<PdfUploadPage />} />

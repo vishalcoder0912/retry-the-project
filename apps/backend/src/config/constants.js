@@ -155,10 +155,10 @@ export const TIME_UNITS = {
 };
 
 export const FILE_LIMITS = {
-  MAX_UPLOAD_SIZE: 100 * 1024 * 1024, // 100MB
+  MAX_UPLOAD_SIZE: 200 * 1024 * 1024 * 1024, // 200GB
   SUPPORTED_FORMATS: ['.csv', '.xlsx', '.xls', '.json', '.txt'],
-  MAX_ROWS: 100000,
-  MAX_COLUMNS: 1000
+  MAX_ROWS: 1000000000, // 1 Billion rows
+  MAX_COLUMNS: 10000 // 10,000 columns
 };
 
 export const AI_DEFAULTS = {

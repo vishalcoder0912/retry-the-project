@@ -187,6 +187,10 @@ const NUMERIC_HINTS = [
   "orders", "quantity", "customers", "patients", "rating",
   "review_count", "cost", "price", "risk_score", "amount",
   "income", "expense", "margin", "score", "count",
+<<<<<<< HEAD
+  "marks", "gpa", "cgpa", "percentage", "grade", "rank",
+=======
+>>>>>>> origin/main
 ];
 
 const TEXT_KEYWORDS = [
@@ -199,10 +203,22 @@ const CATEGORY_HINTS = [
   "company_size", "admission_type", "insurance_provider",
   "category", "segment", "group", "type", "status", "level",
   "role", "position", "industry",
+<<<<<<< HEAD
+  "branch", "board", "stream", "specialization", "major",
+];
+
+/**
+ * Normalize a column name by stripping underscores, spaces, dashes,
+ * AND bracket notations like [10th], [12th], etc.
+ */
+function normalize(col: string): string {
+  return col.toLowerCase().replace(/[_\s-[\]()0-9th]+/g, "");
+=======
 ];
 
 function normalize(col: string): string {
   return col.toLowerCase().replace(/[_\s-]/g, "");
+>>>>>>> origin/main
 }
 
 function classifyColumn(name: string, values: unknown[]): ColumnClass {
@@ -302,9 +318,23 @@ const DOMAIN_SIGNATURES: Array<{ type: DatasetType; keywords: string[]; required
   { type: "Finance", keywords: ["revenue", "profit", "expense", "income", "budget", "forecast", "transaction", "audit", "tax"] },
   { type: "Marketing", keywords: ["campaign", "click", "impression", "conversion", "acquisition", "traffic", "ctr", "roi"] },
   { type: "Reviews", keywords: ["review", "rating", "sentiment", "feedback", "comment", "score", "reviewer"], required: ["rating"] },
+<<<<<<< HEAD
+  // Education checked BEFORE Ecommerce so marks/branch/board beats product/category signals
+  {
+    type: "Education",
+    keywords: [
+      "student", "course", "enrollment", "grade", "exam", "attendance", "teacher", "subject",
+      "marks", "branch", "board", "semester", "gpa", "cgpa", "rank", "stream",
+      "specialization", "percentage", "college", "university", "faculty", "lecture",
+    ],
+  },
+  { type: "Ecommerce", keywords: ["product", "order", "cart", "checkout", "sku", "inventory", "category", "customer", "purchase"] },
+  { type: "Manufacturing", keywords: ["production", "defect", "quality", "inventory", "supply", "machine", "downtime", "yield"] },
+=======
   { type: "Ecommerce", keywords: ["product", "order", "cart", "checkout", "sku", "inventory", "category", "customer", "purchase"] },
   { type: "Manufacturing", keywords: ["production", "defect", "quality", "inventory", "supply", "machine", "downtime", "yield"] },
   { type: "Education", keywords: ["student", "course", "enrollment", "grade", "exam", "attendance", "teacher", "subject"] },
+>>>>>>> origin/main
   { type: "Logistics", keywords: ["shipment", "delivery", "warehouse", "route", "freight", "carrier", "dispatch"] },
   { type: "SaaS", keywords: ["subscription", "churn", "mrr", "arr", "trial", "user", "tenant", "plan", "license"] },
 ];
@@ -371,6 +401,50 @@ function avgColumn(rows: Row[], col: string): number {
   return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0;
 }
 
+<<<<<<< HEAD
+function medianColumn(rows: Row[], col: string): number {
+  const vals = rows
+    .map((r) => typeof r[col] === "number" ? (r[col] as number) : Number(r[col]))
+    .filter((v) => Number.isFinite(v))
+    .sort((a, b) => a - b);
+  if (!vals.length) return 0;
+  const mid = Math.floor(vals.length / 2);
+  return vals.length % 2 === 0 ? (vals[mid - 1] + vals[mid]) / 2 : vals[mid];
+}
+
+function topCategoryByAvg(rows: Row[], catCol: string, metricCol: string): string {
+  const groups = new Map<string, number[]>();
+  for (const row of rows) {
+    const label = String(row[catCol] ?? "").trim();
+    const val = typeof row[metricCol] === "number" ? (row[metricCol] as number) : Number(row[metricCol]);
+    if (!label || !Number.isFinite(val)) continue;
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label)!.push(val);
+  }
+  let topLabel = "N/A", topAvg = -Infinity;
+  for (const [label, vals] of groups) {
+    const avg = vals.reduce((s, v) => s + v, 0) / vals.length;
+    if (avg > topAvg) { topAvg = avg; topLabel = label; }
+  }
+  return topLabel;
+}
+
+function diversityIndex(rows: Row[], col: string): number {
+  const groups = new Map<string, number>();
+  for (const row of rows) {
+    const label = String(row[col] ?? "").trim();
+    if (!label) continue;
+    groups.set(label, (groups.get(label) || 0) + 1);
+  }
+  if (!groups.size) return 0;
+  const counts = Array.from(groups.values());
+  const min = Math.min(...counts);
+  const max = Math.max(...counts);
+  return max > 0 ? Math.round((min / max) * 100) : 0;
+}
+
+=======
+>>>>>>> origin/main
 function maxColumn(rows: Row[], col: string): number {
   let max = -Infinity;
   for (const r of rows) {
@@ -464,9 +538,19 @@ const DOMAIN_KPI_DEFS: Record<DatasetType, Array<{
   ],
   Education: [
     { title: "Total Students", metric: "student", aggregation: "count_unique", format: "number", businessValue: "Student enrollment" },
+<<<<<<< HEAD
+    { title: "Avg Marks (10th)", metric: "marks", aggregation: "avg", format: "number", businessValue: "10th grade performance benchmark" },
+    { title: "Median Marks (10th)", metric: "marks", aggregation: "median", format: "number", businessValue: "Robust central tendency vs outliers" },
+    { title: "Courses Offered", metric: "course", aggregation: "count_unique", format: "number", businessValue: "Curriculum breadth" },
+    { title: "Avg GPA", metric: "gpa", aggregation: "avg", format: "number", businessValue: "Overall academic standing" },
+    { title: "Pass Rate", metric: "pass", aggregation: "avg", format: "percent", businessValue: "Success rate" },
+    { title: "Top Performing Branch", metric: "branch", aggregation: "top_category", format: "text", businessValue: "Highest average marks branch" },
+    { title: "Gender Diversity Index", metric: "gender", aggregation: "diversity", format: "percent", businessValue: "Balance between gender groups" },
+=======
     { title: "Avg Grade", metric: "grade", aggregation: "avg", format: "number", businessValue: "Academic performance" },
     { title: "Courses Offered", metric: "course", aggregation: "count_unique", format: "number", businessValue: "Curriculum breadth" },
     { title: "Pass Rate", metric: "pass", aggregation: "avg", format: "percent", businessValue: "Success rate" },
+>>>>>>> origin/main
   ],
   Logistics: [
     { title: "Total Shipments", metric: "shipment", aggregation: "count_unique", format: "number", businessValue: "Logistics volume" },
@@ -492,6 +576,14 @@ function resolveMetricColumn(schema: InsightFlowSchema, hint: string): string | 
   if (found) return found.name;
   if (hint === "__row_count__") return "__row_count__";
   if (hint === "__category__") return schema.categories[0]?.name || null;
+<<<<<<< HEAD
+  // Special: resolve 'marks' → first column containing 'marks'
+  if (hint === "marks") {
+    const marksCol = schema.columns.find((c) => normalize(c.name).includes("marks") || normalize(c.name).includes("mark"));
+    return marksCol?.name || schema.numeric[0]?.name || null;
+  }
+=======
+>>>>>>> origin/main
   return null;
 }
 
@@ -510,9 +602,22 @@ export function generateKPIs(rows: Row[], schema: InsightFlowSchema, datasetType
 
     if (def.aggregation === "sum" && col !== "__row_count__") rawValue = sumColumn(rows, col);
     else if (def.aggregation === "avg" && col !== "__row_count__") rawValue = avgColumn(rows, col);
+<<<<<<< HEAD
+    else if (def.aggregation === "median" && col !== "__row_count__") rawValue = medianColumn(rows, col);
     else if (def.aggregation === "max" && col !== "__row_count__") rawValue = maxColumn(rows, col);
     else if (def.aggregation === "min" && col !== "__row_count__") rawValue = minColumn(rows, col);
     else if (def.aggregation === "count_unique" && col !== "__row_count__") rawValue = countUniqueColumn(rows, col);
+    else if (def.aggregation === "top_category" && col !== "__row_count__") {
+      // Find primary numeric metric to rank categories by
+      const metricCol = schema.numeric[0]?.name;
+      rawValue = metricCol ? topCategoryByAvg(rows, col, metricCol) : "N/A";
+    }
+    else if (def.aggregation === "diversity" && col !== "__row_count__") rawValue = diversityIndex(rows, col);
+=======
+    else if (def.aggregation === "max" && col !== "__row_count__") rawValue = maxColumn(rows, col);
+    else if (def.aggregation === "min" && col !== "__row_count__") rawValue = minColumn(rows, col);
+    else if (def.aggregation === "count_unique" && col !== "__row_count__") rawValue = countUniqueColumn(rows, col);
+>>>>>>> origin/main
     else rawValue = rows.length;
 
     kpis.push(makeKpi(
@@ -520,7 +625,12 @@ export function generateKPIs(rows: Row[], schema: InsightFlowSchema, datasetType
     ));
   }
 
+<<<<<<< HEAD
+  // Fallback: ensure at least one avg KPI for primary numeric
+  if (schema.numeric.length > 0 && !kpis.some((k) => k.aggregation === "avg" || k.aggregation === "median")) {
+=======
   if (schema.numeric.length > 0 && !kpis.some((k) => k.aggregation === "avg")) {
+>>>>>>> origin/main
     const firstMetric = schema.numeric[0].name;
     kpis.push(makeKpi(
       `Average ${firstMetric.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
@@ -529,7 +639,75 @@ export function generateKPIs(rows: Row[], schema: InsightFlowSchema, datasetType
     ));
   }
 
+<<<<<<< HEAD
+  // Add secondary numeric avg KPI if we have enough room and a 2nd metric
+  if (schema.numeric.length > 1 && kpis.length < 8) {
+    const secondMetric = schema.numeric[1].name;
+    if (!kpis.some((k) => k.metric === secondMetric)) {
+      kpis.push(makeKpi(
+        `Avg ${secondMetric.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+        avgColumn(rows, secondMetric), secondMetric, "avg", "number",
+        "Secondary performance metric", datasetType
+      ));
+    }
+  }
+
+  return kpis.slice(0, 8);
+}
+
+// ─── KPI Breakdowns (for hover drill-down) ────────────────────────────────
+export interface KpiBreakdown {
+  dimension: string;
+  values: Array<{ label: string; formatted: string; raw: number }>;
+}
+
+export function computeKpiBreakdowns(
+  rows: Row[], kpi: InsightFlowKPI, schema: InsightFlowSchema
+): KpiBreakdown[] {
+  const breakdowns: KpiBreakdown[] = [];
+  if (!rows.length || kpi.metric === "__row_count__" || kpi.aggregation === "top_category" || kpi.aggregation === "diversity") {
+    return breakdowns;
+  }
+
+  const metricCol = schema.columns.find((c) => c.name === kpi.metric);
+  if (!metricCol || (metricCol.class !== "numeric" && kpi.aggregation !== "count_unique")) {
+    return breakdowns;
+  }
+
+  // Build breakdown for up to 2 category columns
+  const catCols = schema.categories.slice(0, 2);
+  for (const cat of catCols) {
+    const groups = new Map<string, number[]>();
+    for (const row of rows) {
+      const label = String(row[cat.name] ?? "").trim();
+      if (!label) continue;
+      const val = typeof row[kpi.metric] === "number" ? (row[kpi.metric] as number) : Number(row[kpi.metric]);
+      if (!Number.isFinite(val)) continue;
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label)!.push(val);
+    }
+
+    const values = Array.from(groups.entries())
+      .map(([label, vals]) => {
+        const raw = kpi.aggregation === "sum"
+          ? vals.reduce((s, v) => s + v, 0)
+          : kpi.aggregation === "max" ? Math.max(...vals)
+          : kpi.aggregation === "min" ? Math.min(...vals)
+          : vals.reduce((s, v) => s + v, 0) / vals.length;
+        return { label, formatted: raw.toLocaleString(undefined, { maximumFractionDigits: 1 }), raw };
+      })
+      .sort((a, b) => b.raw - a.raw)
+      .slice(0, 6);
+
+    if (values.length > 0) {
+      breakdowns.push({ dimension: cat.name, values });
+    }
+  }
+
+  return breakdowns;
+=======
   return kpis.slice(0, 6);
+>>>>>>> origin/main
 }
 
 /* ============================================================
@@ -538,6 +716,27 @@ export function generateKPIs(rows: Row[], schema: InsightFlowSchema, datasetType
 
 function buildGroupedData(rows: Row[], xKey: string, yKey: string, aggregation: string, limit = 10): Array<Record<string, string | number>> {
   const groups = new Map<string, number[]>();
+<<<<<<< HEAD
+  const isCount = aggregation === "count";
+
+  for (const row of rows) {
+    const label = String(row[xKey] ?? "Unknown").trim() || "Unknown";
+    if (!groups.has(label)) groups.set(label, []);
+    if (isCount) {
+      groups.get(label)!.push(1);
+    } else {
+      const val = typeof row[yKey] === "number" ? (row[yKey] as number) : Number(row[yKey]);
+      if (Number.isFinite(val)) groups.get(label)!.push(val);
+    }
+  }
+
+  const valueKey = isCount ? "count" : yKey;
+
+  return Array.from(groups.entries())
+    .map(([label, vals]) => ({
+      [xKey]: label,
+      [valueKey]: aggregation === "sum" ? vals.reduce((s, v) => s + v, 0)
+=======
 
   for (const row of rows) {
     const label = String(row[xKey] ?? "Unknown").trim() || "Unknown";
@@ -550,13 +749,18 @@ function buildGroupedData(rows: Row[], xKey: string, yKey: string, aggregation: 
     .map(([label, vals]) => ({
       [xKey]: label,
       [yKey]: aggregation === "sum" ? vals.reduce((s, v) => s + v, 0)
+>>>>>>> origin/main
         : aggregation === "avg" ? (vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 0)
           : aggregation === "max" ? Math.max(...vals)
             : aggregation === "min" ? Math.min(...vals)
               : vals.length,
       __count: vals.length,
     }))
+<<<<<<< HEAD
+    .sort((a, b) => Number(b[valueKey]) - Number(a[valueKey]))
+=======
     .sort((a, b) => Number(b[yKey]) - Number(a[yKey]))
+>>>>>>> origin/main
     .slice(0, limit);
 }
 
@@ -654,6 +858,10 @@ export function generateCharts(rows: Row[], schema: InsightFlowSchema, datasetTy
   const charts: InsightFlowChart[] = [];
   const usedIntents = new Set<string>();
   const usedPatterns = new Set<string>();
+<<<<<<< HEAD
+  const usedXKeys = new Set<string>();
+=======
+>>>>>>> origin/main
 
   function addChart(
     type: ChartType, title: string, xKey: string, yKey: string,
@@ -662,17 +870,34 @@ export function generateCharts(rows: Row[], schema: InsightFlowSchema, datasetTy
   ) {
     const pattern = `${intent}|${xKey}|${yKey}|${type}`;
     if (usedPatterns.has(pattern)) return;
+<<<<<<< HEAD
+    if (usedIntents.has(intent) && charts.length >= 4) return;
+=======
     if (usedIntents.has(intent) && charts.length >= 3) return;
+>>>>>>> origin/main
     if (isRejectedChart(title, xKey, yKey)) return;
 
     usedIntents.add(intent);
     usedPatterns.add(pattern);
+<<<<<<< HEAD
+    usedXKeys.add(xKey);
+
+    // Issue #3: For scatter/correlation charts, replace "NONE" aggregation with "Correlation"
+    const displayAggregation = aggregation === "none" && intent === "correlation"
+      ? "Correlation"
+      : aggregation.toUpperCase();
+=======
+>>>>>>> origin/main
 
     charts.push({
       id: crypto.randomUUID(),
       type,
       title,
+<<<<<<< HEAD
+      subtitle: `${displayAggregation} - ${xKey} vs ${yKey}`,
+=======
       subtitle: `${aggregation.toUpperCase()} - ${xKey} vs ${yKey}`,
+>>>>>>> origin/main
       xKey,
       yKey,
       aggregation,
@@ -686,7 +911,10 @@ export function generateCharts(rows: Row[], schema: InsightFlowSchema, datasetTy
   const primaryMetric = schema.numeric[0];
   const secondaryMetric = schema.numeric.length > 1 ? schema.numeric[1] : undefined;
   const primaryCat = schema.categories[0];
+<<<<<<< HEAD
+=======
   const secondaryCat = schema.categories.length > 1 ? schema.categories[1] : undefined;
+>>>>>>> origin/main
   const dateCol = schema.dates[0];
   const geoCol = schema.geo[0];
 
@@ -698,7 +926,11 @@ export function generateCharts(rows: Row[], schema: InsightFlowSchema, datasetTy
       buildTrendData(rows, dateCol.name, primaryMetric.name, "sum"));
   }
 
+<<<<<<< HEAD
+  // 2. Distribution — Histogram of primary metric
+=======
   // 2. Distribution — Histogram
+>>>>>>> origin/main
   if (primaryMetric) {
     addChart("histogram", `${primaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} Distribution`,
       "range", primaryMetric.name, "count", "distribution",
@@ -706,9 +938,25 @@ export function generateCharts(rows: Row[], schema: InsightFlowSchema, datasetTy
       buildHistogramData(rows, primaryMetric.name));
   }
 
+<<<<<<< HEAD
+  // 2b. Distribution — Histogram of secondary metric (if exists)
+  if (secondaryMetric && secondaryMetric.name !== primaryMetric?.name) {
+    addChart("histogram",
+      `${secondaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} Distribution`,
+      "range", secondaryMetric.name, "count", "distribution",
+      "Secondary metric distribution",
+      buildHistogramData(rows, secondaryMetric.name));
+  }
+
+  // 3. Comparison — Bar: primary cat × primary metric
+  if (primaryCat && primaryMetric) {
+    addChart("bar",
+      `${primaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} by ${primaryCat.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+=======
   // 3. Comparison — Bar
   if (primaryCat && primaryMetric) {
     addChart("bar", `${primaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} by ${primaryCat.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+>>>>>>> origin/main
       primaryCat.name, primaryMetric.name, "avg", "comparison",
       "Category performance comparison",
       buildGroupedData(rows, primaryCat.name, primaryMetric.name, "avg"));
@@ -721,13 +969,22 @@ export function generateCharts(rows: Row[], schema: InsightFlowSchema, datasetTy
 
   // 4. Correlation — Scatter
   if (primaryMetric && secondaryMetric) {
+<<<<<<< HEAD
+    addChart("scatter",
+      `${primaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} vs ${secondaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+=======
     addChart("scatter", `${primaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} vs ${secondaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+>>>>>>> origin/main
       primaryMetric.name, secondaryMetric.name, "none", "correlation",
       "Correlation analysis between key metrics",
       buildScatterData(rows, primaryMetric.name, secondaryMetric.name));
   }
 
+<<<<<<< HEAD
+  // 5. Composition — Donut of primary category
+=======
   // 5. Composition — Pie/Donut
+>>>>>>> origin/main
   if (primaryCat) {
     addChart("donut", `Records by ${primaryCat.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
       primaryCat.name, "count", "count", "composition",
@@ -735,15 +992,26 @@ export function generateCharts(rows: Row[], schema: InsightFlowSchema, datasetTy
       buildGroupedData(rows, primaryCat.name, primaryCat.name, "count"));
   }
 
+<<<<<<< HEAD
+  // 6. Geographic — Horizontal bar ranking
+  if (geoCol && primaryMetric) {
+    addChart("horizontalBar",
+      `${primaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} by ${geoCol.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+=======
   // 6. Geographic — Map (handled by GeoIntelligence separately, but add a ranking chart)
   if (geoCol && primaryMetric) {
     addChart("horizontalBar", `${primaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} by ${geoCol.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+>>>>>>> origin/main
       geoCol.name, primaryMetric.name, "sum", "geo",
       "Geographic performance analysis",
       buildGroupedData(rows, geoCol.name, primaryMetric.name, "sum"));
   }
 
+<<<<<<< HEAD
+  // 7. Relationship — Domain-specific deep insight (horizontalBar top-N)
+=======
   // 7. Deep Insight — Domain-specific
+>>>>>>> origin/main
   if (primaryCat && primaryMetric) {
     const deepInsightTitle = getDeepInsightTitle(datasetType, primaryCat.name, primaryMetric.name);
     addChart("horizontalBar", deepInsightTitle,
@@ -757,6 +1025,36 @@ export function generateCharts(rows: Row[], schema: InsightFlowSchema, datasetTy
       buildGroupedData(rows, schema.categories[0].name, primaryMetric.name, "sum"));
   }
 
+<<<<<<< HEAD
+  // 8+. Extra category charts — iterate unused categories (Gender, Board, Category, etc.)
+  //     Add a bar chart for each, plus a donut for the second category.
+  if (primaryMetric) {
+    for (let i = 1; i < schema.categories.length && charts.length < 9; i++) {
+      const cat = schema.categories[i];
+      if (usedXKeys.has(cat.name)) continue;
+
+      // Donut for second category (composition)
+      if (i === 1) {
+        addChart("donut",
+          `Distribution by ${cat.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+          cat.name, "count", "count", "composition",
+          `Breakdown by ${cat.name}`,
+          buildGroupedData(rows, cat.name, cat.name, "count"));
+      }
+
+      // Bar for remaining categories × primary metric
+      if (charts.length < 9) {
+        addChart("bar",
+          `${primaryMetric.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())} by ${cat.name.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())}`,
+          cat.name, primaryMetric.name, "avg", "comparison",
+          `Performance broken down by ${cat.name}`,
+          buildGroupedData(rows, cat.name, primaryMetric.name, "avg"));
+      }
+    }
+  }
+
+=======
+>>>>>>> origin/main
   // Fallback: ensure we have at least 1 chart
   if (charts.length === 0 && schema.numeric.length > 0) {
     addChart("bar", "Data Overview",
@@ -1019,10 +1317,34 @@ export function runSelfCritic(
     issues.push(`Low chart diversity: only ${intents.size} unique chart intents (need at least 3)`);
   }
 
+<<<<<<< HEAD
+  // Only require intents that make sense for this dataset:
+  // - Skip "geo" requirement if the schema has no geo columns
+  // - Skip "trend" requirement if schema has no date columns
+  // - Skip "relationship" if there's only one category (no cross-dim comparison available)
+  const hasGeo = schema.geo.length > 0;
+  const hasDate = schema.dates.length > 0;
+  const hasMultiCat = schema.categories.length > 1;
+
+  const requiredIntents: ChartIntent[] = [
+    "distribution",
+    "comparison",
+    "correlation",
+    "composition",
+    ...(hasDate ? ["trend" as ChartIntent] : []),
+    ...(hasGeo ? ["geo" as ChartIntent] : []),
+    ...(hasMultiCat ? ["relationship" as ChartIntent] : []),
+  ];
+
+  for (const ri of requiredIntents) {
+    if (!intents.has(ri)) {
+      issues.push(`Missing recommended chart intent: ${ri}`);
+=======
   const requiredIntents: ChartIntent[] = ["trend", "distribution", "comparison", "correlation", "composition", "geo", "relationship"];
   for (const ri of requiredIntents) {
     if (!intents.has(ri)) {
       issues.push(`Missing required chart intent: ${ri}`);
+>>>>>>> origin/main
     }
   }
 
@@ -1034,7 +1356,11 @@ export function runSelfCritic(
   });
   if (uselessKpis.length > 0) issues.push(`${uselessKpis.length} KPI(s) use person/identifier columns`);
 
+<<<<<<< HEAD
+  // 4. Check geo metric correctness (only when geo chart exists)
+=======
   // 4. Check geo metric correctness
+>>>>>>> origin/main
   const geoChart = charts.find((c) => c.intent === "geo");
   if (geoChart) {
     const yCol = schema.columns.find((c) => c.name === geoChart.yKey);
@@ -1058,8 +1384,13 @@ export function runSelfCritic(
     }
   }
 
+<<<<<<< HEAD
+  // 6. Score — denominator is adjusted required intents length
+  const diversityScore = Math.min(100, (intents.size / Math.max(requiredIntents.length, 3)) * 100);
+=======
   // 6. Score
   const diversityScore = Math.min(100, (intents.size / requiredIntents.length) * 100);
+>>>>>>> origin/main
   const kpiScore = Math.min(100, (kpis.filter((k) => !uselessKpis.includes(k)).length / Math.max(kpis.length, 1)) * 100);
   const qualityScore = charts.length > 0
     ? Math.min(100, (charts.filter((c) => validateChartQuality(c, charts, schema).length === 0).length / charts.length) * 100)
@@ -1180,6 +1511,25 @@ export function scoreDashboard(
   kpis: InsightFlowKPI[], charts: InsightFlowChart[], geo: GeoIntelligence, filters: InsightFlowFilter[], schema: InsightFlowSchema, datasetType: DatasetType
 ): DashboardScore {
   // KPI relevance: 0-100
+<<<<<<< HEAD
+  let kpiRelevance = 55;
+  if (kpis.length >= 3) kpiRelevance += 15;
+  if (kpis.length >= 5) kpiRelevance += 10;
+  // Domain-aware: give credit if KPI titles use column names that exist in schema
+  const schemaNames = new Set(schema.columns.map((c) => normalize(c.name)));
+  const relevantKpis = kpis.filter((k) => k.metric === "__row_count__" || schemaNames.has(normalize(k.metric)));
+  if (relevantKpis.length >= 2) kpiRelevance += 20;
+
+  // Chart diversity: 0-100
+  const intents = new Set(charts.map((c) => c.intent));
+  let chartDiversity = intents.size * 16;
+  if (charts.length >= 5) chartDiversity = Math.min(100, chartDiversity + 10);
+  const dataPopulated = charts.filter((c) => c.data.length > 0).length;
+  if (dataPopulated >= 4) chartDiversity += 10;
+
+  // Geo relevance: 0-100
+  // Issue #2: Datasets without geo columns should not be penalized
+=======
   let kpiRelevance = 50;
   if (kpis.length >= 4) kpiRelevance += 20;
   if (kpis.length >= 5) kpiRelevance += 10;
@@ -1194,12 +1544,39 @@ export function scoreDashboard(
   if (dataPopulated >= 5) chartDiversity += 10;
 
   // Geo relevance: 0-100
+>>>>>>> origin/main
   let geoRelevance = 0;
   if (geo.enabled) {
     geoRelevance = 70;
     if (geo.locations.length >= 3) geoRelevance += 15;
     if (geo.topLocation) geoRelevance += 15;
   } else {
+<<<<<<< HEAD
+    // No geo columns = full credit (geo is optional for Education/HR/etc)
+    geoRelevance = schema.geo.length === 0 ? 100 : 30;
+  }
+
+  // Business usefulness: 0-100
+  let businessUsefulness = 45;
+  if (schema.numeric.length >= 2) businessUsefulness += 15;
+  if (schema.categories.length >= 2) businessUsefulness += 15;
+  if (datasetType !== "General") businessUsefulness += 15;
+  if (charts.some((c) => c.intent === "comparison")) businessUsefulness += 10;
+
+  // Filter usefulness: 0-100
+  let filterUsefulness = 20;
+  if (filters.length > 0) filterUsefulness = 50;
+  if (filters.some((f) => f.type === "category")) filterUsefulness += 25;
+  if (filters.some((f) => f.type === "geo" || f.type === "date")) filterUsefulness += 15;
+  const uselessCount = filters.filter((f) => isUselessFilter(f.key)).length;
+  if (uselessCount === 0) filterUsefulness = Math.min(100, filterUsefulness + 10);
+
+  const total = Math.round(
+    kpiRelevance * 0.25 +
+    chartDiversity * 0.30 +
+    geoRelevance * 0.10 +
+    businessUsefulness * 0.20 +
+=======
     // Not all datasets need geo — give partial credit if no geo columns exist
     if (schema.geo.length === 0) geoRelevance = 80;
     else geoRelevance = 20;
@@ -1227,17 +1604,26 @@ export function scoreDashboard(
     chartDiversity * 0.25 +
     geoRelevance * 0.15 +
     businessUsefulness * 0.2 +
+>>>>>>> origin/main
     filterUsefulness * 0.15
   );
 
   return {
+<<<<<<< HEAD
+    total: Math.min(100, total),
+=======
     total,
+>>>>>>> origin/main
     kpiRelevance,
     chartDiversity,
     geoRelevance,
     businessUsefulness,
     filterUsefulness,
+<<<<<<< HEAD
+    passed: total >= 80,
+=======
     passed: total >= 85,
+>>>>>>> origin/main
   };
 }
 
