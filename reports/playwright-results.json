@@ -1,7 +1,7 @@
 {
   "config": {
-    "configFile": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\retry-the-project\\playwright.config.ts",
-    "rootDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/e2e",
+    "configFile": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\playwright.config.ts",
+    "rootDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/e2e",
     "forbidOnly": false,
     "fullyParallel": false,
     "globalSetup": null,
@@ -11,25 +11,25 @@
     "grepInvert": null,
     "maxFailures": 0,
     "metadata": {
-      "actualWorkers": 1
+      "actualWorkers": 6
     },
     "preserveOutput": "always",
     "projects": [
       {
-        "outputDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/reports/playwright-artifacts",
+        "outputDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/reports/playwright-artifacts",
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
-          "actualWorkers": 1
+          "actualWorkers": 6
         },
         "id": "chromium",
         "name": "chromium",
-        "testDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/e2e",
+        "testDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/e2e",
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
         ],
-        "timeout": 60000
+        "timeout": 30000
       }
     ],
     "quiet": false,
@@ -61,7 +61,7 @@
     "updateSnapshots": "missing",
     "updateSourceMethod": "patch",
     "version": "1.59.1",
-    "workers": 1,
+    "workers": 6,
     "webServer": null
   },
   "suites": [
@@ -77,7 +77,7 @@
           "tags": [],
           "tests": [
             {
-              "timeout": 60000,
+              "timeout": 30000,
               "annotations": [],
               "expectedStatus": "passed",
               "projectId": "chromium",
@@ -87,12 +87,12 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-                  "duration": 7316,
+                  "duration": 10620,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-05-21T08:58:00.382Z",
+                  "startTime": "2026-06-04T12:28:11.199Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -102,6 +102,90 @@
           ],
           "id": "ea3fa66f92e78aac8903-4cc017da49b11a6f9a00",
           "file": "ai-dashboard-command-flow.spec.ts",
+          "line": 4,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "ai-provider-fallback.spec.ts",
+      "file": "ai-provider-fallback.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "E2E AI provider status and fallback rendering",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 1,
+                  "status": "passed",
+                  "duration": 11955,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-04T12:28:11.173Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "8cb2b899e6729689e9f5-57e56bb5a9ce0b36852d",
+          "file": "ai-provider-fallback.spec.ts",
+          "line": 4,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "dashboard-chat-custom-chart.spec.ts",
+      "file": "dashboard-chat-custom-chart.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "E2E Dashboard chat commands for custom charts",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
+                  "status": "passed",
+                  "duration": 9590,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-04T12:28:11.724Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "c2d9d85f48471235f421-2563ee6367078628cc8a",
+          "file": "dashboard-chat-custom-chart.spec.ts",
           "line": 4,
           "column": 1
         }
@@ -119,22 +203,22 @@
           "tags": [],
           "tests": [
             {
-              "timeout": 60000,
+              "timeout": 30000,
               "annotations": [],
               "expectedStatus": "passed",
               "projectId": "chromium",
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
+                  "workerIndex": 3,
+                  "parallelIndex": 3,
                   "status": "passed",
-                  "duration": 2322,
+                  "duration": 11907,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-05-21T08:58:08.260Z",
+                  "startTime": "2026-06-04T12:28:11.140Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -145,6 +229,48 @@
           "id": "a38ca1b2dc0027160652-988430f918026d6cbc79",
           "file": "dashboard-upload-flow.spec.ts",
           "line": 5,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "invalid-dashboard-request.spec.ts",
+      "file": "invalid-dashboard-request.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "E2E Invalid dashboard request safety",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 4,
+                  "parallelIndex": 4,
+                  "status": "passed",
+                  "duration": 9182,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-04T12:28:11.973Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "f102925a8a9b5bd23e4f-dc82311f8b6b42f62644",
+          "file": "invalid-dashboard-request.spec.ts",
+          "line": 4,
           "column": 1
         }
       ]
@@ -161,22 +287,22 @@
           "tags": [],
           "tests": [
             {
-              "timeout": 60000,
+              "timeout": 30000,
               "annotations": [],
               "expectedStatus": "passed",
               "projectId": "chromium",
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
+                  "workerIndex": 5,
+                  "parallelIndex": 5,
                   "status": "passed",
-                  "duration": 1249,
+                  "duration": 9098,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-05-21T08:58:10.621Z",
+                  "startTime": "2026-06-04T12:28:12.221Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -203,22 +329,22 @@
           "tags": [],
           "tests": [
             {
-              "timeout": 60000,
+              "timeout": 30000,
               "annotations": [],
               "expectedStatus": "passed",
               "projectId": "chromium",
               "projectName": "chromium",
               "results": [
                 {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
+                  "workerIndex": 2,
+                  "parallelIndex": 2,
                   "status": "passed",
-                  "duration": 3309,
+                  "duration": 6285,
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-                  "startTime": "2026-05-21T08:58:12.026Z",
+                  "startTime": "2026-06-04T12:28:23.919Z",
                   "annotations": [],
                   "attachments": []
                 }
@@ -232,13 +358,55 @@
           "column": 1
         }
       ]
+    },
+    {
+      "title": "upload-dashboard-flow.spec.ts",
+      "file": "upload-dashboard-flow.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "E2E Upload and dashboard generation flow",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 30000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "chromium",
+              "projectName": "chromium",
+              "results": [
+                {
+                  "workerIndex": 5,
+                  "parallelIndex": 5,
+                  "status": "passed",
+                  "duration": 5749,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-06-04T12:28:24.077Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "22903ad1444cbbd91e38-4d06e5bc2b996a7589cf",
+          "file": "upload-dashboard-flow.spec.ts",
+          "line": 5,
+          "column": 1
+        }
+      ]
     }
   ],
   "errors": [],
   "stats": {
-    "startTime": "2026-05-21T08:57:58.490Z",
-    "duration": 17901.532,
-    "expected": 4,
+    "startTime": "2026-06-04T12:28:01.565Z",
+    "duration": 98601.444,
+    "expected": 8,
     "skipped": 0,
     "unexpected": 0,
     "flaky": 0
