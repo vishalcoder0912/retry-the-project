@@ -1,11 +1,19 @@
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+<<<<<<< HEAD
 import { DataColumn, DatasetRow } from '@/features/data/model/dataStore';
+=======
+import { DatasetRow } from '@/features/data/model/dataStore';
+>>>>>>> origin/main
 
 export interface LocalFileProcessResult {
   columns: Array<{
     name: string;
+<<<<<<< HEAD
     type: DataColumn["type"];
+=======
+    type: 'string' | 'number' | 'date';
+>>>>>>> origin/main
     sample: string[];
   }>;
   rowCount: number;
@@ -21,6 +29,7 @@ export interface LocalFileChunk {
 /**
  * Infers data type from sample values
  */
+<<<<<<< HEAD
 const numericValue = (value: string) => {
   const parsed = Number(value.replace(/[$,€£₹%\s]/g, ""));
   return Number.isFinite(parsed) ? parsed : null;
@@ -50,6 +59,14 @@ const inferType = (name: string, values: string[]): DataColumn["type"] => {
   }
   if (uniqueCount <= Math.max(12, sample.length * 0.45)) return "category";
   return sample.some((value) => value.length > 80) ? "text" : "string";
+=======
+const inferType = (values: string[]): 'string' | 'number' | 'date' => {
+  const sample = values.filter(Boolean).slice(0, 20);
+  if (sample.length === 0) return 'string';
+  if (sample.every(v => !isNaN(Number(v)))) return 'number';
+  if (sample.every(v => !isNaN(Date.parse(v)))) return 'date';
+  return 'string';
+>>>>>>> origin/main
 };
 
 /**
@@ -81,7 +98,11 @@ const normalizeDatasetRow = (value: unknown): DatasetRow => {
 export const extractSchema = (rows: DatasetRow[], fields: string[]): LocalFileProcessResult['columns'] => {
   return fields.map(name => ({
     name,
+<<<<<<< HEAD
     type: inferType(name, rows.slice(0, 50).map(r => String(r[name] ?? ''))),
+=======
+    type: inferType(rows.slice(0, 20).map(r => String(r[name] ?? ''))),
+>>>>>>> origin/main
     sample: rows.slice(0, 3).map(r => String(r[name] ?? '')),
   }));
 };

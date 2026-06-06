@@ -58,13 +58,17 @@ export type SchemaChatResponse = {
 import { API_BASE_URL } from "@/config/apiConfig";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || API_BASE_URL).replace(/\/$/, "");
+<<<<<<< HEAD
 const DEFAULT_REQUEST_TIMEOUT_MS = 18000;
+=======
+>>>>>>> origin/main
 
 function endpoint(path: string) {
   return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+<<<<<<< HEAD
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
   let response: Response;
@@ -89,6 +93,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const text = await response.text();
   let payload: unknown = null;
+=======
+  const response = await fetch(endpoint(path), {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers || {}),
+    },
+  });
+
+  const text = await response.text();
+  let payload: any = null;
+>>>>>>> origin/main
 
   try {
     payload = text ? JSON.parse(text) : null;
@@ -96,6 +112,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     payload = { raw: text };
   }
 
+<<<<<<< HEAD
   const envelope = payload as {
     success?: boolean;
     data?: unknown;
@@ -111,6 +128,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
 
   return (envelope?.data ?? payload) as T;
+=======
+  if (!response.ok || payload?.success === false) {
+    const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
+    const details = payload?.error?.details || payload?.raw || "";
+    throw new Error(details ? `${message}: ${details}` : message);
+  }
+
+  return (payload?.data ?? payload) as T;
+>>>>>>> origin/main
 }
 
 function safeDatasetBody(dataset?: DatasetPayload) {
@@ -168,6 +194,7 @@ export const schemaAiClient = {
       }),
     }),
 
+<<<<<<< HEAD
   runExcelAnalyze: (
     datasetId: string,
     payload: Record<string, unknown>,
@@ -192,6 +219,8 @@ export const schemaAiClient = {
       body: JSON.stringify(payload),
     }),
 
+=======
+>>>>>>> origin/main
   trainSchemaDashboard: (
     datasetId: string,
     dataset: DatasetPayload,
@@ -240,6 +269,7 @@ export const schemaAiClient = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+<<<<<<< HEAD
 
   generateSeniorDashboard: (datasetId: string, payload: Record<string, unknown>) =>
     request(`/api/datasets/${encodeURIComponent(datasetId)}/senior-dashboard`, {
@@ -252,6 +282,8 @@ export const schemaAiClient = {
       method: "POST",
       body: JSON.stringify({ useOllama: false }),
     }),
+=======
+>>>>>>> origin/main
 };
 
 export function getSchemaRagMemory() {
@@ -282,6 +314,7 @@ export function trainSmartRagDashboard(datasetId: string, payload: Record<string
   return schemaAiClient.trainSmartRagDashboard(datasetId, payload);
 }
 
+<<<<<<< HEAD
 export function generateSeniorDashboard(datasetId: string, payload: Record<string, unknown>) {
   return schemaAiClient.generateSeniorDashboard(datasetId, payload);
 }
@@ -290,6 +323,8 @@ export function trainSeniorAnalystSeeds() {
   return schemaAiClient.trainSeniorAnalystSeeds();
 }
 
+=======
+>>>>>>> origin/main
 export function generateSchemaDashboard(datasetId: string, payload: Record<string, unknown>) {
   return request(`/api/datasets/${encodeURIComponent(datasetId)}/schema-dashboard`, {
     method: "POST",

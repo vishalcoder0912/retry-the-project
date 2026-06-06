@@ -33,6 +33,12 @@ export default defineConfig({
           });
         },
       },
+      // ML Service proxy
+      "/api/ml": {
+        target: "http://localhost:5000",
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
   build: {

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { api, DatasetImportPayload } from '@/features/data/api/dataApi';
@@ -159,6 +159,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error("File contains no analyzable data rows after removing schema/dictionary rows");
     }
 
+    const columns: DataColumn[] = fields.map(name => ({
     const columns: DataColumn[] = fields.map(name => ({
       name,
       type: inferType(name, rows.slice(0, 50).map(r => String(r[name] ?? ''))),
@@ -393,25 +394,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [dataset]);
 
+  const contextValue = useMemo(() => ({
+    dataset,
+    chatMessages,
+    analysis,
+    isProcessing,
+    isHydrating,
+    apiError,
+    uploadFile,
+    uploadFiles,
+    importPdfFile,
+    loadDemo,
+    sendChatQuery,
+    updateDatasetCell,
+    replaceDatasetLocally,
+    deleteDataset,
+    resetAppState,
+    retryHydrate: hydrateState,
+  }), [
+    dataset,
+    chatMessages,
+    analysis,
+    isProcessing,
+    isHydrating,
+    apiError,
+    uploadFile,
+    uploadFiles,
+    importPdfFile,
+    loadDemo,
+    sendChatQuery,
+    updateDatasetCell,
+    replaceDatasetLocally,
+    deleteDataset,
+    resetAppState,
+    hydrateState,
+  ]);
+
   return (
-    <DataContext.Provider value={{
-      dataset,
-      chatMessages,
-      analysis,
-      isProcessing,
-      isHydrating,
-      apiError,
-      uploadFile,
-      uploadFiles,
-      importPdfFile,
-      loadDemo,
-      sendChatQuery,
-      updateDatasetCell,
-      replaceDatasetLocally,
-      deleteDataset,
-      resetAppState,
-      retryHydrate: hydrateState,
-    }}>
+    <DataContext.Provider value={contextValue}>
       {children}
     </DataContext.Provider>
   );

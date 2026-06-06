@@ -65,6 +65,7 @@ def test_compare_datasets():
     assert body["sameSchema"] is False
     assert body["missingColumns"] == ["b"]
     assert body["extraColumns"] == ["c"]
+<<<<<<< HEAD
 
 
 def test_bad_input():
@@ -72,3 +73,5 @@ def test_bad_input():
     response = client.post("/profile", json={"rows": "not an array"})
     assert response.status_code == 422
 
+=======
+>>>>>>> origin/main

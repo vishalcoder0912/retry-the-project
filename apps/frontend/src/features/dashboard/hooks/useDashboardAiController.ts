@@ -32,12 +32,15 @@ type DashboardSpecs = {
   domain?: string;
 };
 
+<<<<<<< HEAD
 type ChartTarget = {
   id?: string;
   title?: string;
   chart?: Partial<ChartSpec>;
 };
 
+=======
+>>>>>>> origin/main
 type ControllerOptions = {
   dataset?: DatasetPayload | null;
   initialDashboard?: Partial<DashboardSpecs> | null;
@@ -74,6 +77,7 @@ function localFallbackAnswer(query: string, rows: Row[]) {
   return `Local fallback handled "${query}". Dataset has ${rows.length.toLocaleString()} clean rows, and dashboard values are calculated locally.`;
 }
 
+<<<<<<< HEAD
 function blockedDashboardPrompt(query: string): string | null {
   const lower = query.toLowerCase();
 
@@ -96,6 +100,8 @@ function blockedDashboardPrompt(query: string): string | null {
   return null;
 }
 
+=======
+>>>>>>> origin/main
 function chartFromAction(action: NonNullable<DashboardCommandResponse["actions"]>[number]): ChartSpec | null {
   const spec = action.chartSpec as ChartSpec | undefined;
   if (spec?.type && spec?.title && spec?.xKey) return spec;
@@ -137,6 +143,7 @@ function sameChart(left: Partial<ChartSpec>, right: Partial<ChartSpec>) {
   return chartKey(left) === chartKey(right) || (!!left.title && !!right.title && left.title.toLowerCase() === right.title.toLowerCase());
 }
 
+<<<<<<< HEAD
 function normalizeTitle(value?: string) {
   return String(value || "").toLowerCase().trim();
 }
@@ -178,6 +185,8 @@ function replaceChartByTarget(charts: ChartSpec[], target: ChartTarget, next: Ch
   return replaced ? updated : upsertChart(charts, next);
 }
 
+=======
+>>>>>>> origin/main
 function upsertChart(charts: ChartSpec[], next: ChartSpec) {
   const index = charts.findIndex((chart) => sameChart(chart, next));
   if (index < 0) return [...charts, next];
@@ -209,7 +218,10 @@ export function useDashboardAiController({
   });
   const [manualKpis, setManualKpis] = useState<KpiSpec[]>([]);
   const [manualCharts, setManualCharts] = useState<ChartSpec[]>([]);
+<<<<<<< HEAD
   const [chartsCleared, setChartsCleared] = useState(false);
+=======
+>>>>>>> origin/main
   const [messages, setMessages] = useState<Message[]>([
     {
       id: makeId(),
@@ -268,6 +280,7 @@ export function useDashboardAiController({
     return {
       rows: filteredRows,
       kpis: kpiSpecs.length ? kpiSpecs.map((spec) => buildKpiFromSpec(filteredRows, spec)) : buildKpis(filteredRows),
+<<<<<<< HEAD
       charts: chartSpecs.length
         ? chartSpecs.map((spec) => buildChartFromSpec(filteredRows, spec)).slice(0, 10)
         : chartsCleared
@@ -275,6 +288,11 @@ export function useDashboardAiController({
           : buildDefaultCharts(filteredRows),
     };
   }, [allSpecs, chartsCleared, filteredRows]);
+=======
+      charts: chartSpecs.length ? chartSpecs.map((spec) => buildChartFromSpec(filteredRows, spec)).slice(0, 10) : buildDefaultCharts(filteredRows),
+    };
+  }, [allSpecs, filteredRows]);
+>>>>>>> origin/main
 
   const pushAssistant = useCallback((content: string, options: Partial<Message> = {}) => {
     setMessages((current) => [...current, { id: makeId(), role: "assistant", content, ...options }]);
@@ -282,8 +300,11 @@ export function useDashboardAiController({
 
   const applyCommand = useCallback((command: DashboardCommandResponse) => {
     if (command.dashboardHealth) setDashboardHealth(command.dashboardHealth);
+<<<<<<< HEAD
     if (command.provider) localStorage.setItem("last_selected_provider", command.provider);
     if (command.model) localStorage.setItem("last_selected_model", command.model);
+=======
+>>>>>>> origin/main
 
     if (command.response_type === "dashboard_action" && Array.isArray(command.actions) && command.actions.length) {
       let createdCharts = 0;
@@ -301,7 +322,10 @@ export function useDashboardAiController({
           if (!chart) continue;
           const exists = allSpecs.charts.some((current) => sameChart(current, chart));
           if (!exists) {
+<<<<<<< HEAD
             setChartsCleared(false);
+=======
+>>>>>>> origin/main
             setManualCharts((current) => upsertChart(current, chart).slice(-10));
             createdCharts += 1;
           } else {
@@ -313,12 +337,19 @@ export function useDashboardAiController({
         if (["modify_chart", "update_chart", "update_chart_type", "convert_chart_type"].includes(actionName)) {
           const chart = chartFromAction(action);
           if (!chart) continue;
+<<<<<<< HEAD
           const target = getActionTarget(action);
           const existsInDashboard = dashboardSpecs.charts.some((item) => chartMatchesTarget(item, target) || sameChart(item, chart));
           setChartsCleared(false);
           setDashboardSpecs((current) => ({ ...current, charts: replaceChartByTarget(current.charts, target, chart) }));
           setManualCharts((current) => current.some((item) => chartMatchesTarget(item, target) || sameChart(item, chart)) || !existsInDashboard
             ? replaceChartByTarget(current, target, chart).slice(-10)
+=======
+          const existsInDashboard = dashboardSpecs.charts.some((item) => sameChart(item, chart));
+          setDashboardSpecs((current) => ({ ...current, charts: current.charts.map((item) => sameChart(item, chart) ? { ...item, ...chart } : item) }));
+          setManualCharts((current) => current.some((item) => sameChart(item, chart)) || !existsInDashboard
+            ? upsertChart(current, chart).slice(-10)
+>>>>>>> origin/main
             : current);
           modifiedCharts += 1;
           continue;
@@ -342,6 +373,7 @@ export function useDashboardAiController({
           continue;
         }
 
+<<<<<<< HEAD
         if (["clear_charts", "remove_all_charts", "delete_all_charts"].includes(actionName)) {
           setChartsCleared(true);
           setManualCharts([]);
@@ -354,6 +386,11 @@ export function useDashboardAiController({
           const target = getActionTarget(action);
           setManualCharts((current) => removeChartByTarget(current, target));
           setDashboardSpecs((current) => ({ ...current, charts: removeChartByTarget(current.charts, target) }));
+=======
+        if (["delete_chart", "remove_chart"].includes(actionName)) {
+          setManualCharts((current) => current.slice(0, -1));
+          setDashboardSpecs((current) => ({ ...current, charts: current.charts.slice(0, -1) }));
+>>>>>>> origin/main
           deletedCharts += 1;
         }
       }
@@ -381,7 +418,10 @@ export function useDashboardAiController({
         source: dashboard?.source,
         domain: dashboard?.domain,
       });
+<<<<<<< HEAD
       setChartsCleared(false);
+=======
+>>>>>>> origin/main
       setManualCharts([]);
       setManualKpis([]);
       pushAssistant(command.message || "Dashboard regenerated with the quality guardian.", {
@@ -392,10 +432,15 @@ export function useDashboardAiController({
       return;
     }
 
+<<<<<<< HEAD
     const incomingChartSpec = command.chartSpec || (command as any).chart;
     if ((command.action === "GENERATE_CHART" || command.action === "MODIFY_CHART") && incomingChartSpec) {
       const { data: _data, rows: _rows, rawRows: _rawRows, ...chartSpec } = incomingChartSpec as ChartSpec & { data?: unknown; rows?: unknown; rawRows?: unknown };
       setChartsCleared(false);
+=======
+    if ((command.action === "GENERATE_CHART" || command.action === "MODIFY_CHART") && command.chartSpec) {
+      const { data: _data, rows: _rows, rawRows: _rawRows, ...chartSpec } = command.chartSpec as ChartSpec & { data?: unknown; rows?: unknown; rawRows?: unknown };
+>>>>>>> origin/main
       if (command.action === "MODIFY_CHART") {
         setManualCharts((current) => current.length ? [...current.slice(0, -1), chartSpec] : [chartSpec]);
       } else {
@@ -421,6 +466,7 @@ export function useDashboardAiController({
     }
 
     if (command.action === "DELETE_CHART") {
+<<<<<<< HEAD
       const target = {
         id: command.targetId || command.chartSpec?.id,
         title: command.targetTitle || command.chartSpec?.title,
@@ -428,6 +474,10 @@ export function useDashboardAiController({
       };
       setManualCharts((current) => removeChartByTarget(current, target));
       setDashboardSpecs((current) => ({ ...current, charts: removeChartByTarget(current.charts, target) }));
+=======
+      setManualCharts((current) => current.slice(0, -1));
+      setDashboardSpecs((current) => ({ ...current, charts: current.charts.slice(0, -1) }));
+>>>>>>> origin/main
       pushAssistant(command.message || "Removed a chart.", { type: "action" });
       return;
     }
@@ -461,12 +511,15 @@ export function useDashboardAiController({
     setMessages((current) => [...current, { id: makeId(), role: "user", content: text }]);
 
     try {
+<<<<<<< HEAD
       const blockedMessage = blockedDashboardPrompt(text);
       if (blockedMessage) {
         pushAssistant(blockedMessage, { type: "warning", provider: "schema-guardian" });
         return;
       }
 
+=======
+>>>>>>> origin/main
       if (/understand|explain schema|schema samjhao|data samjhao/i.test(text)) {
         const result: Record<string, unknown> = await schemaAiClient.understandDatasetSchema(payload.id || "local-dataset", {
           ...payloadWithContext,
@@ -564,9 +617,12 @@ export function useDashboardAiController({
 
     try {
       const response = await schemaAiClient.sendSchemaChat(payload.id || "local-dataset", text, payloadWithContext, { useLlm });
+<<<<<<< HEAD
       if (response.assistantMessage?.provider) localStorage.setItem("last_selected_provider", response.assistantMessage.provider);
       if (response.assistantMessage?.model) localStorage.setItem("last_selected_model", response.assistantMessage.model);
 
+=======
+>>>>>>> origin/main
       pushAssistant(response.assistantMessage?.content || localFallbackAnswer(text, rows), {
         type: "text",
         model: response.assistantMessage?.model,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Menu, X } from "lucide-react";
 import AppSidebar from "@/shared/layout/AppSidebar";
@@ -7,31 +7,7 @@ import { useData } from "@/features/data/context/useData";
 
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isOffline, setIsOffline] = useState(false);
   const { dataset } = useData();
-
-  useEffect(() => {
-    let active = true;
-    const checkHealth = async () => {
-      try {
-        const res = await fetch("/api/health", { method: "GET", cache: "no-store" });
-        if (res.ok) {
-          if (active) setIsOffline(false);
-        } else {
-          if (active) setIsOffline(true);
-        }
-      } catch (err) {
-        if (active) setIsOffline(true);
-      }
-    };
-
-    checkHealth();
-    const interval = setInterval(checkHealth, 8000);
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, []);
 
   return (
     <div className="min-h-screen bg-[#F6F8FC] text-[#0F172A]">
@@ -41,11 +17,12 @@ export default function AppLayout() {
         <AppSidebar />
       </div>
 
-      <div className="sticky top-0 z-40 flex items-center justify-between border-b bg-white/90 px-4 py-3 backdrop-blur xl:hidden shadow-sm">
+      <div className="sticky top-0 z-40 flex items-center justify-between border-b bg-white/90 px-4 py-3 shadow-sm backdrop-blur xl:hidden">
         <button
           type="button"
           onClick={() => setSidebarOpen(true)}
           className="rounded-xl border bg-white p-2 text-gray-700 shadow-sm"
+          aria-label="Open sidebar"
         >
           <Menu className="size-5" />
         </button>
@@ -74,6 +51,7 @@ export default function AppLayout() {
                 type="button"
                 onClick={() => setSidebarOpen(false)}
                 className="rounded-xl border bg-white p-2 text-gray-700 shadow-sm"
+                aria-label="Close sidebar"
               >
                 <X className="size-5" />
               </button>

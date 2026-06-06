@@ -24,6 +24,7 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.cluster import KMeans
 
+<<<<<<< HEAD
 try:
     import duckdb
 except Exception:  # pragma: no cover - optional health visibility
@@ -36,6 +37,8 @@ from pdf_intelligence.pdf_ocr_engine import run_ocr_for_pdf
 from pdf_intelligence.pdf_table_extractor import extract_tables_hybrid
 from pdf_intelligence.messy_table_cleaner import clean_extracted_table
 
+=======
+>>>>>>> origin/main
 
 MAX_ANALYTICS_ROWS = 50_000
 MAX_RESPONSE_ROWS = 500
@@ -70,6 +73,7 @@ class RagTrainingPayload(DatasetPayload):
     max_examples: int = 50
 
 
+<<<<<<< HEAD
 class FastDashboardRequest(BaseModel):
     file_path: str
     metric_priority: list[str] | None = None
@@ -109,6 +113,8 @@ class PdfOcrRequest(BaseModel):
     dpi: int | None = None
 
 
+=======
+>>>>>>> origin/main
 def _json_safe(value: Any) -> Any:
     if isinstance(value, dict):
         return {str(key): _json_safe(val) for key, val in value.items()}
@@ -217,13 +223,17 @@ def health():
         "status": "healthy",
         "engine": "fastapi",
         "polarsAvailable": pl is not None,
+<<<<<<< HEAD
         "duckdbAvailable": duckdb is not None,
         "fastDashboardEngine": duckdb is not None,
         "pdfIntelligenceAvailable": True,
+=======
+>>>>>>> origin/main
         "cacheEntries": len(analytics_cache),
     }
 
 
+<<<<<<< HEAD
 @app.post("/fast-dashboard")
 def fast_dashboard(payload: FastDashboardRequest):
     try:
@@ -335,6 +345,8 @@ def pdf_intelligence_extract_tables(payload: PdfTableExtractRequest):
         raise HTTPException(status_code=400, detail=str(error))
 
 
+=======
+>>>>>>> origin/main
 @app.post("/profile")
 def profile(payload: DatasetPayload):
     def build(df: pd.DataFrame, columns: list[str]):

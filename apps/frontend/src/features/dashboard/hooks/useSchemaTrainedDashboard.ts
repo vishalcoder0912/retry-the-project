@@ -106,9 +106,25 @@ function isSalaryDataset(rows: DataRow[], columns: string[]) {
 
 function strictSalaryKpis(columns: string[]): SchemaDashboardKpiSpec[] {
   const salary = findColumn(columns, ["salary_usd", "salary", "income"]);
+<<<<<<< HEAD
   const country = findColumn(columns, ["country", "region", "location"]);
 
   const kpis: SchemaDashboardKpiSpec[] = [];
+=======
+  const experience = findColumn(columns, ["experience", "years_experience", "exp"]);
+  const country = findColumn(columns, ["country", "region", "location"]);
+
+  const kpis: SchemaDashboardKpiSpec[] = [
+    {
+      id: "total-records",
+      title: "Total Records",
+      metric: "__row_count__",
+      aggregation: "count",
+      format: "number",
+      businessKpi: true,
+    },
+  ];
+>>>>>>> origin/main
 
   if (salary) {
     kpis.push(
@@ -121,12 +137,24 @@ function strictSalaryKpis(columns: string[]): SchemaDashboardKpiSpec[] {
         businessKpi: true,
       },
       {
+<<<<<<< HEAD
+=======
+        id: "median-salary",
+        title: "Median Salary",
+        metric: salary,
+        aggregation: "median",
+        format: "currency",
+        businessKpi: true,
+      },
+      {
+>>>>>>> origin/main
         id: "highest-salary",
         title: "Highest Salary",
         metric: salary,
         aggregation: "max",
         format: "currency",
         businessKpi: true,
+<<<<<<< HEAD
       }
     );
   }
@@ -146,15 +174,52 @@ function strictSalaryKpis(columns: string[]): SchemaDashboardKpiSpec[] {
       title: "Countries Covered",
       metric: country,
       aggregation: "count_unique",
+=======
+      },
+    );
+  }
+
+  if (experience) {
+    kpis.push({
+      id: "average-experience",
+      title: "Average Experience",
+      metric: experience,
+      aggregation: "avg",
+>>>>>>> origin/main
       format: "number",
       businessKpi: true,
     });
   }
 
+<<<<<<< HEAD
+=======
+  if (country) {
+    kpis.push(
+      {
+        id: "countries",
+        title: "Countries",
+        metric: country,
+        aggregation: "count_unique",
+        format: "number",
+        businessKpi: true,
+      },
+      {
+        id: "top-paying-country",
+        title: "Top Paying Country",
+        metric: country,
+        aggregation: "top_by_avg",
+        format: "text",
+        businessKpi: true,
+      },
+    );
+  }
+
+>>>>>>> origin/main
   return kpis;
 }
 
 function strictSalaryCharts(columns: string[]): SchemaDashboardChartSpec[] {
+<<<<<<< HEAD
   const salary = findColumn(columns, ["salary_usd", "salary", "income"]) || "salary_usd";
   const experience = findColumn(columns, ["experience", "years_experience", "exp"]) || "experience";
   const country = findColumn(columns, ["country", "region", "location"]) || "country";
@@ -163,6 +228,33 @@ function strictSalaryCharts(columns: string[]): SchemaDashboardChartSpec[] {
 
   return [
     {
+=======
+  const salary = findColumn(columns, ["salary_usd", "salary", "income"]);
+  const experience = findColumn(columns, ["experience", "years_experience", "exp"]);
+  const country = findColumn(columns, ["country", "region", "location"]);
+  const education = findColumn(columns, ["education", "degree", "qualification"]);
+  const languages = findColumn(columns, ["languages", "language", "programming_language"]);
+  const frameworks = findColumn(columns, ["frameworks", "framework", "library"]);
+  const companySize = findColumn(columns, ["company_size", "company", "size"]);
+
+  const charts: SchemaDashboardChartSpec[] = [];
+
+  if (salary && country) {
+    charts.push({
+      id: "avg-salary-by-country",
+      title: "Average Salary by Country",
+      type: "bar",
+      xKey: country,
+      yKey: salary,
+      aggregation: "avg",
+      intent: "geo_ranking",
+      limit: 10,
+    });
+  }
+
+  if (salary) {
+    charts.push({
+>>>>>>> origin/main
       id: "salary-distribution",
       title: "Salary Distribution",
       type: "histogram",
@@ -171,6 +263,7 @@ function strictSalaryCharts(columns: string[]): SchemaDashboardChartSpec[] {
       aggregation: "count",
       intent: "distribution",
       limit: 12,
+<<<<<<< HEAD
     },
     {
       id: "salary-by-country",
@@ -185,12 +278,22 @@ function strictSalaryCharts(columns: string[]): SchemaDashboardChartSpec[] {
     {
       id: "experience-vs-salary",
       title: "Experience vs Salary",
+=======
+    });
+  }
+
+  if (experience && salary) {
+    charts.push({
+      id: "salary-vs-experience",
+      title: "Salary vs Experience",
+>>>>>>> origin/main
       type: "scatter",
       xKey: experience,
       yKey: salary,
       aggregation: "none",
       intent: "relationship",
       limit: 500,
+<<<<<<< HEAD
     },
     {
       id: "education-distribution",
@@ -205,12 +308,35 @@ function strictSalaryCharts(columns: string[]): SchemaDashboardChartSpec[] {
     {
       id: "salary-by-company-size",
       title: "Salary by Company Size",
+=======
+    });
+  }
+
+  if (education && salary) {
+    charts.push({
+      id: "avg-salary-by-education",
+      title: "Average Salary by Education",
+      type: "bar",
+      xKey: education,
+      yKey: salary,
+      aggregation: "avg",
+      intent: "segment_comparison",
+      limit: 10,
+    });
+  }
+
+  if (companySize && salary) {
+    charts.push({
+      id: "avg-salary-by-company-size",
+      title: "Average Salary by Company Size",
+>>>>>>> origin/main
       type: "bar",
       xKey: companySize,
       yKey: salary,
       aggregation: "avg",
       intent: "segment_comparison",
       limit: 10,
+<<<<<<< HEAD
     },
     {
       id: "country-salary-heatmap",
@@ -233,6 +359,44 @@ function strictSalaryCharts(columns: string[]): SchemaDashboardChartSpec[] {
       limit: 10,
     },
   ];
+=======
+    });
+  }
+
+  if (languages && salary) {
+    charts.push({
+      id: "avg-salary-by-language",
+      title: "Average Salary by Language",
+      type: "bar",
+      xKey: languages,
+      yKey: salary,
+      aggregation: "avg",
+      intent: "skill_salary_impact",
+      multiValue: true,
+      splitValues: true,
+      splitDelimiter: ",",
+      limit: 10,
+    });
+  }
+
+  if (frameworks && salary) {
+    charts.push({
+      id: "avg-salary-by-framework",
+      title: "Average Salary by Framework",
+      type: "bar",
+      xKey: frameworks,
+      yKey: salary,
+      aggregation: "avg",
+      intent: "skill_salary_impact",
+      multiValue: true,
+      splitValues: true,
+      splitDelimiter: ",",
+      limit: 10,
+    });
+  }
+
+  return charts.slice(0, 7);
+>>>>>>> origin/main
 }
 
 function makeLocalFallbackDashboard(
@@ -486,8 +650,11 @@ export function useSchemaTrainedDashboard({
       setMemoryMatch(data.memoryMatch || data.match || null);
       setModel(data.model);
       setProvider(data.provider || "schema-trained-api");
+<<<<<<< HEAD
       if (data.provider) localStorage.setItem("last_selected_provider", data.provider);
       if (data.model) localStorage.setItem("last_selected_model", data.model);
+=======
+>>>>>>> origin/main
 
       applyDashboardPlan(plan, data.provider || "schema-trained-api");
 
@@ -715,8 +882,11 @@ export function useSchemaTrainedDashboard({
         applyCommand(command);
 
         setProvider(command?.provider || "dashboard-command");
+<<<<<<< HEAD
         if (command?.provider) localStorage.setItem("last_selected_provider", command.provider);
         if (command?.model) localStorage.setItem("last_selected_model", command.model);
+=======
+>>>>>>> origin/main
 
         setMessages((current) => [
           ...current,
@@ -785,6 +955,7 @@ export function useSchemaTrainedDashboard({
           useLlm: true,
         } as Record<string, unknown>);
 
+<<<<<<< HEAD
         const chatData = response?.data || response;
         if (chatData?.assistantMessage?.provider || chatData?.provider) {
           localStorage.setItem("last_selected_provider", chatData.assistantMessage?.provider || chatData.provider);
@@ -793,12 +964,18 @@ export function useSchemaTrainedDashboard({
           localStorage.setItem("last_selected_model", chatData.assistantMessage?.model || chatData.model);
         }
 
+=======
+>>>>>>> origin/main
         setMessages((current) => [
           ...current,
           {
             role: "assistant",
             content:
+<<<<<<< HEAD
               chatData?.assistantMessage?.content ||
+=======
+              response?.data?.assistantMessage?.content ||
+>>>>>>> origin/main
               "I generated a schema-safe explanation.",
           },
         ]);

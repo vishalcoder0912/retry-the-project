@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+<<<<<<< HEAD
 import { useEffect, useState } from "react";
 import {
   AlertTriangle,
@@ -29,6 +30,20 @@ type ProvidersHealth = {
     ollama?: { available?: boolean };
   };
 };
+=======
+import {
+  FileText,
+  LayoutDashboard,
+  Upload,
+  MessageSquare,
+  Table2,
+  LineChart,
+  Sparkles,
+  BrainCircuit,
+} from "lucide-react";
+import ThemeToggle from "@/shared/layout/ThemeToggle";
+import { cn } from "@/shared/lib/utils";
+>>>>>>> origin/main
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -41,6 +56,7 @@ const navItems = [
   { path: "/agentic-data-science", label: "Data Science", icon: BrainCircuit },
 ];
 
+<<<<<<< HEAD
 function ProviderPill({ online }: { online: boolean }) {
   return (
     <span
@@ -59,6 +75,14 @@ function ProviderPill({ online }: { online: boolean }) {
 
 export default function AppSidebar({ onNavigate, className }: Props) {
   const { dataset } = useData();
+=======
+type Props = {
+  onNavigate?: () => void;
+  className?: string;
+};
+
+export default function AppSidebar({ onNavigate, className }: Props) {
+>>>>>>> origin/main
   const location = useLocation();
   const [health, setHealth] = useState<ProvidersHealth | null>(null);
   const [checking, setChecking] = useState(false);
@@ -90,6 +114,7 @@ export default function AppSidebar({ onNavigate, className }: Props) {
   return (
     <aside
       className={cn(
+<<<<<<< HEAD
         "relative flex h-screen w-64 flex-col overflow-hidden border-r border-[rgba(148,163,184,0.16)] bg-[#081225] text-[#F8FAFC] shadow-2xl",
         className,
       )}
@@ -108,10 +133,25 @@ export default function AppSidebar({ onNavigate, className }: Props) {
             ) : (
               <p className="mt-0.5 truncate text-xs font-medium text-[#94A3B8]">Agentic AI Analytics</p>
             )}
+=======
+        "flex h-full w-72 flex-col border-r border-slate-800/70 bg-[#081121]/95 backdrop-blur",
+        className,
+      )}
+    >
+      <div className="border-b border-slate-800/70 p-5">
+        <Link to="/dashboard" className="flex items-center gap-3" onClick={onNavigate}>
+          <div className="flex size-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#7c3aed] via-[#8b5cf6] to-[#2563eb] shadow-lg shadow-violet-500/25">
+            <Sparkles className="size-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold text-white">InsightFlow</h1>
+            <p className="text-xs text-slate-400">Analytics Platform</p>
+>>>>>>> origin/main
           </div>
         </Link>
       </div>
 
+<<<<<<< HEAD
       <div className="relative px-5 pb-2 pt-5">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#64748B]">Menu</p>
       </div>
@@ -122,10 +162,25 @@ export default function AppSidebar({ onNavigate, className }: Props) {
             location.pathname === item.path ||
             (item.path === "/dashboard" && location.pathname === "/") ||
             (item.path === "/pdf" && location.pathname === "/pdf-upload");
+=======
+      <div className="px-4 py-5">
+        <p className="px-3 text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+          Menu
+        </p>
+      </div>
+
+      <nav className="flex-1 space-y-1 px-3">
+        {navItems.map((item) => {
+          const isActive =
+            location.pathname === item.path ||
+            (item.path === "/dashboard" && location.pathname === "/");
+
+>>>>>>> origin/main
           return (
             <Link key={item.path} to={item.path} onClick={onNavigate} className="block">
               <div
                 className={cn(
+<<<<<<< HEAD
                   "group flex h-11 items-center gap-3 rounded-xl px-3.5 text-sm font-semibold transition duration-200",
                   active
                     ? "bg-gradient-to-r from-[#7C3AED] to-[#2563EB] text-[#FFFFFF] shadow-lg shadow-violet-900/30"
@@ -136,12 +191,23 @@ export default function AppSidebar({ onNavigate, className }: Props) {
                   <item.icon className={cn("size-5", active ? "text-[#FFFFFF]" : "text-[#94A3B8] group-hover:text-[#F8FAFC]")} />
                 </span>
                 <span className="truncate leading-none">{item.label}</span>
+=======
+                  "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all",
+                  isActive
+                    ? "bg-gradient-to-r from-violet-600/85 to-blue-600/70 text-white shadow-lg shadow-violet-500/10"
+                    : "text-slate-300 hover:bg-slate-800/70 hover:text-white",
+                )}
+              >
+                <item.icon className="size-5" />
+                <span>{item.label}</span>
+>>>>>>> origin/main
               </div>
             </Link>
           );
         })}
       </nav>
 
+<<<<<<< HEAD
       <div className="relative mt-4 p-3.5 pt-2">
         <div className="rounded-2xl border border-[rgba(148,163,184,0.28)] bg-[rgba(15,23,42,0.88)] p-4 shadow-[0_18px_45px_rgba(2,6,23,0.28),inset_0_1px_0_rgba(255,255,255,0.06)]">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -184,6 +250,23 @@ export default function AppSidebar({ onNavigate, className }: Props) {
               <span>{warning}</span>
             </div>
           )}
+=======
+      <div className="space-y-3 border-t border-slate-800/70 p-4">
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-3">
+          <div className="mb-3 flex items-center justify-between text-xs text-slate-400">
+            <span>Theme</span>
+            <span>Dark / Light</span>
+          </div>
+          <ThemeToggle />
+        </div>
+
+        <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-200">
+            <span className="size-2.5 rounded-full bg-green-400 shadow-[0_0_12px_rgba(74,222,128,0.9)]" />
+            All systems operational
+          </div>
+          <p className="mt-2 text-xs text-slate-500">Last checked: 2 min ago</p>
+>>>>>>> origin/main
         </div>
       </div>
     </aside>

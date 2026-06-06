@@ -4,6 +4,7 @@ export type StoredDashboardState = {
   filters: DashboardFilters;
   manualCharts: DashboardChart[];
   manualKpis: DashboardKpi[];
+<<<<<<< HEAD
   aiChatMessages?: Array<{
     id: string;
     role: "user" | "assistant";
@@ -23,6 +24,8 @@ export type StoredDashboardState = {
     source: "chat" | "command-bar" | "dashboard" | "agent";
   };
   geoActive?: boolean;
+=======
+>>>>>>> origin/main
 };
 
 function getKey(datasetId?: string) {
@@ -42,10 +45,13 @@ export function loadDashboardState(datasetId?: string): StoredDashboardState {
       filters: parsed.filters || {},
       manualCharts: Array.isArray(parsed.manualCharts) ? parsed.manualCharts : [],
       manualKpis: Array.isArray(parsed.manualKpis) ? parsed.manualKpis : [],
+<<<<<<< HEAD
       aiChatMessages: Array.isArray(parsed.aiChatMessages) ? parsed.aiChatMessages : [],
       auditTrail: Array.isArray(parsed.auditTrail) ? parsed.auditTrail : [],
       lastAction: parsed.lastAction,
       geoActive: Boolean(parsed.geoActive),
+=======
+>>>>>>> origin/main
     };
   } catch {
     return { filters: {}, manualCharts: [], manualKpis: [] };
@@ -56,6 +62,7 @@ export function saveDashboardState(datasetId: string | undefined, state: StoredD
   if (!datasetId || typeof window === "undefined") return;
   window.localStorage.setItem(getKey(datasetId), JSON.stringify(state));
 }
+<<<<<<< HEAD
 
 export function recordDashboardAction(
   datasetId: string | undefined,
@@ -82,3 +89,5 @@ export function recordDashboardAction(
     },
   });
 }
+=======
+>>>>>>> origin/main
