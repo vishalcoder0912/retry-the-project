@@ -78,7 +78,7 @@ class AIManager {
     // Initialize Anthropic
     if (this.priority.includes('anthropic')) {
       try {
-        const anthropic = new AnthropicProvider(config.anthropic);
+        const anthropic = new AnthropicProvider({ ...config.anthropic, rateLimit: config.rateLimit });
         await anthropic.initialize();
         this.providers.set('anthropic', anthropic);
         console.log('✅ Anthropic provider initialized');
