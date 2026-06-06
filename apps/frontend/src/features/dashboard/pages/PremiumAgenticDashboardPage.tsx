@@ -18,6 +18,7 @@ import type { PremiumChart } from "@/features/dashboard/types/premiumDashboardTy
 import GlobalGeoIntelligence from "@/features/dashboard/components/GlobalGeoIntelligence";
 
 const PremiumChartCard = lazy(() => import("@/features/dashboard/components/PremiumChartCard"));
+const EMPTY_CHARTS: PremiumChart[] = [];
 
 export default function PremiumAgenticDashboardPage() {
   const navigate = useNavigate();
@@ -29,7 +30,8 @@ export default function PremiumAgenticDashboardPage() {
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
   
   // Chart management state
-  const chartManager = useChartManager(dashboard?.charts || []);
+  const dashboardCharts = dashboard?.charts ?? EMPTY_CHARTS;
+  const chartManager = useChartManager(dashboardCharts);
   const [modalType, setModalType] = useState<"customize" | "build" | null>(null);
   const hasGeoColumn = useMemo(
     () => Boolean(dataset?.columns.some((column) => /country|region|state|city|location|territory|province|geo|lat|lon/i.test(column.name) || ["country", "city", "latitude", "longitude"].includes(column.type))),
@@ -76,10 +78,8 @@ export default function PremiumAgenticDashboardPage() {
   });
 
   useEffect(() => {
-    if (!analyticsTabs.includes(activeAnalyticsTab)) {
-      setActiveAnalyticsTab("Overview");
-    }
-  }, [activeAnalyticsTab, analyticsTabs]);
+    setActiveAnalyticsTab((currentTab) => (analyticsTabs.includes(currentTab) ? currentTab : "Overview"));
+  }, [analyticsTabs]);
 
   useEffect(() => {
     setChartsReady(false);

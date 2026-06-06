@@ -6,6 +6,33 @@ import type {
   ChartOperationResult,
 } from "@/features/dashboard/types/chartManagementTypes";
 
+const chartsMatch = (left: PremiumChart[], right: PremiumChart[]) => {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+
+  return left.every((chart, index) => {
+    const other = right[index];
+    return (
+      other &&
+      chart.id === other.id &&
+      chart.title === other.title &&
+      chart.type === other.type &&
+      chart.subtitle === other.subtitle &&
+      chart.xKey === other.xKey &&
+      chart.yKey === other.yKey &&
+      chart.data.length === other.data.length
+    );
+  });
+};
+
+const setsMatch = (left: Set<string>, right: Set<string>) => {
+  if (left.size !== right.size) return false;
+  for (const item of left) {
+    if (!right.has(item)) return false;
+  }
+  return true;
+};
+
 export function useChartManager(initialCharts: PremiumChart[]) {
   const [charts, setCharts] = useState<PremiumChart[]>(initialCharts);
   const [history, setHistory] = useState<ChartAction[]>([]);
@@ -15,9 +42,13 @@ export function useChartManager(initialCharts: PremiumChart[]) {
   const [selectedChartId, setSelectedChartId] = useState<string | null>(null);
 
   useEffect(() => {
-    setCharts(initialCharts);
-    setVisibleCharts(new Set(initialCharts.map((chart) => chart.id)));
-    setSelectedChartId(null);
+    const nextVisibleCharts = new Set(initialCharts.map((chart) => chart.id));
+
+    setCharts((currentCharts) => (chartsMatch(currentCharts, initialCharts) ? currentCharts : initialCharts));
+    setVisibleCharts((currentVisibleCharts) =>
+      setsMatch(currentVisibleCharts, nextVisibleCharts) ? currentVisibleCharts : nextVisibleCharts,
+    );
+    setSelectedChartId((currentChartId) => (currentChartId && nextVisibleCharts.has(currentChartId) ? currentChartId : null));
   }, [initialCharts]);
 
   const saveToHistory = useCallback((action: ChartAction) => {
