@@ -12,6 +12,11 @@ export class AnthropicProvider {
     this.available = false;
     this.client = null;
     this.initialized = false;
+    this.lastRequestTime = 0;
+    this.requestCount = 0;
+    this.rpm = config.rateLimit?.rpm || 10;
+    this.cooldownMs = config.rateLimit?.cooldownAfterErrorMs || 30000;
+    this.minIntervalMs = Math.ceil(60000 / this.rpm);
   }
 
   async initialize() {
@@ -60,12 +65,23 @@ export class AnthropicProvider {
     }
   }
 
+  _enforceRateLimit() {
+    const now = Date.now();
+    if (now - this.lastRequestTime < this.minIntervalMs) {
+      const waitMs = this.minIntervalMs - (now - this.lastRequestTime);
+      throw new AIProviderError(`Rate limit: wait ${waitMs}ms between requests`, 'anthropic');
+    }
+    this.lastRequestTime = now;
+    this.requestCount++;
+  }
+
   async generate(prompt, options = {}) {
     if (!this.available) {
       throw new AIProviderError('Anthropic service not available', 'anthropic');
     }
 
     try {
+      this._enforceRateLimit();
       console.log('🧠 Anthropic generating response...');
       const startTime = Date.now();
 
@@ -115,6 +131,7 @@ export class AnthropicProvider {
     }
 
     try {
+      this._enforceRateLimit();
       console.log('💬 Anthropic chat with messages...');
       const startTime = Date.now();
 
