@@ -162,15 +162,19 @@ export class AnalyticsEngine {
       return this.getFallbackSchema(dataset);
     }
 
-    const dataPreview = JSON.stringify(dataset.data.slice(0, 5), null, 2);
-    const columnInfo = dataset.columns.map((col) => ({
-      name: col,
-      sample_values: dataset.data
-        .slice(0, 3)
-        .map((row) => row[col]),
-    }));
+    try {
+      const dataPreview = JSON.stringify((dataset.data || dataset.rows || []).slice(0, 5), null, 2);
+      const columns = Array.isArray(dataset.columns) ? dataset.columns : [];
+      const data = Array.isArray(dataset.data) ? dataset.data : (Array.isArray(dataset.rows) ? dataset.rows : []);
+      const columnInfo = columns.map((col) => {
+        const colName = typeof col === "string" ? col : col?.name;
+        return {
+          name: colName || "",
+          sample_values: data.slice(0, 3).map((row) => row?.[colName]),
+        };
+      });
 
-    const prompt = `
+      const prompt = `
 Analyze this dataset and generate a semantic schema for analytics:
 
 Columns: ${JSON.stringify(columnInfo)}
@@ -203,13 +207,17 @@ Respond with ONLY valid JSON (no markdown, no explanation):
   ]
 }`;
 
-    const response = await this.model.generateContent(prompt);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+      const response = await this.model.generateContent(prompt);
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        return this.getFallbackSchema(dataset);
+      }
+
+      return JSON.parse(jsonMatch[0]);
+    } catch (error) {
+      console.warn("AI analyzeDatasetStructure failed, using fallback schema:", error.message);
       return this.getFallbackSchema(dataset);
     }
-
-    return JSON.parse(jsonMatch[0]);
   }
 
   async generateKPIs(schema, dataset) {
@@ -252,9 +260,10 @@ Respond with ONLY valid JSON array (no markdown, no explanation):
       return this.getFallbackVisualizations(schema);
     }
 
-    const correlationAnalysis = this.analyzeCorrelations(dataset, schema);
+    try {
+      const correlationAnalysis = this.analyzeCorrelations(dataset, schema);
 
-    const prompt = `
+      const prompt = `
 Generate 15-18 professional data visualizations for an enterprise analytics dashboard.
 
 Dataset Domain: ${schema.dataset_domain}
@@ -281,28 +290,35 @@ Respond with ONLY valid JSON array (no markdown):
   }
 ]`;
 
-    const response = await this.model.generateContent(prompt);
-    const jsonMatch = response.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return this.getFallbackVisualizations(schema);
+      const response = await this.model.generateContent(prompt);
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return this.getFallbackVisualizations(schema);
 
-    return JSON.parse(jsonMatch[0]);
+      return JSON.parse(jsonMatch[0]);
+    } catch (error) {
+      console.warn("AI generateVisualizations failed, using fallback visualizations:", error.message);
+      return this.getFallbackVisualizations(schema);
+    }
   }
 
   async buildExecutiveDashboard(schema, kpis, visualizations) {
+    const fallbackVal = {
+      title: "Executive Dashboard",
+      domain: schema.dataset_domain,
+      kpis: kpis.slice(0, 8),
+      charts: visualizations.slice(0, 12),
+      insights: [],
+      layout: { sections: ["Executive Overview", "Analytics"] },
+      filters: [],
+      recommendations: [],
+    };
+
     if (!this.model.isAvailable()) {
-      return {
-        title: "Executive Dashboard",
-        domain: schema.dataset_domain,
-        kpis: kpis.slice(0, 8),
-        charts: visualizations.slice(0, 12),
-        insights: [],
-        layout: { sections: ["Executive Overview", "Analytics"] },
-        filters: [],
-        recommendations: [],
-      };
+      return fallbackVal;
     }
 
-    const prompt = `
+    try {
+      const prompt = `
 Create an executive-grade analytics dashboard structure:
 
 Domain: ${schema.dataset_domain}
@@ -330,32 +346,27 @@ Respond with ONLY valid JSON (no markdown):
   "recommendations": ["action recommendation 1"]
 }`;
 
-    const response = await this.model.generateContent(prompt);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+      const response = await this.model.generateContent(prompt);
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        return fallbackVal;
+      }
+
+      const dashboardConfig = JSON.parse(jsonMatch[0]);
       return {
-        title: "Executive Dashboard",
+        title: dashboardConfig.title || "Executive Dashboard",
         domain: schema.dataset_domain,
         kpis: kpis.slice(0, 8),
         charts: visualizations.slice(0, 12),
-        insights: [],
-        layout: { sections: ["Executive Overview", "Analytics"] },
-        filters: [],
-        recommendations: [],
+        insights: dashboardConfig.insights || [],
+        layout: dashboardConfig.layout || {},
+        filters: dashboardConfig.filters || [],
+        recommendations: dashboardConfig.recommendations || [],
       };
+    } catch (error) {
+      console.warn("AI buildExecutiveDashboard failed, using fallback dashboard config:", error.message);
+      return fallbackVal;
     }
-
-    const dashboardConfig = JSON.parse(jsonMatch[0]);
-    return {
-      title: dashboardConfig.title || "Executive Dashboard",
-      domain: schema.dataset_domain,
-      kpis: kpis.slice(0, 8),
-      charts: visualizations.slice(0, 12),
-      insights: dashboardConfig.insights || [],
-      layout: dashboardConfig.layout || {},
-      filters: dashboardConfig.filters || [],
-      recommendations: dashboardConfig.recommendations || [],
-    };
   }
 
   async generateAIInsights(schema, dataset) {
@@ -363,10 +374,11 @@ Respond with ONLY valid JSON (no markdown):
       return this.getFallbackInsights(dataset);
     }
 
-    const statistics = this.calculateDataStatistics(dataset);
-    const outliers = this.detectOutliers(dataset, schema);
+    try {
+      const statistics = this.calculateDataStatistics(dataset);
+      const outliers = this.detectOutliers(dataset, schema);
 
-    const prompt = `
+      const prompt = `
 Generate 8-10 executive-level insights from this dataset:
 
 Domain: ${schema.dataset_domain}
@@ -389,11 +401,15 @@ Respond with ONLY valid JSON array:
   }
 ]`;
 
-    const response = await this.model.generateContent(prompt);
-    const jsonMatch = response.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) return this.getFallbackInsights(dataset);
+      const response = await this.model.generateContent(prompt);
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return this.getFallbackInsights(dataset);
 
-    return JSON.parse(jsonMatch[0]);
+      return JSON.parse(jsonMatch[0]);
+    } catch (error) {
+      console.warn("AI generateAIInsights failed, using fallback insights:", error.message);
+      return this.getFallbackInsights(dataset);
+    }
   }
 
   async respondToAnalyticsQuery(query, schema, dataset) {
@@ -406,7 +422,8 @@ Respond with ONLY valid JSON array:
       };
     }
 
-    const prompt = `
+    try {
+      const prompt = `
 You are an enterprise analytics assistant. Answer this analytics query about the dataset:
 
 Query: "${query}"
@@ -427,37 +444,52 @@ Respond in JSON format:
   "key_metrics": {"metric_name": "value"}
 }`;
 
-    const response = await this.model.generateContent(prompt);
-    const jsonMatch = response.match(/\{[\s\S]*\}/);
+      const response = await this.model.generateContent(prompt);
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
 
-    if (!jsonMatch) {
+      if (!jsonMatch) {
+        return {
+          response: response,
+          charts: [],
+        };
+      }
+
+      return JSON.parse(jsonMatch[0]);
+    } catch (error) {
+      console.warn("AI respondToAnalyticsQuery failed:", error.message);
       return {
-        response: response,
+        response: `AI query failed: ${error.message}. Standard fallback analysis was processed.`,
         charts: [],
       };
     }
-
-    return JSON.parse(jsonMatch[0]);
   }
 
   getFallbackSchema(dataset) {
-    const columns = dataset.columns;
-    const numericCols = columns.filter((col) =>
-      dataset.data.some((row) => typeof row[col] === "number")
-    );
+    const columns = Array.isArray(dataset?.columns) ? dataset.columns : [];
+    const data = Array.isArray(dataset?.data) ? dataset.data : (Array.isArray(dataset?.rows) ? dataset.rows : []);
+
+    const numericCols = columns.filter((col) => {
+      const colName = typeof col === "string" ? col : col?.name;
+      return colName && data.some((row) => typeof row?.[colName] === "number");
+    });
     const stringCols = columns.filter(
       (col) => !numericCols.includes(col)
     );
+    const geoCols = stringCols.filter((col) => {
+      const colName = typeof col === "string" ? col : col?.name;
+      return colName && /country|state|city|region|location|address|market|territory|latitude|longitude/i.test(colName);
+    });
 
     return {
       dataset_domain: "Analytics Dataset",
       fact_entity: "Records",
-      dimensions: stringCols.slice(0, 5),
-      measures: numericCols.slice(0, 5),
-      geo_dimensions: [],
-      time_columns: columns.filter(
-        (c) => c.toLowerCase().includes("date") || c.toLowerCase().includes("time")
-      ),
+      dimensions: stringCols.map(c => typeof c === "string" ? c : c?.name).filter(Boolean).slice(0, 5),
+      measures: numericCols.map(c => typeof c === "string" ? c : c?.name).filter(Boolean).slice(0, 5),
+      geo_dimensions: geoCols.map(c => typeof c === "string" ? c : c?.name).filter(Boolean),
+      time_columns: columns
+        .map(c => typeof c === "string" ? c : c?.name)
+        .filter(Boolean)
+        .filter((c) => c.toLowerCase().includes("date") || c.toLowerCase().includes("time")),
       recommended_kpis: [],
       recommended_visualizations: [],
     };
@@ -542,22 +574,26 @@ Respond in JSON format:
 
   calculateDataStatistics(dataset) {
     const stats = {};
+    const columns = Array.isArray(dataset?.columns) ? dataset.columns : [];
+    const data = Array.isArray(dataset?.data) ? dataset.data : (Array.isArray(dataset?.rows) ? dataset.rows : []);
 
-    for (const col of dataset.columns) {
-      const values = dataset.data.map((row) => row[col]);
+    for (const col of columns) {
+      const colName = typeof col === "string" ? col : col?.name;
+      if (!colName) continue;
+      const values = data.map((row) => row[colName]);
       const numericValues = values
         .filter((v) => typeof v === "number")
         .sort((a, b) => a - b);
 
       if (numericValues.length > 0) {
         const sum = numericValues.reduce((a, b) => a + b, 0);
-        stats[`${col}_avg`] = sum / numericValues.length;
-        stats[`${col}_min`] = numericValues[0];
-        stats[`${col}_max`] = numericValues[numericValues.length - 1];
-        stats[`${col}_count`] = numericValues.length;
+        stats[`${colName}_avg`] = sum / numericValues.length;
+        stats[`${colName}_min`] = numericValues[0];
+        stats[`${colName}_max`] = numericValues[numericValues.length - 1];
+        stats[`${colName}_count`] = numericValues.length;
       } else {
         const uniqueCount = new Set(values).size;
-        stats[`${col}_unique`] = uniqueCount;
+        stats[`${colName}_unique`] = uniqueCount;
       }
     }
 
