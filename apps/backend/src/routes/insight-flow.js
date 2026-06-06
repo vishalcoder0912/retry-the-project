@@ -45,6 +45,10 @@ export async function handleInsightFlowRoutes(request, response, pathname) {
       const body = await readJsonBody(request);
       const { datasetId, rows, columns } = body;
 
+      if (columns !== undefined && columns !== null && !Array.isArray(columns)) {
+        throw new TypeError("columns must be an array");
+      }
+
       let dataset;
 
       if (datasetId) {

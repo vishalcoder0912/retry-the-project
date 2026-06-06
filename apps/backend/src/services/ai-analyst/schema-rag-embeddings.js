@@ -4,7 +4,7 @@ const DEFAULT_OLLAMA_BASE_URL =
   process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 
 const DEFAULT_EMBEDDING_MODEL =
-  process.env.RAG_EMBEDDING_MODEL || "nomic-embed-text";
+  process.env.RAG_EMBEDDING_MODEL || OLLAMA_AGENT_MODELS.embedding;
 
 const DEFAULT_VECTOR_SIZE = Number(process.env.RAG_FALLBACK_VECTOR_SIZE || 384);
 
@@ -75,7 +75,7 @@ async function callOllamaEmbedApi(text, model) {
   const { signal, clear } = timeoutSignal();
 
   try {
-    const response = await fetch(`${DEFAULT_OLLAMA_BASE_URL}/api/embed`, {
+    const response = await fetch(`${OLLAMA_HOST}/api/embed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, input: text }),
@@ -106,7 +106,7 @@ async function callOllamaEmbeddingsApi(text, model) {
   const { signal, clear } = timeoutSignal();
 
   try {
-    const response = await fetch(`${DEFAULT_OLLAMA_BASE_URL}/api/embeddings`, {
+    const response = await fetch(`${OLLAMA_HOST}/api/embeddings`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model, prompt: text }),

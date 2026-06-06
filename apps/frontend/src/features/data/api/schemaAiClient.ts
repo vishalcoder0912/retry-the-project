@@ -58,22 +58,37 @@ export type SchemaChatResponse = {
 import { API_BASE_URL } from "@/config/apiConfig";
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || API_BASE_URL).replace(/\/$/, "");
+const DEFAULT_REQUEST_TIMEOUT_MS = 18000;
 
 function endpoint(path: string) {
   return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(endpoint(path), {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+  let response: Response;
+
+  try {
+    response = await fetch(endpoint(path), {
+      ...init,
+      signal: init.signal || controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Request timed out. The local AI service may still be working, but the UI has recovered.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   const text = await response.text();
-  let payload: any = null;
+  let payload: unknown = null;
 
   try {
     payload = text ? JSON.parse(text) : null;
@@ -81,13 +96,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     payload = { raw: text };
   }
 
-  if (!response.ok || payload?.success === false) {
-    const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
-    const details = payload?.error?.details || payload?.raw || "";
+  const envelope = payload as {
+    success?: boolean;
+    data?: unknown;
+    message?: string;
+    raw?: string;
+    error?: { message?: string; details?: string };
+  } | null;
+
+  if (!response.ok || envelope?.success === false) {
+    const message = envelope?.error?.message || envelope?.message || `HTTP ${response.status}`;
+    const details = envelope?.error?.details || envelope?.raw || "";
     throw new Error(details ? `${message}: ${details}` : message);
   }
 
-  return (payload?.data ?? payload) as T;
+  return (envelope?.data ?? payload) as T;
 }
 
 function safeDatasetBody(dataset?: DatasetPayload) {
@@ -145,6 +168,30 @@ export const schemaAiClient = {
       }),
     }),
 
+  runExcelAnalyze: (
+    datasetId: string,
+    payload: Record<string, unknown>,
+  ) =>
+    request(`/api/datasets/${encodeURIComponent(datasetId)}/excel-analyze`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  runExcelChat: (
+    datasetId: string,
+    payload: Record<string, unknown>,
+  ) =>
+    request<ExcelAnalystResponse>(`/api/datasets/${encodeURIComponent(datasetId)}/excel-chat`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  trainExcelRagSeeds: (payload: Record<string, unknown> = {}) =>
+    request("/api/ai/excel-rag/train-seeds", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   trainSchemaDashboard: (
     datasetId: string,
     dataset: DatasetPayload,
@@ -193,6 +240,18 @@ export const schemaAiClient = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  generateSeniorDashboard: (datasetId: string, payload: Record<string, unknown>) =>
+    request(`/api/datasets/${encodeURIComponent(datasetId)}/senior-dashboard`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  trainSeniorAnalystSeeds: () =>
+    request("/api/ai/senior-analyst/train-seeds", {
+      method: "POST",
+      body: JSON.stringify({ useOllama: false }),
+    }),
 };
 
 export function getSchemaRagMemory() {
@@ -221,6 +280,14 @@ export function generateSmartRagDashboard(datasetId: string, payload: Record<str
 
 export function trainSmartRagDashboard(datasetId: string, payload: Record<string, unknown>) {
   return schemaAiClient.trainSmartRagDashboard(datasetId, payload);
+}
+
+export function generateSeniorDashboard(datasetId: string, payload: Record<string, unknown>) {
+  return schemaAiClient.generateSeniorDashboard(datasetId, payload);
+}
+
+export function trainSeniorAnalystSeeds() {
+  return schemaAiClient.trainSeniorAnalystSeeds();
 }
 
 export function generateSchemaDashboard(datasetId: string, payload: Record<string, unknown>) {

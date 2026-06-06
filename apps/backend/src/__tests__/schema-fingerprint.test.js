@@ -33,4 +33,25 @@ describe("schema fingerprint", () => {
     expect(packet.columns.find((column) => column.name === "salary_usd")).toHaveProperty("stats");
     expect(packet.columns.find((column) => column.name === "country").topValues).toContain("India");
   });
+
+  it("does not classify language fields as age metrics", () => {
+    const profile = buildSchemaProfile({
+      name: "salary skills",
+      rows: [
+        { experience: 4, languages: "Python, JavaScript", frameworks: "React", salary_usd: 90000 },
+        { experience: 6, languages: "Go, Python", frameworks: "Django", salary_usd: 120000 },
+      ],
+      columns: [
+        { name: "experience", type: "number" },
+        { name: "languages", type: "string" },
+        { name: "frameworks", type: "string" },
+        { name: "salary_usd", type: "currency" },
+      ],
+    });
+
+    expect(profile.columns.find((column) => column.name === "experience").role).toBe("continuous_metric");
+    expect(profile.columns.find((column) => column.name === "languages").role).toBe("category");
+    expect(profile.columns.find((column) => column.name === "frameworks").role).toBe("category");
+    expect(profile.columns.find((column) => column.name === "salary_usd").role).toBe("money_metric");
+  });
 });

@@ -25,11 +25,22 @@ export const sentinelDataset = {
 };
 
 export function makeReq(method, body = {}) {
+  const jsonString = JSON.stringify(body);
   return {
     method,
     body,
     readable: false,
     headers: { "content-type": "application/json" },
+    on(event, callback) {
+      if (event === "data") {
+        setTimeout(() => callback(Buffer.from(jsonString)), 0);
+      } else if (event === "end") {
+        setTimeout(() => callback(), 1);
+      }
+    },
+    async *[Symbol.asyncIterator]() {
+      yield Buffer.from(jsonString);
+    }
   };
 }
 

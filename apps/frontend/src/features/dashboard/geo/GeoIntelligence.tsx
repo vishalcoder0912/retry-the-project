@@ -36,17 +36,28 @@ export default function GeoIntelligence({
 
   const availableMetrics = useMemo(() => {
     const result: string[] = [];
-    const lowerCols = columns.map((c) => c.toLowerCase());
+    const seen = new Set<string>();
+    const candidates = columns.map((column) => ({
+      column,
+      lower: column.toLowerCase(),
+      normalized: column.toLowerCase().replace(/[_\s-]/g, ""),
+    }));
 
     for (const mp of METRIC_OPTIONS_PRIORITY) {
       const normalizedPriority = mp.replace(/_/g, "");
-      const idx = lowerCols.findIndex((c) =>
-        c.replace(/[_\s-]/g, "").includes(normalizedPriority) || c.includes(mp)
-      );
-      if (idx >= 0) result.push(columns[idx]);
+      for (const candidate of candidates) {
+        if (
+          !seen.has(candidate.column) &&
+          (candidate.normalized.includes(normalizedPriority) || candidate.lower.includes(mp))
+        ) {
+          result.push(candidate.column);
+          seen.add(candidate.column);
+          break;
+        }
+      }
     }
 
-    return [...new Set(result)];
+    return result;
   }, [columns]);
 
   const resolvedMetric = useMemo(() => {
@@ -79,32 +90,33 @@ export default function GeoIntelligence({
   if (!geoField || !geoResult || !geoResult.enabled) return null;
 
   return (
-    <section className="rounded-2xl border border-violet-500/30 bg-slate-900/70 shadow-xl backdrop-blur">
-      <div className="border-b border-slate-700/60 p-4">
+    <section className="rounded-2xl border border-[#E2E8F0] bg-white shadow-sm">
+      <div className="border-b border-[#E2E8F0] p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-purple-600">
+            <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-[#7C3AED] to-[#2563EB] shadow-lg shadow-violet-500/20">
               <Globe className="size-5 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-white">Geo Intelligence</h2>
-              <p className="text-xs text-slate-400">
+              <h2 className="text-lg font-bold text-[#0F172A]">Geo Intelligence</h2>
+              <p className="text-xs text-[#64748B]">
                 {geoResult.totalLocations} locations - {geoResult.activityLabel}
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 rounded-lg border border-slate-700/60 bg-slate-950/60 px-3 py-1.5">
-              <MapPin className="size-3.5 text-slate-400" />
-              <span className="text-xs text-slate-300">Field: {geoField}</span>
+            <div className="flex items-center gap-1.5 rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-2">
+              <MapPin className="size-3.5 text-[#64748B]" />
+              <span className="text-xs font-semibold text-[#334155]">Field: {geoField}</span>
             </div>
 
             {availableMetrics.length > 1 && (
               <select
                 value={selectedMetric}
+                aria-label="Select Geo Intelligence metric"
                 onChange={(e) => setSelectedMetric(e.target.value)}
-                className="rounded-lg border border-slate-700/60 bg-slate-950/60 px-2.5 py-1.5 text-xs text-slate-200 outline-none"
+                className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#334155] outline-none"
               >
                 <option value="auto">Auto (Best Metric)</option>
                 {availableMetrics.map((m) => (
@@ -119,7 +131,7 @@ export default function GeoIntelligence({
               <button
                 type="button"
                 onClick={handleResetFilter}
-                className="flex items-center gap-1 rounded-lg border border-slate-700/60 bg-slate-950/60 px-2.5 py-1.5 text-xs text-slate-300 hover:bg-slate-800"
+                className="flex items-center gap-1 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#334155] hover:bg-[#F8FAFC]"
               >
                 <RotateCcw className="size-3" />
                 Reset Map
@@ -129,7 +141,7 @@ export default function GeoIntelligence({
         </div>
       </div>
 
-      <div className="p-4">
+      <div className="p-5">
         <GeoKPICards
           topLocation={geoResult.topLocation}
           bottomLocation={geoResult.bottomLocation}
@@ -138,20 +150,21 @@ export default function GeoIntelligence({
           totalRecords={geoResult.totalRecords}
           metricField={geoResult.metricField}
           activityLabel={geoResult.activityLabel}
+          geoField={geoResult.geoField}
         />
       </div>
 
-      <div className="grid gap-4 border-t border-slate-700/60 p-4 lg:grid-cols-[1fr_280px]">
-        <div className="min-h-[300px] rounded-xl border border-slate-700/40 bg-slate-950/40 p-2">
+      <div className="grid gap-4 border-t border-[#E2E8F0] p-5 lg:grid-cols-[1fr_300px]">
+        <div className="min-h-[300px] rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-2">
           <GeoIntelligenceMap
             locations={geoResult.locations}
             onCountryClick={handleCountryClick}
             metricField={geoResult.metricField}
             activityLabel={geoResult.activityLabel}
           />
-          <div className="flex items-center justify-center gap-4 px-4 pb-2 pt-1 text-xs text-slate-500">
+          <div className="flex items-center justify-center gap-4 px-4 pb-2 pt-1 text-xs text-[#64748B]">
             <span className="flex items-center gap-1">
-              <span className="inline-block size-3 rounded-sm bg-slate-700/40" />
+              <span className="inline-block size-3 rounded-sm bg-slate-200" />
               No data
             </span>
             <span className="flex items-center gap-1">
@@ -175,12 +188,12 @@ export default function GeoIntelligence({
             onCountryClick={handleCountryClick}
           />
 
-          <div className="rounded-xl border border-slate-700/60 bg-slate-900/70 p-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-              <Lightbulb className="size-3.5 text-amber-400" />
+          <div className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#334155]">
+              <Lightbulb className="size-3.5 text-[#F59E0B]" />
               AI Geo Insight
             </div>
-            <p className="mt-1.5 text-xs leading-relaxed text-slate-400">
+            <p className="mt-2 text-sm leading-6 text-[#64748B]">
               {geoResult.summaryInsight}
             </p>
           </div>

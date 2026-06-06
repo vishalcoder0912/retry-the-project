@@ -1,98 +1,36 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
-  AlertTriangle,
   CheckCircle2,
   Database,
-  ExternalLink,
   File,
-  FileSpreadsheet,
   Layers,
-  Loader2,
   Lock,
-  RefreshCw,
+  QrCode,
   ShieldCheck,
-  Trash2,
+  Sparkles,
   Upload,
-  XCircle,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { api, QrUploadSession, QrUploadStatus } from "@/features/data/api/dataApi";
+import { api, type QrUploadSession, type QrUploadStatus } from "@/features/data/api/dataApi";
 import { useData } from "@/features/data/context/useData";
-import { analyzeDataQuality, type Dataset } from "@/features/data/model/dataStore";
+import {
+  buildDataQualityScore,
+  buildDatasetProfile,
+  cleanDatasetRows,
+  type Row,
+} from "@/features/dashboard/utils/dashboardAnalytics";
+
+const CARD = "rounded-2xl border border-[#E2E8F0] bg-white shadow-sm";
 
 function getPortalBaseUrl() {
   return import.meta.env.VITE_PUBLIC_APP_URL || window.location.origin;
 }
 
-function getFileTypeLabel(dataset?: Pick<Dataset, "fileName" | "sourceType"> | null) {
-  const source = (dataset?.fileName || dataset?.sourceType || "").toLowerCase();
-
-  if (/\.(csv|tsv|txt)$/.test(source) || source.includes("csv")) return "Delimited";
-  if (/\.(xlsx|xls)$/.test(source)) return "Spreadsheet";
-  if (/\.json$/.test(source) || source.includes("json")) return "JSON";
-
-  return "Dataset";
-}
-
-function validateDataset(dataset: Dataset | null) {
-  if (!dataset) {
-    return {
-      canProceed: false,
-      qualityScore: null as number | null,
-      errors: ["Upload a dataset before opening the dashboard."],
-      warnings: [] as string[],
-    };
-  }
-
-  const rows = Array.isArray(dataset.rows) ? dataset.rows : [];
-  const columns = Array.isArray(dataset.columns) ? dataset.columns : [];
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  const columnNames = columns.map((column) => column.name).filter(Boolean);
-  const duplicateColumns = columnNames.filter((name, index) => columnNames.indexOf(name) !== index);
-
-  if (rows.length === 0 && Number(dataset.rowCount || 0) === 0) {
-    errors.push("No analyzable rows were found.");
-  }
-
-  if (columns.length === 0) {
-    errors.push("No columns were detected.");
-  }
-
-  if (duplicateColumns.length > 0) {
-    errors.push(`Duplicate fields detected: ${Array.from(new Set(duplicateColumns)).join(", ")}.`);
-  }
-
-  let qualityScore: number | null = null;
-
-  if (rows.length > 0 && columns.length > 0) {
-    const quality = analyzeDataQuality(dataset);
-    qualityScore = quality.summary.qualityScore;
-
-    if (quality.summary.missingValues > 0) {
-      warnings.push(`${quality.summary.missingValues.toLocaleString()} missing value(s) detected.`);
-    }
-
-    if (quality.summary.invalidValues > 0) {
-      warnings.push(`${quality.summary.invalidValues.toLocaleString()} invalid numeric value(s) detected.`);
-    }
-
-    if (quality.summary.duplicates > 0) {
-      warnings.push(`${quality.summary.duplicates.toLocaleString()} duplicate row(s) detected.`);
-    }
-
-    if (quality.summary.outliers > 0) {
-      warnings.push(`${quality.summary.outliers.toLocaleString()} possible outlier(s) detected.`);
-    }
-  }
-
-  return {
-    canProceed: errors.length === 0,
-    qualityScore,
-    errors,
-    warnings,
-  };
+function fileLabel(fileName?: string | null) {
+  if (!fileName) return "Dataset";
+  const ext = fileName.split(".").pop()?.toUpperCase();
+  return ext && ext.length <= 5 ? ext : "Dataset";
 }
 
 export default function UploadPage() {
@@ -100,536 +38,350 @@ export default function UploadPage() {
   const {
     dataset,
     analysis,
-    loadDemo,
-    deleteDataset,
-    uploadFiles: uploadDataFiles,
+    uploadFiles,
     retryHydrate,
     isProcessing,
     apiError,
   } = useData();
-
   const singleInputRef = useRef<HTMLInputElement>(null);
   const multiInputRef = useRef<HTMLInputElement>(null);
-
-  const [qrSession, setQrSession] = useState<QrUploadSession | null>(null);
-  const [qrStatus, setQrStatus] = useState<QrUploadStatus | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
   const [uploadState, setUploadState] = useState<"idle" | "uploading" | "success" | "error">("idle");
+  const [qrSession, setQrSession] = useState<QrUploadSession | null>(null);
+  const [qrStatus, setQrStatus] = useState<QrUploadStatus | null>(null);
+
+  const rows = useMemo(() => cleanDatasetRows((dataset?.rows || []) as Row[]), [dataset?.rows]);
+  const profile = useMemo(() => buildDatasetProfile(rows), [rows]);
+  const quality = useMemo(() => buildDataQualityScore(rows), [rows]);
+  const activeDataset = qrStatus?.dataset || dataset;
+  const activeRows = useMemo(() => cleanDatasetRows((activeDataset?.rows || []) as Row[]), [activeDataset?.rows]);
+  const activeProfile = useMemo(() => buildDatasetProfile(activeRows), [activeRows]);
 
   const generateQr = useCallback(async () => {
-    setMessage("");
-
-    const session = await api.generateQRSession({
-      portalBaseUrl: getPortalBaseUrl(),
-      workspaceName: dataset?.name || "InsightFlow Workspace",
-    });
-
-    setQrSession(session);
-    setQrStatus({
-      sessionId: session.sessionId,
-      status: session.status,
-      workspaceName: session.workspaceName,
-      files: [],
-      expiresAt: session.expiresAt,
-    });
-
-    return session;
+    try {
+      const session = await api.generateQRSession({
+        portalBaseUrl: getPortalBaseUrl(),
+        workspaceName: dataset?.name || "InsightFlow Workspace",
+      });
+      setQrSession(session);
+      setQrStatus({
+        sessionId: session.sessionId,
+        status: session.status,
+        workspaceName: session.workspaceName,
+        files: [],
+        expiresAt: session.expiresAt,
+      });
+    } catch {
+      setQrSession(null);
+    }
   }, [dataset?.name]);
 
   useEffect(() => {
-    generateQr().catch((error) => {
-      setMessage(error instanceof Error ? error.message : "Failed to generate QR.");
-    });
+    void generateQr();
   }, [generateQr]);
 
   useEffect(() => {
     if (!qrSession) return;
-
     const interval = window.setInterval(async () => {
       try {
-        const status = await api.getQRSessionStatus(
-          qrSession.sessionId,
-          qrSession.uploadToken
-        );
-
+        const status = await api.getQRSessionStatus(qrSession.sessionId, qrSession.uploadToken);
         setQrStatus(status);
-
         if (status.status === "completed" && status.dataset) {
           await retryHydrate();
           setUploadState("success");
-          setMessage("Mobile upload synced. Review validation before opening the dashboard.");
-        } else if (status.status === "error") {
-          setUploadState("error");
-          setMessage(status.error || "Mobile upload failed.");
+          setMessage("Mobile upload synced and schema is ready.");
         }
       } catch {
-        // silent polling failure
+        // QR polling should not interrupt the upload page.
       }
     }, 2500);
-
     return () => window.clearInterval(interval);
   }, [qrSession, retryHydrate]);
 
-  async function uploadFiles(files: File[]) {
-    if (!files.length || uploading) return;
-
-    setUploading(true);
+  async function handleFiles(files: File[]) {
+    if (!files.length || isProcessing) return;
     setUploadState("uploading");
-    setMessage("Uploading and validating dataset...");
-
+    setMessage("Reading file, detecting schema, and importing rows...");
     try {
-      await uploadDataFiles(files);
+      await uploadFiles(files);
       setUploadState("success");
-      setMessage("Dataset uploaded and schema validation completed. Review the results, then open the dashboard.");
+      setMessage("File processed successfully. Review schema and open the dashboard.");
     } catch (error) {
       setUploadState("error");
       setMessage(error instanceof Error ? error.message : "Upload failed.");
-    } finally {
-      setUploading(false);
     }
   }
 
   function onDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragging(false);
-    uploadFiles(Array.from(event.dataTransfer.files || []));
+    void handleFiles(Array.from(event.dataTransfer.files || []));
   }
 
-  const activeDataset = qrStatus?.dataset || dataset;
-  const activeAnalysis = qrStatus?.analysis || analysis;
-  const validation = validateDataset(activeDataset || null);
-  const dashboardReady = Boolean(activeDataset && validation.canProceed && !uploading && !isProcessing);
-  const statusMessage = apiError && uploadState !== "uploading" ? apiError : message;
+  const schemaRows = activeProfile.columns.slice(0, 8);
+  const previewRows = activeRows.slice(0, 5);
+  const columns = activeProfile.columns.map((column) => column.name);
+  const ready = Boolean(activeDataset && activeRows.length && columns.length);
 
   return (
-    <div className="min-h-screen bg-[#07111f] p-6 text-white">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold text-slate-400">
-              {activeDataset?.name || "No dataset selected"}{" "}
-              {activeDataset?.rowCount
-                ? `• ${activeDataset.rowCount.toLocaleString()} rows`
-                : ""}
-            </p>
-            <h1 className="mt-1 text-3xl font-bold">Upload Data</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Import your datasets for analysis
-            </p>
-          </div>
-
-          <button type="button" className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">
-            Docs
-          </button>
-        </div>
-
-        <div className="grid gap-5 xl:grid-cols-[1.8fr_0.9fr]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20">
-            <div className="grid gap-6 lg:grid-cols-[220px_1fr_250px]">
-              <div>
-                <div className="mb-3 flex items-center gap-2">
-                  <h2 className="text-xl font-bold">
-                    Scan to Upload from Mobile
-                  </h2>
-                  <span className="rounded-full bg-violet-500/15 px-2 py-1 text-xs text-violet-300">
-                    Recommended
-                  </span>
-                </div>
-
-                <div className="rounded-2xl bg-white p-3">
-                  {qrSession?.qrDataUrl ? (
-                    <img
-                      src={qrSession.qrDataUrl}
-                      alt="Upload QR code"
-                      className="size-52 rounded-xl"
-                    />
-                  ) : (
-                    <div className="flex size-52 items-center justify-center text-slate-900">
-                      <Loader2 className="size-8 animate-spin" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex flex-col justify-center">
-                <p className="max-w-sm text-sm leading-6 text-slate-300">
-                  Scan this QR code to open the secure upload portal on your
-                  phone. Upload one or multiple files and sync them directly to
-                  InsightFlow.
-                </p>
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button type="button"
-                    disabled={!qrSession}
-                    onClick={() =>
-                      qrSession && window.open(qrSession.uploadUrl, "_blank")
-                    }
-                    className="rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-50"
-                  >
-                    Open Upload Portal{" "}
-                    <ExternalLink className="ml-2 inline size-4" />
-                  </button>
-
-                  <button type="button"
-                    onClick={() => generateQr()}
-                    className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold text-slate-100 hover:bg-slate-800"
-                  >
-                    Generate New QR{" "}
-                    <RefreshCw className="ml-2 inline size-4" />
-                  </button>
-                </div>
-
-                {statusMessage && (
-                  <div
-                    className={`mt-4 rounded-xl border p-3 text-sm ${
-                      uploadState === "error" || apiError
-                        ? "border-red-500/40 bg-red-500/10 text-red-200"
-                        : uploadState === "success"
-                          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200"
-                          : "border-slate-800 bg-slate-950/60 text-slate-300"
-                    }`}
-                    role={uploadState === "error" || apiError ? "alert" : "status"}
-                  >
-                    {uploadState === "error" || apiError ? (
-                      <XCircle className="mr-2 inline size-4" />
-                    ) : uploadState === "success" ? (
-                      <CheckCircle2 className="mr-2 inline size-4" />
-                    ) : null}
-                    {statusMessage}
-                  </div>
-                )}
-              </div>
-
-              <div className="hidden overflow-hidden rounded-[2rem] border border-slate-700 bg-slate-950 p-4 lg:block">
-                <div className="mb-3 flex justify-between text-xs text-slate-400">
-                  <span>9:41</span>
-                  <span>●●●</span>
-                </div>
-
-                <p className="text-sm font-bold">InsightFlow</p>
-                <p className="mt-2 text-sm text-slate-300">Upload Files</p>
-
-                <div className="mt-4 rounded-xl border border-dashed border-violet-500/60 p-5 text-center">
-                  <Upload className="mx-auto mb-2 size-8 text-violet-400" />
-                  <p className="text-sm font-semibold">Tap to select files</p>
-                  <p className="mt-1 text-xs text-slate-400">
-                    CSV, XLSX, JSON
-                  </p>
-                </div>
-
-                <div className="mt-4 rounded-xl border border-slate-800 p-3">
-                  <p className="text-xs text-slate-400">Recent upload</p>
-                  <p className="mt-1 text-sm">
-                    {qrStatus?.files?.[0]?.name || "customer_data.csv"}
-                  </p>
-                </div>
-              </div>
+    <div className="min-h-screen bg-[#F6F8FC] px-5 py-6 xl:px-8">
+      <div className="mx-auto grid max-w-[1720px] gap-5 2xl:grid-cols-[minmax(0,1fr)_360px]">
+        <main className="space-y-5">
+          <header className="flex items-start gap-4">
+            <div className="mt-1 text-[#7C3AED]">
+              <Upload className="size-8" />
             </div>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-lg font-bold">
-                Mobile uploads auto-sync to this workspace
-              </h2>
-              <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-300">
-                Live
-              </span>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-[#0F172A]">Upload Data</h1>
+              <p className="mt-1 text-sm text-[#64748B]">Import CSV, XLSX, or JSON datasets for AI-powered analysis.</p>
             </div>
+          </header>
 
-            {[
-              ["Scan QR", "Use your phone camera"],
-              ["Select files", "Choose one or multiple files"],
-              ["Upload", "Files are securely uploaded"],
-              ["Dataset appears here", "Ready for analysis instantly"],
-            ].map((step, index) => (
-              <div key={step[0]} className="flex gap-4 pb-5 last:pb-0">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm font-bold">
-                  {index + 1}
+          <section
+            onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={`${CARD} grid min-h-[260px] place-items-center border-dashed p-8 text-center transition ${
+              dragging ? "border-[#7C3AED] bg-violet-50/50" : "border-violet-300"
+            }`}
+          >
+            <div>
+              <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-white shadow-lg shadow-violet-500/20">
+                <Upload className="size-9" />
+              </div>
+              <h2 className="mt-5 text-xl font-bold text-[#0F172A]">Drag & drop files here</h2>
+              <p className="mt-1 text-sm font-medium text-[#7C3AED]">or click to browse</p>
+              <p className="mt-3 text-sm text-[#64748B]">Supports CSV, XLSX, JSON. Multiple files are merged into one dataset.</p>
+              <button
+                type="button"
+                onClick={() => multiInputRef.current?.click()}
+                className="mt-5 rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#2563EB] px-10 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20"
+              >
+                Select Files
+              </button>
+            </div>
+          </section>
+
+          {(message || apiError) && (
+            <div
+              className={`rounded-2xl border p-4 text-sm font-medium ${
+                uploadState === "error" || apiError
+                  ? "border-rose-200 bg-rose-50 text-rose-700"
+                  : "border-emerald-200 bg-emerald-50 text-emerald-700"
+              }`}
+            >
+              <CheckCircle2 className="mr-2 inline size-4" />
+              {apiError || message}
+            </div>
+          )}
+
+          <section className="grid gap-4 xl:grid-cols-3">
+            <div className={`${CARD} p-5`}>
+              <div className="flex items-center gap-4">
+                <div className="grid size-14 place-items-center rounded-2xl bg-violet-50 text-[#7C3AED]">
+                  <File className="size-7" />
                 </div>
                 <div>
-                  <p className="font-semibold">{step[0]}</p>
-                  <p className="text-sm text-slate-400">{step[1]}</p>
+                  <h3 className="font-bold text-[#0F172A]">Single File Upload</h3>
+                  <p className="mt-1 text-sm text-[#64748B]">Upload one dataset file for analysis.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => singleInputRef.current?.click()} className="mt-5 w-full rounded-xl border border-[#E2E8F0] px-4 py-3 text-sm font-bold text-[#334155]">
+                Choose File
+              </button>
+            </div>
+
+            <div className={`${CARD} p-5`}>
+              <div className="flex items-center gap-4">
+                <div className="grid size-14 place-items-center rounded-2xl bg-violet-50 text-[#7C3AED]">
+                  <Layers className="size-7" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#0F172A]">Merge Multiple Files</h3>
+                  <p className="mt-1 text-sm text-[#64748B]">Combine multiple files into one unified dataset.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => multiInputRef.current?.click()} className="mt-5 w-full rounded-xl border border-[#E2E8F0] px-4 py-3 text-sm font-bold text-[#334155]">
+                Select Multiple Files
+              </button>
+            </div>
+
+            <div className={`${CARD} p-5`}>
+              <div className="flex items-center gap-4">
+                <div className="grid size-14 place-items-center rounded-2xl bg-emerald-50 text-[#22C55E]">
+                  <QrCode className="size-7" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#0F172A]">Mobile QR Upload</h3>
+                  <p className="mt-1 text-sm text-[#64748B]">Upload from your mobile device instantly.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => qrSession && window.open(qrSession.uploadUrl, "_blank")} className="mt-5 w-full rounded-xl border border-[#E2E8F0] px-4 py-3 text-sm font-bold text-[#334155]">
+                Show QR Code
+              </button>
+            </div>
+          </section>
+
+          <section className={`${CARD} grid gap-4 p-4 md:grid-cols-4`}>
+            {[
+              [ShieldCheck, "Secure Upload", "End-to-end validation"],
+              [Database, "Auto Schema Detection", "Smart type detection"],
+              [Sparkles, "Real-time Sync", "Instant data availability"],
+              [Lock, "Your Data, Your Privacy", "Never shared. Ever."],
+            ].map(([Icon, title, copy]) => (
+              <div key={String(title)} className="flex items-center gap-3">
+                <div className="grid size-10 place-items-center rounded-xl bg-violet-50 text-[#7C3AED]">
+                  <Icon className="size-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-[#0F172A]">{String(title)}</p>
+                  <p className="text-xs text-[#64748B]">{String(copy)}</p>
                 </div>
               </div>
             ))}
-          </div>
-        </div>
+          </section>
 
-        <div className="grid gap-5 lg:grid-cols-3">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-            <div className="mb-4 flex items-center gap-4">
-              <div className="rounded-2xl bg-violet-500/15 p-4">
-                <File className="size-7 text-violet-300" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold">Single File</h3>
-                <p className="text-sm text-slate-400">
-                  Upload one dataset file
-                </p>
-                <p className="text-sm text-slate-500">CSV, XLSX or JSON</p>
-              </div>
-            </div>
-
-            <button type="button"
-              onClick={() => singleInputRef.current?.click()}
-              className="w-full rounded-xl border border-slate-700 py-3 text-sm font-semibold hover:bg-slate-800"
-            >
-              Select File
-            </button>
-
-            <input
-              ref={singleInputRef}
-              type="file"
-              accept=".csv,.xlsx,.xls,.json"
-              className="hidden"
-              onChange={(event) =>
-                uploadFiles(Array.from(event.target.files || []).slice(0, 1))
-              }
-            />
-          </div>
-
-          <div className="rounded-2xl border border-violet-500/40 bg-slate-900/70 p-6">
-            <div className="mb-4 flex items-center gap-4">
-              <div className="rounded-2xl bg-violet-500/15 p-4">
-                <Layers className="size-7 text-violet-300" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold">Multiple Files</h3>
-                <p className="text-sm text-slate-400">
-                  Upload and merge multiple files
-                </p>
-                <p className="text-sm text-slate-500">CSV, XLSX or JSON</p>
-              </div>
-            </div>
-
-            <button type="button"
-              onClick={() => multiInputRef.current?.click()}
-              className="w-full rounded-xl bg-violet-600 py-3 text-sm font-semibold hover:bg-violet-500"
-            >
-              Select Files
-            </button>
-
-            <input
-              ref={multiInputRef}
-              type="file"
-              multiple
-              accept=".csv,.xlsx,.xls,.json"
-              className="hidden"
-              onChange={(event) =>
-                uploadFiles(Array.from(event.target.files || []))
-              }
-            />
-          </div>
-
-          <div
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={onDrop}
-            className={`flex min-h-[180px] flex-col items-center justify-center rounded-2xl border border-dashed p-6 text-center ${
-              dragging
-                ? "border-violet-400 bg-violet-500/10"
-                : "border-violet-500/50 bg-slate-900/70"
-            }`}
-          >
-            <Upload className="mb-3 size-10 text-violet-300" />
-            <h3 className="text-lg font-bold">Drag & Drop Files Here</h3>
-            <p className="mt-1 text-sm text-slate-400">
-              Drop one or more files to upload
-            </p>
-            <p className="mt-1 text-sm text-slate-500">
-              CSV, XLSX, JSON • Multiple files supported
-            </p>
-          </div>
-        </div>
-
-        {uploading && (
-          <div
-            className="rounded-2xl border border-violet-500/40 bg-violet-500/10 p-4 text-sm text-violet-200"
-            role="status"
-          >
-            <div className="mb-3 flex items-center justify-between gap-4">
-              <span>
-                <Loader2 className="mr-2 inline size-4 animate-spin" />
-                Uploading, parsing, and validating dataset...
-              </span>
-              <span className="text-xs font-semibold uppercase tracking-wide text-violet-100">
-                In progress
-              </span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-slate-950/70">
-              <div className="h-full w-2/3 animate-pulse rounded-full bg-violet-300" />
-            </div>
-          </div>
-        )}
-
-        {activeDataset && (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/70">
-            <div className="flex items-center justify-between border-b border-slate-800 p-6">
-              <div className="flex items-center gap-4">
-                <CheckCircle2 className="size-7 text-emerald-400" />
+          <section className="grid gap-5 xl:grid-cols-2">
+            <div className={`${CARD} overflow-hidden`}>
+              <div className="flex items-center justify-between border-b border-[#E2E8F0] px-5 py-4">
                 <div>
-                  <h2 className="text-xl font-bold">{activeDataset.name}</h2>
-                  <p className="text-sm text-slate-400">
-                    {validation.canProceed
-                      ? "Dataset loaded and schema validation passed"
-                      : "Dataset loaded but needs attention"}
-                  </p>
+                  <h2 className="font-bold text-[#0F172A]">Dataset Preview</h2>
+                  <p className="text-sm text-[#64748B]">{activeDataset?.fileName || activeDataset?.name || "No file processed yet"}</p>
                 </div>
+                {ready && <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">File processed successfully</span>}
               </div>
-
-              <span
-                className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                  validation.canProceed
-                    ? "bg-emerald-500/15 text-emerald-300"
-                    : "bg-red-500/15 text-red-300"
-                }`}
-              >
-                {validation.canProceed ? "Validated" : "Blocked"}
-              </span>
+              {ready ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[620px] text-left text-sm">
+                    <thead className="bg-[#F8FAFC] text-xs text-[#64748B]">
+                      <tr>
+                        {columns.slice(0, 6).map((column) => <th key={column} className="px-4 py-3">{column}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {previewRows.map((row) => (
+                        <tr key={`${activeDataset?.id || "preview"}-${String(row.__rowId ?? Object.values(row).join("|")).slice(0, 120)}`} className="border-t border-[#E2E8F0] text-[#334155]">
+                          {columns.slice(0, 6).map((column) => <td key={column} className="max-w-[170px] truncate px-4 py-3">{String(row[column] ?? "") || "-"}</td>)}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="flex items-center justify-between border-t border-[#E2E8F0] px-5 py-4 text-sm text-[#64748B]">
+                    <span>Showing first {previewRows.length} rows</span>
+                    <button type="button" onClick={() => navigate("/data")} className="font-bold text-[#7C3AED]">View full data table <ArrowRight className="inline size-4" /></button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid min-h-[220px] place-items-center p-8 text-center text-sm text-[#64748B]">Upload data to preview rows here.</div>
+              )}
             </div>
 
-            <div className="grid gap-5 p-6 md:grid-cols-5">
-              <div>
-                <p className="text-sm text-slate-400">Total Records</p>
-                <p className="mt-1 text-2xl font-bold">
-                  {activeDataset.rowCount?.toLocaleString?.() ||
-                    activeDataset.rows?.length?.toLocaleString?.() ||
-                    0}
-                </p>
+            <div className={`${CARD} overflow-hidden`}>
+              <div className="flex items-center justify-between border-b border-[#E2E8F0] px-5 py-4">
+                <div>
+                  <h2 className="font-bold text-[#0F172A]">Detected Schema</h2>
+                  <p className="text-sm text-[#64748B]">{schemaRows.length} columns shown</p>
+                </div>
+                {ready && <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-600">Confidence: {Math.round(quality.finalScore)}%</span>}
               </div>
-
-              <div>
-                <p className="text-sm text-slate-400">Columns</p>
-                <p className="mt-1 text-2xl font-bold">
-                  {activeDataset.columns?.length || 0}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm text-slate-400">File Type</p>
-                <p className="mt-2 inline-flex items-center rounded-full bg-slate-800 px-3 py-1 text-sm">
-                  <FileSpreadsheet className="mr-2 size-4" />
-                  {getFileTypeLabel(activeDataset)}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm text-slate-400">Validation</p>
-                <p className="mt-1 text-2xl font-bold">
-                  {validation.qualityScore == null ? "Ready" : `${validation.qualityScore}%`}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-sm text-slate-400">Uploaded</p>
-                <p className="mt-1 text-sm text-slate-200">
-                  {activeDataset.uploadedAt
-                    ? new Date(activeDataset.uploadedAt).toLocaleString()
-                    : "Just now"}
-                </p>
-              </div>
+              {ready ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[520px] text-left text-sm">
+                    <thead className="bg-[#F8FAFC] text-xs text-[#64748B]">
+                      <tr>
+                        <th className="px-4 py-3">Column Name</th>
+                        <th className="px-4 py-3">Data Type</th>
+                        <th className="px-4 py-3">Sample Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schemaRows.map((column) => (
+                        <tr key={column.name} className="border-t border-[#E2E8F0] text-[#334155]">
+                          <td className="px-4 py-3 font-medium">{column.name}</td>
+                          <td className="px-4 py-3">{column.type}</td>
+                          <td className="max-w-[180px] truncate px-4 py-3">{column.sampleValues[0] || "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="flex items-center justify-between border-t border-[#E2E8F0] px-5 py-4 text-sm text-[#64748B]">
+                    <span>{activeProfile.columns.length} columns detected</span>
+                    <button type="button" onClick={() => navigate("/data")} className="font-bold text-[#7C3AED]">View all columns <ArrowRight className="inline size-4" /></button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid min-h-[220px] place-items-center p-8 text-center text-sm text-[#64748B]">Detected schema will appear after upload.</div>
+              )}
             </div>
+          </section>
+        </main>
 
-            <div className="px-6 pb-6">
-              <p className="mb-3 text-sm text-slate-400">Detected Fields</p>
-
-              <div className="flex flex-wrap gap-2">
-                {(activeDataset.columns || []).slice(0, 16).map((column: any) => (
-                  <span
-                    key={column.name}
-                    className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-xs font-semibold text-slate-200"
-                  >
-                    {column.name}
-                  </span>
-                ))}
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {validation.errors.map((error) => (
-                  <div
-                    key={error}
-                    className="rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200"
-                    role="alert"
-                  >
-                    <XCircle className="mr-2 inline size-4" />
-                    {error}
+        <aside className="space-y-5">
+          <section className={`${CARD} p-5`}>
+            <h2 className="text-xl font-bold text-[#0F172A]">How InsightFlow analyzes your data</h2>
+            <div className="mt-5 space-y-4">
+              {[
+                ["Read file", "We securely read your file and validate its structure."],
+                ["Detect schema", "Automatically detect columns, data types, and relationships."],
+                ["Profile columns", "Analyze data quality, distributions, and key patterns."],
+                ["Build dashboard", "Generate visualizations and KPIs tailored to your data."],
+                ["Enable AI chat", "Ask questions and get instant insights from your data."],
+              ].map(([title, copy], index) => (
+                <div key={title} className="grid grid-cols-[34px_1fr] gap-3">
+                  <div className="grid size-8 place-items-center rounded-full bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-sm font-bold text-white">
+                    {index + 1}
                   </div>
-                ))}
-
-                {validation.errors.length === 0 && validation.warnings.length === 0 && (
-                  <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-                    <CheckCircle2 className="mr-2 inline size-4" />
-                    Validation passed. No missing, duplicate, invalid, or outlier issues were detected.
+                  <div className="rounded-2xl border border-[#E2E8F0] p-4">
+                    <p className="font-bold text-[#0F172A]">{title}</p>
+                    <p className="mt-1 text-sm leading-6 text-[#64748B]">{copy}</p>
                   </div>
-                )}
-
-                {validation.warnings.map((warning) => (
-                  <div
-                    key={warning}
-                    className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-100"
-                  >
-                    <AlertTriangle className="mr-2 inline size-4" />
-                    {warning}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <button type="button"
-                  onClick={async () => {
-                    if (window.confirm(`Delete "${activeDataset.name}"? This cannot be undone.`)) {
-                      await deleteDataset();
-                    }
-                  }}
-                  className="rounded-xl border border-red-500/30 px-5 py-3 text-sm font-semibold text-red-400 hover:bg-red-500/10"
-                >
-                  <Trash2 className="mr-2 inline size-4" />
-                  Clear Dataset
-                </button>
-
-                <button type="button"
-                  onClick={() => navigate("/dashboard")}
-                  disabled={!dashboardReady}
-                  className="rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold hover:bg-violet-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-                >
-                  Proceed to Dashboard{" "}
-                  <ArrowRight className="ml-2 inline size-4" />
-                </button>
-              </div>
+                </div>
+              ))}
             </div>
-          </div>
-        )}
+          </section>
 
-        {!activeDataset && (
-          <div className="flex justify-end">
-            <button type="button"
-              onClick={() => loadDemo()}
-              disabled={isProcessing}
-              className="rounded-xl border border-slate-700 px-5 py-3 text-sm font-semibold hover:bg-slate-800"
+          <section className="rounded-2xl border border-violet-100 bg-violet-50/50 p-5 text-center">
+            <h2 className="text-xl font-bold text-[#0F172A]">Ready to explore your data?</h2>
+            <p className="mt-2 text-sm leading-6 text-[#64748B]">
+              {ready ? "Your dataset is processed and ready. Open it in the dashboard to begin analysis." : "Upload a dataset to unlock dashboard analysis."}
+            </p>
+            <button
+              type="button"
+              disabled={!ready}
+              onClick={() => navigate("/dashboard")}
+              className="mt-5 w-full rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#2563EB] px-4 py-3 text-sm font-bold text-white shadow-lg shadow-violet-500/20 disabled:opacity-50"
             >
-              <Database className="mr-2 inline size-4" />
-              Use Demo Data
+              Open in Dashboard
             </button>
-          </div>
-        )}
+            <button type="button" disabled={!ready} onClick={() => navigate("/data")} className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-bold text-[#334155] disabled:opacity-50">
+              Go to Data Table <ArrowRight className="inline size-4" />
+            </button>
+          </section>
 
-        <div className="flex flex-col gap-3 border-t border-slate-800 pt-5 text-sm text-slate-400 md:flex-row md:justify-between">
-          <p>
-            <ShieldCheck className="mr-2 inline size-4 text-emerald-400" />
-            All uploads are encrypted and stored securely.
-          </p>
-          <p>
-            <Lock className="mr-2 inline size-4 text-orange-400" />
-            Your data is private and never shared.
-          </p>
-        </div>
+          {qrSession?.qrDataUrl && (
+            <section className={`${CARD} p-5 text-center`}>
+              <h3 className="font-bold text-[#0F172A]">Mobile Upload QR</h3>
+              <img src={qrSession.qrDataUrl} alt="Mobile upload QR code" className="mx-auto mt-4 size-44 rounded-2xl border border-[#E2E8F0] p-2" />
+              <p className="mt-3 text-xs text-[#64748B]">{qrStatus?.files?.length ? `${qrStatus.files.length} file(s) uploaded` : "Waiting for mobile upload"}</p>
+            </section>
+          )}
+
+          <section className={`${CARD} p-5`}>
+            <h3 className="font-bold text-[#0F172A]">Dataset Summary</h3>
+            <div className="mt-4 space-y-3 text-sm">
+              <div className="flex justify-between"><span className="text-[#64748B]">Dataset</span><span className="font-semibold text-[#0F172A]">{activeDataset?.name || "-"}</span></div>
+              <div className="flex justify-between"><span className="text-[#64748B]">Rows</span><span className="font-semibold text-[#0F172A]">{activeRows.length.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-[#64748B]">Columns</span><span className="font-semibold text-[#0F172A]">{activeProfile.columns.length}</span></div>
+              <div className="flex justify-between"><span className="text-[#64748B]">Type</span><span className="font-semibold text-[#0F172A]">{fileLabel(activeDataset?.fileName || activeDataset?.sourceType)}</span></div>
+              <div className="flex justify-between"><span className="text-[#64748B]">Analysis</span><span className="font-semibold text-[#0F172A]">{analysis?.dataTypeLabel || "Schema-aware"}</span></div>
+            </div>
+          </section>
+        </aside>
       </div>
+
+      <input ref={singleInputRef} aria-label="Upload one dataset file" type="file" accept=".csv,.xlsx,.xls,.json" className="hidden" onChange={(event) => void handleFiles(Array.from(event.target.files || []).slice(0, 1))} />
+      <input ref={multiInputRef} aria-label="Upload one or more dataset files" type="file" multiple accept=".csv,.xlsx,.xls,.json" className="hidden" onChange={(event) => void handleFiles(Array.from(event.target.files || []))} />
     </div>
   );
 }

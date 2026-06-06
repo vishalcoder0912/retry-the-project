@@ -143,6 +143,28 @@ export interface DashboardCommandResponse {
   aiError?: string | null;
 }
 
+export interface FastDashboardChatResponse {
+  intent:
+    | "answer"
+    | "add_chart"
+    | "remove_chart"
+    | "update_chart"
+    | "add_kpi"
+    | "filter"
+    | "explain"
+    | "general_answer";
+  answer: string;
+  action: {
+    targetTitle?: string;
+    chart?: ChartSpec | Record<string, unknown>;
+    kpi?: KpiSpec | Record<string, unknown>;
+    filter?: Record<string, string>;
+  };
+  reason: string;
+  source: "local" | "ollama" | "fallback";
+  cached: boolean;
+}
+
 export interface DashboardAiPayload {
   rows: any[];
   dataDictionary?: any[];
@@ -238,9 +260,23 @@ export interface PdfImportResult {
     datasetId: string;
     fileName: string;
     jobId: string;
+    pageCount?: number;
     tableCount: number;
     chunkCount: number;
     textElementCount: number;
+    documentType?: string;
+    ocrUsed?: boolean;
+    qualityScore?: number;
+    ocrConfidence?: number | null;
+    warnings?: string[];
+  };
+  pdfIntelligence?: {
+    summary?: Record<string, any>;
+    pages?: Array<Record<string, any>>;
+    sections?: Array<Record<string, any>>;
+    quality?: Record<string, any>;
+    tables?: Array<Record<string, any>>;
+    readiness?: PdfPipelineStatus["readiness"];
   };
   dataset: Dataset;
   analysis: DatasetAnalysis;
@@ -262,7 +298,70 @@ export interface PdfAskResult {
     source: number;
     id: string;
     preview: string;
+    pageNumber?: number | null;
+    confidence?: number | null;
+    extractionMethod?: string;
+    chunkType?: string;
+    chunkId?: string;
+    score?: number;
   }>;
+  intent?: string;
+  confidence?: number;
+  warnings?: string[];
+  model?: string;
+  contextUsed?: {
+    retrievedChunks: number;
+    usedDocumentSummary: boolean;
+    maxChars: number;
+  };
+}
+
+export interface PdfUploadPipelineResult {
+  documentId: string;
+  status: string;
+  message: string;
+  next: {
+    statusUrl: string;
+    documentUrl: string;
+  };
+}
+
+export interface PdfPipelineStatus {
+  documentId: string;
+  status: string;
+  progress: number;
+  pipelines?: Record<string, {
+    status: string;
+    progress: number;
+    currentPage?: number | null;
+    totalPages?: number | null;
+    error?: string | null;
+  }>;
+  jobs?: Array<Record<string, any>>;
+  readiness?: {
+    documentId?: string | null;
+    status: string;
+    hasUploadedPdf?: boolean;
+    hasText?: boolean;
+    hasPageText?: boolean;
+    hasChunks?: boolean;
+    hasDocumentSummary?: boolean;
+    hasVectorIndex?: boolean;
+    hasTables?: boolean;
+    hasRealDataTables?: boolean;
+    canAskQuestions: boolean;
+    canExplainPdf: boolean;
+    canUseVectorSearch?: boolean;
+    canUseLocalFallback?: boolean;
+    canSummarizePage: boolean;
+    canShowMetrics: boolean;
+    processingMessage?: string;
+    activePipelines?: Array<Record<string, any>>;
+    progress?: number;
+  };
+  currentPage?: number | null;
+  totalPages?: number | null;
+  message?: string;
 }
 
 export interface AgenticConfigResponse {
@@ -277,6 +376,29 @@ export interface AgenticHealthResponse {
     model: string;
     installed: boolean;
   }>;
+}
+
+export interface SchemaOnlyAnalysisResponse {
+  success: boolean;
+  response_type: string;
+  natural_response: string;
+  dataset_id: string;
+  actions: Array<{
+    action: string;
+    id?: string;
+    title?: string;
+    metric?: string;
+    aggregation?: string;
+    chart_type?: string;
+    x?: string;
+    y?: string;
+  }>;
+  computed_results: Record<string, { value?: number; data?: Array<Record<string, unknown>>; calculated?: boolean }>;
+  warnings: string[];
+  errors: Array<{ action: string; reason: string; suggestion?: string }>;
+  schema_safe: boolean;
+  dashboard_health?: { status: string; score: number; issues: Array<Record<string, unknown>>; warnings: Array<Record<string, unknown>> };
+  audit: { schemaColumnsReceived: number; rawRowsSent: number; actionsValidated: number; actionsRejected: number };
 }
 
 
@@ -296,36 +418,33 @@ const apiBaseUrl = (() => {
   return baseUrl.replace(/\/$/, "");
 })();
 
-const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const startTime = Date.now();
-  const method = init?.method || "GET";
-
+export async function safeApiFetch<T>(
+  path: string,
+  options?: RequestInit,
+): Promise<T> {
   try {
     const response = await fetch(`${apiBaseUrl}${path}`, {
+      ...options,
       headers: {
         "Content-Type": "application/json",
-        ...(init?.headers || {}),
+        ...(options?.headers || {}),
       },
-      ...init,
     });
 
-    const duration = Date.now() - startTime;
-
     if (!response.ok) {
-      const errorPayload = await response.json().catch(() => null);
-      const errorMessage = errorPayload?.error?.message || errorPayload?.error || `Request failed with status ${response.status}`;
-      
-      logger.error(`API Error: ${method} ${path}`, {
-        statusCode: response.status,
-        duration,
-        path,
-        method,
-      });
+      const payload = await response.json().catch(() => null);
+      const fallbackText = await response.text().catch(() => "");
+      const message =
+        payload?.error?.message ||
+        payload?.message ||
+        payload?.error ||
+        fallbackText ||
+        `API failed with status ${response.status}`;
 
-      throw new ApiError(errorMessage, response.status, errorPayload?.error?.code || errorPayload?.code);
+      throw new ApiError(message, response.status, payload?.error?.code || payload?.code);
     }
 
-    logger.info(`API: ${method} ${path}`, {
+    logger.debug(`API: ${method} ${path}`, {
       statusCode: response.status,
       duration,
     });
@@ -334,7 +453,34 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
       return {} as T;
     }
 
-    const payload = await response.json() as T | ApiEnvelope<T>;
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+
+    console.error("API connection failed:", error);
+
+    throw new ApiError(
+      "Backend server is offline. Please start backend on port 3001 and refresh the app.",
+      0,
+      "NETWORK_ERROR",
+    );
+  }
+}
+
+const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
+  const startTime = Date.now();
+  const method = init?.method || "GET";
+
+  try {
+    const payload = await safeApiFetch<T | ApiEnvelope<T>>(path, init);
+    const duration = Date.now() - startTime;
+
+    logger.info(`API: ${method} ${path}`, {
+      statusCode: 200,
+      duration,
+    });
 
     if (
       payload
@@ -407,10 +553,51 @@ export const api = {
     const payload = await response.json() as ApiEnvelope<PdfImportResult>;
     return payload.data as PdfImportResult;
   },
+  uploadPdfIntelligence: async (file: File): Promise<PdfUploadPipelineResult> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${apiBaseUrl}/api/pdf-intelligence/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      throw new ApiError(errorPayload?.error?.message || "PDF upload failed", response.status, errorPayload?.error?.code);
+    }
+
+    const payload = await response.json() as ApiEnvelope<PdfUploadPipelineResult>;
+    return payload.data as PdfUploadPipelineResult;
+  },
+  getPdfIntelligenceDocument: (pdfId: string): Promise<PdfImportResult["pdfIntelligence"] & { documentId: string; fileName?: string; pageCount?: number; tableCount?: number; chunkCount?: number; status?: string; progress?: number }> =>
+    request(`/api/pdf-intelligence/${pdfId}`),
+  getPdfPipelineStatus: (pdfId: string): Promise<PdfPipelineStatus> =>
+    request<PdfPipelineStatus>(`/api/pdf-intelligence/${pdfId}/status`),
   askPdf: (pdfId: string, query: string): Promise<PdfAskResult> =>
     request<PdfAskResult>(`/api/pdf/${pdfId}/ask`, {
       method: "POST",
       body: JSON.stringify({ query }),
+    }),
+  askPdfIntelligence: (pdfId: string, query: string, intent?: string): Promise<PdfAskResult> =>
+    request<PdfAskResult>(`/api/pdf-intelligence/${pdfId}/query`, {
+      method: "POST",
+      body: JSON.stringify({ query, intent }),
+    }),
+  explainPdf: (pdfId: string): Promise<PdfAskResult> =>
+    request<PdfAskResult>(`/api/pdf-intelligence/${pdfId}/explain`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  reindexPdf: (pdfId: string) =>
+    request(`/api/pdf-intelligence/${pdfId}/reindex`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  forceOcrPdf: (pdfId: string) =>
+    request<{ document: PdfImportResult["pdfIntelligence"] & { documentId?: string }; vectorIndex?: unknown }>(`/api/pdf-intelligence/${pdfId}/force-ocr`, {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
   updateRow: (datasetId: string, rowId: number, column: string, value: unknown) =>
     request<{ dataset: Dataset }>(`/api/datasets/${datasetId}/rows/${rowId}`, {
@@ -450,7 +637,8 @@ export const api = {
     datasetId: string,
     query: string,
     currentDashboard?: unknown,
-    dataset?: { rows?: unknown[]; columns?: unknown[] },
+    dataset?: { rows?: unknown[]; columns?: unknown[]; pageContext?: string; dashboardChartCount?: number },
+    context?: { page?: string; activeFilters?: Record<string, string>; selectedChart?: string; dashboardChartCount?: number },
   ) =>
     request<DashboardCommandResponse>(`/api/datasets/${datasetId}/dashboard-command`, {
       method: "POST",
@@ -458,10 +646,45 @@ export const api = {
         query,
         currentDashboard,
         useLlm: true,
+        rows: dataset?.rows,
         columns: dataset?.columns,
+        context: {
+          ...context,
+          page: context?.page || dataset?.pageContext,
+          dashboardChartCount: context?.dashboardChartCount ?? dataset?.dashboardChartCount,
+        },
       }),
     }),
-  sendSchemaChat: (datasetId: string, query: string, dataset?: { rows?: unknown[]; columns?: unknown[] }) =>
+  sendFastDashboardChat: async (
+    message: string,
+    schemaProfile: Record<string, unknown>,
+    currentDashboard?: unknown,
+    context?: { page?: string; activeFilters?: Record<string, string>; selectedChart?: string },
+  ) => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 2500);
+
+    try {
+      return await request<{ ok: boolean; result: FastDashboardChatResponse }>("/api/ollama-manager/fast-chat", {
+        method: "POST",
+        signal: controller.signal,
+        body: JSON.stringify({
+          message,
+          schemaProfile,
+          currentDashboard,
+          context,
+        }),
+      });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  },
+  sendSchemaChat: (
+    datasetId: string,
+    query: string,
+    dataset?: { rows?: unknown[]; columns?: unknown[] },
+    context?: { page?: string; activeFilters?: Record<string, string>; selectedChart?: string },
+  ) =>
     request<{
       userMessage: unknown;
       assistantMessage: {
@@ -477,6 +700,7 @@ export const api = {
         query,
         useLlm: true,
         columns: dataset?.columns,
+        context,
       }),
     }),
   getSchemaTrainingMemory: () =>
@@ -537,9 +761,20 @@ export const api = {
       method: "GET",
     }),
   exportDataset: async (datasetId: string, format: 'json' | 'csv' | 'md') => {
-    const response = await fetch(`${apiBaseUrl}/api/datasets/${datasetId}/export/${format}`);
+    let response: Response;
+    try {
+      response = await fetch(`${apiBaseUrl}/api/datasets/${datasetId}/export/${format}`);
+    } catch (error) {
+      console.error("API connection failed:", error);
+      throw new ApiError(
+        "Backend server is offline. Please start backend on port 3001 and refresh the app.",
+        0,
+        "NETWORK_ERROR",
+      );
+    }
+
     if (!response.ok) {
-      throw new Error(`Export failed with status ${response.status}`);
+      throw new ApiError(`Export failed with status ${response.status}`, response.status);
     }
     return response.blob();
   },
@@ -665,28 +900,68 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ goal }),
     }),
+  runSchemaOnlyAnalysis: (
+    datasetId: string,
+    goal: string,
+    currentDashboardState?: Record<string, unknown>,
+    options?: { sampleSize?: number }
+  ) =>
+    request<SchemaOnlyAnalysisResponse>(
+      `/api/agentic-models/datasets/${datasetId}/analyze`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          goal,
+          currentDashboardState: currentDashboardState || {},
+          schema_only: true,
+          sampleSize: options?.sampleSize,
+        }),
+      }
+    ),
 };
 
 async function postDashboardAi<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const payload = await safeApiFetch<any>(path, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify(body),
   });
 
-  const payload = await response.json();
-
-  if (!response.ok || payload.success === false) {
+  if (payload.success === false) {
     throw new ApiError(
       payload.message || payload.error?.message || "Request failed",
-      response.status,
+      400,
       payload.error?.code
     );
   }
 
   return payload as T;
+}
+
+export interface ChartQueryResponse {
+  chart: ChartConfig;
+  confidence: number;
+  columnStats: {
+    uniqueValues: number;
+    sampleValues: string[];
+    min?: number;
+    max?: number;
+    avg?: number;
+    median?: number;
+  } | null;
+  ragContext: {
+    matchedViaRag: boolean;
+    ragMemoryCount: number;
+    instructionsUsed?: string[];
+  };
+  schemaSummary: {
+    datasetName: string;
+    rowCount: number;
+    totalColumns: number;
+    metrics: string[];
+    dimensions: string[];
+  };
+  removedChartId: string | null;
+  message: string;
 }
 
 export const dashboardAiApi = {
@@ -700,5 +975,15 @@ export const dashboardAiApi = {
 
   validateAndFixDashboard(body: DashboardAiFixPayload) {
     return postDashboardAi<DashboardAiResponse>("/api/dashboard-ai/fix", body);
+  },
+
+  chartQuery(body: { query: string; datasetId?: string; existingCharts?: ChartConfig[] }) {
+    return postDashboardAi<ChartQueryResponse>("/api/dashboard/chart-query", body);
+  },
+
+  removeChart(chartId: string) {
+    return postDashboardAi<{ removedChartId: string; message: string }>("/api/dashboard/remove-chart", {
+      chartId,
+    });
   },
 };

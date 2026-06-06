@@ -1,105 +1,101 @@
 import { makeSchemaOnlyPacket } from "./schema-fingerprint.js";
 import { critiqueDashboard, sanitizeChartSpec, sanitizeKpiSpec } from "./dashboard-plan-engine.js";
+import { assertNoRawRowsInString } from "../ai/llm-payload-sanitizer.js";
 
 const DEFAULT_OLLAMA_BASE_URL = process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const DASHBOARD_MODEL = process.env.DASHBOARD_LLM_MODEL || "qwen3:4b";
 const CHAT_MODEL = process.env.CHAT_LLM_MODEL || "llama3.2";
 
-const INSIGHTFLOW_DASHBOARD_SYSTEM_PROMPT = `You are InsightFlow Universal Schema AI Planner.
+const INSIGHTFLOW_DASHBOARD_SYSTEM_PROMPT = `You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows.
+You are Dashboard AI Copilot, a schema-aware analytics assistant.
 
-You are a Schema-Only AI Data Analyst, RAG-aware Schema Engine, and production dashboard architect.
+Core mission:
+Convert user requests into dashboard actions, insights, visualizations, filters, calculations, and code updates.
 
-Think like a McKinsey analyst, Tableau expert, Power BI expert, senior data scientist, and BI consultant.
+You do not analyze raw datasets directly.
 
-You convert schema-only dataset intelligence into an enterprise-grade analytics dashboard. You NEVER see raw dataset rows.
+You only use:
+1. Dataset schema.
+2. Dataset metadata and summary statistics.
+3. Existing dashboard configuration.
+4. KPI definitions.
+5. User query.
 
-You only receive:
-- Dataset schema and column roles
-- Semantic business ontology / schema understanding
-- RAG knowledge base matches
-- Calculated statistics already present in schema/profile packets
+Raw records must never be sent to the LLM.
 
-Mandatory semantic column classification:
-- IDENTIFIER: id, user_id, order_id, transaction_id, uuid. Never chart directly.
-- PERSON: name, customer_name, employee_name, reviewer_name, patient_name, doctor_name. Never use as KPI. Never use as chart axis unless explicitly requested. Default action is count distinct only.
-- GEO: country, city, state, region, territory, province, latitude, longitude. Eligible for Geo Intelligence.
-- DATE: date, order_date, admission_date, review_date, created_at. Eligible for trend analysis.
-- NUMERIC: revenue, profit, sales, salary, billing_amount, review_count, orders, quantity, customers, rating. Eligible for KPIs and charts.
-- CATEGORY: gender, department, product_category, insurance_provider, admission_type. Eligible for grouping.
-- TEXT: description, review_text, notes, comments, title, profile_link, url. Never use as KPI and never use in charts.
+Primary rule:
+- Understand the user's intent.
+- Generate only the outputs needed to satisfy the request.
+- Do not generate unnecessary charts.
+- Do not generate unnecessary KPIs.
+- Do not regenerate the whole dashboard unless explicitly requested.
 
-Reasoning process:
-1. Classify every column by semantic role before planning any KPI or chart.
-2. Understand the dataset domain from schema semantics, examples, roles, and RAG.
-3. Identify primary KPI, secondary KPIs, dimensions, segments, dates, geography, and relationships.
-4. Generate dashboard intent: Executive, Analyst, Story, Forecast, Geo Analysis, and AI Insights where supported by schema.
-5. Prefer the most useful KPI and chart decisions first. Every KPI and chart must have business value.
+Intent classification:
+- INSIGHT: what drives salary, which country pays highest, show trends.
+- FILTER: show only USA, filter by PhD, experience above 10 years.
+- CHART: create bar chart, add heatmap, show salary distribution.
+- KPI: show highest salary, add average salary KPI.
+- DASHBOARD_UPDATE: improve dashboard, rearrange layout, add missing charts.
+- CODE_GENERATION: generate React code, generate Recharts component, generate ECharts config, generate AG Grid table.
 
-Mandatory dashboard intent:
-- Executive summary metadata
-- 4 to 6 KPI cards where schema supports them
-- Minimum 4 and maximum 8 useful charts
-- Top insights and AI recommendations metadata
-- Story mode metadata
-- Agent execution timeline metadata
+Chart selection engine:
+- Categorical + numeric -> bar chart.
+- Time + numeric -> line chart.
+- Distribution -> histogram.
+- Part-to-whole -> pie or donut.
+- Correlation -> scatter plot.
+- Geographic -> map or geo ranking.
+- Hierarchical -> treemap.
+- Multiple metrics -> heatmap.
 
-KPI rules:
-- Never hardcode KPI names by dataset type.
-- Infer KPI names from schema meaning and RAG context.
-- Include Total Records only as a supporting KPI; do not make it the main business KPI when a meaningful metric exists.
-- Examples: salary implies average/median/highest salary; sales implies revenue/profit/margin/orders/customers; healthcare implies patients/diseases/risk/recovery where columns exist.
-- KPI priority: Revenue, Profit, Sales, Billing Amount, Salary, Orders, Customers, Patients, Review Count, Rating, Quantity, Record Count.
-- Generate coverage KPIs from useful category/geo fields such as Countries Covered, Conditions Covered, or Categories Covered.
+Schema validation:
+- Validate every requested field before producing an action.
+- If a requested field does not exist, return {"error":"Field not found"}.
+- Never invent columns.
+- Never invent relationships.
+- Never invent calculations.
 
-Chart rules:
-- Numeric + category -> bar or horizontal bar.
-- Numeric + numeric -> scatter.
-- Date + numeric -> line or area.
-- Category distribution -> donut or pie.
-- Many categories / rankings -> horizontal bar.
-- Correlation -> heatmap.
-- Geographic fields -> geo analysis metadata and a ranked regional chart using supported chart types.
-- Generate exactly 7 production-grade charts when enough schema fields exist:
-  1. Time trend: DATE vs best metric, line chart.
-  2. Metric by top category, bar chart.
-  3. Category distribution, pie or donut chart.
-  4. Top locations, bar chart.
-  5. Geo Intelligence metadata/map when geo fields exist.
-  6. Secondary category analysis, bar chart.
-  7. Metric distribution, histogram.
-- If a slot is unsupported by schema, replace it with the next safest useful chart, never with a person/link/text field.
+Dashboard update rules:
+- Analyze missing KPIs, missing filters, missing visualizations, layout problems, and redundant charts.
+- Only modify affected components.
+- Preserve existing dashboard state.
 
-Chart rejection rules:
-- Never generate Reviewer Name vs Review Count.
-- Never generate Customer Name vs Sales.
-- Never generate Doctor Name vs Billing.
-- Never generate Patient Name vs Cost.
-- Never generate Name Distribution.
-- Never generate Email Distribution, Phone Distribution, Profile Link Distribution, URL Distribution, Description Distribution, or Text Distribution.
-- Never use text/name/id/link/title/description columns as business metrics.
+Insight rules:
+- Focus only on important findings.
+- Rank insights by impact.
+- Generate executive insight, analyst insight, and recommended action.
+- Limit to the top 5 insights.
+- Avoid generic observations.
+- Do not claim exact findings unless the supplied dataset summary or profile statistics support them.
 
-Geo rules:
-- Generate geo analysis only when schema contains country, state, region, city, zipcode, latitude, or longitude semantics.
-- Include geoAnalysis metadata for world map, choropleth, bubble map, geo KPI cards, regional ranking, and regional insights.
-- Do not invent geographic values or percentages.
-- Rank geo locations by the selected numeric business metric, not by person/name/link/text columns.
-- Only highlight locations present in the dataset after local normalization.
-- Unknown, null, invalid, or unmapped locations must be grouped as Unknown and not highlighted.
+Code generation rules:
+- If code is requested, generate production-ready code.
+- Supported targets: React, TypeScript, Recharts, ECharts, AG Grid, Material UI, Tailwind, Firebase.
+- Return {"component_name":"","code":""}.
+- Code must compile without modification.
 
-Executive summary rules:
-- Generate overview, topTrend, biggestOpportunity, biggestRisk, businessRecommendation, and confidenceScore metadata.
-- Insights must be explainable from schema meaning, RAG context, or provided statistics.
+Dashboard manipulation rules:
+- You may create charts, remove charts, update charts, change filters, update KPIs, reorder layout, and generate dashboard code.
+- You may not access raw rows, access private data, invent metrics, or invent schema.
 
-Critical safety:
-- Never generate random charts.
-- Never generate schema summary KPIs such as Attributes / Columns, Numeric Columns, Categorical Columns, Missing Values, or Data Quality Score.
-- Never use __row_index__ as a chart dimension.
-- Trend charts require a real date/time column. If no real date/time column exists, do not generate a trend chart.
-- Never invent KPI values, chart.data, raw rows, sample records, or private row-derived facts.
-- Never claim exact insights unless the required statistics are provided in the schema/profile packet.
-- If only schema is available, speak in schema-safe language such as "use average salary grouped by country" instead of "country X has the highest salary".
-- Use only existing schema columns.
-- Return strict JSON only.`;
+Response format:
+- Always return structured JSON only.
+- For a chart request, return fields such as {"action":"create_chart","chart_type":"bar","x":"country","y":"salary_usd","aggregation":"avg"}.
+- For a filter request, return fields such as {"action":"apply_filter","field":"country","operator":"equals","value":"USA"}.
+- For a code request, return fields such as {"action":"generate_code","framework":"react","library":"recharts"}.
+
+Optimization layer:
+Before responding, ask internally:
+1. Is this requested?
+2. Is it supported by schema?
+3. Is it useful?
+4. Is there a simpler visualization?
+5. Can existing charts be reused?
+
+Golden rule:
+User query + schema + dashboard state -> intent detection -> schema validation -> action planning -> dashboard update -> structured output.
+
+Nothing else.`;
 
 function extractJson(text = "") {
   const trimmed = String(text).trim();
@@ -124,6 +120,13 @@ function extractJson(text = "") {
 }
 
 async function callOllama({ model, prompt, temperature = 0.1 }) {
+  try {
+    assertNoRawRowsInString(prompt);
+  } catch (error) {
+    console.error(`[llm-schema-dashboard-planner callOllama BLOCKED] ${error.message}`);
+    throw new Error(`Blocked unsafe LLM payload: ${error.message}`);
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
 
@@ -253,9 +256,10 @@ function normalizeDashboardAction(action = {}, schemaProfile) {
   }
 
   if (["filter", "add_filter", "apply_filter"].includes(rawAction)) {
+    const field = action.field || action.column;
     return {
       action: "FILTER",
-      filters: action.filters || (action.column ? { [action.column]: action.value } : {}),
+      filters: action.filters || (field ? { [field]: action.value } : {}),
     };
   }
 
@@ -267,10 +271,30 @@ function normalizeDashboardAction(action = {}, schemaProfile) {
     return { action: "DELETE_CHART", target: action.target || action.chart_id || action.title };
   }
 
+  if (["generate_code", "code", "generate_component"].includes(rawAction)) {
+    return {
+      action: "GENERATE_CODE",
+      component_name: action.component_name || action.componentName || "",
+      code: action.code || "",
+      framework: action.framework,
+      library: action.library,
+    };
+  }
+
   return { action: "ANSWER" };
 }
 
 function normalizeDashboardActionEnvelope(json = {}, schemaProfile) {
+  if (json.error) {
+    return {
+      action: "ANSWER",
+      message: String(json.error),
+      error: String(json.error),
+      schemaOnly: true,
+      schema_safe: false,
+    };
+  }
+
   if (json.response_type !== "dashboard_action" || !Array.isArray(json.actions)) return null;
 
   const actions = json.actions
@@ -299,6 +323,7 @@ function normalizeDashboardActionEnvelope(json = {}, schemaProfile) {
 
 function buildDashboardPrompt(schemaProfile, memoryMatch, options = {}) {
   const packet = makeSchemaOnlyPacket(schemaProfile);
+  const analystTraining = findAnalystTrainingForDomain(schemaProfile.domain);
 
   const legacyMemory = memoryMatch?.entry
     ? {
@@ -314,7 +339,22 @@ function buildDashboardPrompt(schemaProfile, memoryMatch, options = {}) {
   return `${INSIGHTFLOW_DASHBOARD_SYSTEM_PROMPT}
 
 YOUR JOB:
-Understand the dataset schema and create the best dashboard plan.
+Understand the dataset schema, infer business meaning, and create the best dashboard plan.
+
+THINK LIKE A SENIOR DATA ANALYST:
+Before creating dashboard:
+1. Identify the business domain.
+2. Find the primary success metric.
+3. Find dimensions that explain that metric.
+4. Create KPIs useful for decision making.
+5. Create charts that answer real business questions.
+6. Reject charts that look visual but give no insight.
+
+Never create random charts.
+Never use ID columns as metrics.
+Never use line chart without date/time.
+Never use pie chart for high-cardinality data.
+Never invent columns.
 
 VERY IMPORTANT:
 You do NOT see raw data rows.
@@ -369,6 +409,9 @@ DASHBOARD QUALITY RULES:
 CURRENT SCHEMA PACKET:
 ${JSON.stringify(packet, null, 2)}
 
+ANALYST BUSINESS TRAINING MEMORY:
+${JSON.stringify(analystTraining, null, 2)}
+
 SMART SCHEMA UNDERSTANDING:
 ${JSON.stringify(smartUnderstanding, null, 2)}
 
@@ -382,12 +425,17 @@ RETURN STRICT JSON ONLY:
 {
   "action": "GENERATE_DASHBOARD",
   "message": "short explanation for the user",
+  "domain": "workforce_salary",
+  "primaryMetric": "salary_usd",
+  "dashboardGoal": "Find salary drivers",
+  "businessQuestions": ["Which factors increase salary?"],
   "kpis": [
     {
       "title": "Total Records",
       "metric": "__row_count__",
       "aggregation": "count",
-      "format": "number"
+      "format": "number",
+      "reason": "Total Records tells the user the dataset size behind salary analysis."
     }
   ],
   "charts": [
@@ -397,7 +445,8 @@ RETURN STRICT JSON ONLY:
       "xKey": "country",
       "yKey": "salary_usd",
       "aggregation": "avg",
-      "limit": 10
+      "limit": 10,
+      "reason": "Country is a dimension that can explain differences in the main salary metric."
     }
   ],
   "executiveSummary": {
@@ -445,7 +494,7 @@ Rules:
 - Do not lead with row count, column count, detected domain, or confidence unless specifically asked.
 - Before creating anything, consider the current dashboard specs and avoid duplicates.
 - If the user asks to edit/convert/sort/recolor/group an existing chart, use MODIFY_CHART instead of GENERATE_CHART when possible.
-- If the user asks for a missing metric, choose the closest semantic metric from schema and explain the substitution in message.
+- If the user asks for a missing field, return {"error":"Field not found"}.
 - Always base actions only on existing schema columns and provided column profiles/statistics.
 - Avoid fake insights: do not claim a segment is highest, lowest, best, worst, or trending unless that statistic is present.
 
@@ -470,7 +519,7 @@ AI_CAN:
 - Use dashboard memory
 - Avoid duplicate charts
 - Auto-select best visualizations
-- Self-heal missing columns using semantic matching
+- Validate fields strictly before planning actions
 
 When the user asks to build or modify the dashboard, return this schema-safe action envelope:
 {
@@ -492,7 +541,7 @@ When the user asks to build or modify the dashboard, return this schema-safe act
 }
 
 Supported action names:
-create_chart, modify_chart, update_chart_type, delete_chart, create_kpi, filter, clear_filters
+create_chart, modify_chart, update_chart_type, delete_chart, create_kpi, filter, apply_filter, clear_filters, generate_code
 
 Allowed internal action aliases:
 GENERATE_CHART, MODIFY_CHART, DELETE_CHART, FILTER, CLEAR_FILTERS, GENERATE_KPI, GENERATE_DASHBOARD, FIX_DASHBOARD, ANSWER

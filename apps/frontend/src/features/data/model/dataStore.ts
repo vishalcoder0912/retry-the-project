@@ -26,7 +26,20 @@ import {
 
 export interface DataColumn {
   name: string;
-  type: "string" | "number" | "date";
+  type:
+    | "string"
+    | "number"
+    | "date"
+    | "datetime"
+    | "currency"
+    | "percentage"
+    | "category"
+    | "text"
+    | "boolean"
+    | "country"
+    | "city"
+    | "latitude"
+    | "longitude";
   sample: string[];
 }
 

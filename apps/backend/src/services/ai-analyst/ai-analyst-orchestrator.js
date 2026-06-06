@@ -117,6 +117,7 @@ export async function runAnalystCommand({
     return {
       action: "CLEAR_FILTERS",
       message: "All filters cleared.",
+      structured: routed.structured,
     };
   }
 
@@ -125,6 +126,7 @@ export async function runAnalystCommand({
       action: "FILTER",
       message: routed.message || "Filter applied.",
       filters: routed.filters || {},
+      structured: routed.structured,
     };
   }
 
@@ -132,6 +134,7 @@ export async function runAnalystCommand({
     return {
       action: "DELETE_CHART",
       message: "Removed the selected chart.",
+      structured: routed.structured,
     };
   }
 
@@ -146,6 +149,7 @@ export async function runAnalystCommand({
       action: "ADD_KPI",
       message: "Added KPI summary.",
       kpis,
+      structured: routed.structured,
     };
   }
 
@@ -161,6 +165,7 @@ export async function runAnalystCommand({
       return {
         action: "ANSWER",
         message: "I could not create a valid chart from this schema.",
+        structured: routed.structured,
       };
     }
 
@@ -168,6 +173,7 @@ export async function runAnalystCommand({
       action: routed.action,
       message: routed.message || `Created chart: ${chart.title}`,
       chart,
+      structured: routed.structured,
     };
   }
 
@@ -176,5 +182,6 @@ export async function runAnalystCommand({
     message:
       routed.message ||
       "I analyzed the schema, but this command does not require a dashboard change.",
+    structured: routed.structured,
   };
 }

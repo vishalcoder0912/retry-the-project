@@ -1,407 +1,246 @@
-/**
- * Custom Chart Query Parser
- * 
- * Deterministic parser for user queries that request charts and KPIs.
- * Runs BEFORE AI to avoid hallucinations and coordinate x/y fields correctly.
- * 
- * Supports patterns like:
- * - "Show average salary_usd by country"
- * - "Create pie chart of country"
- * - "Show salary_usd distribution"
- * - "Show experience vs salary_usd"
- * - "Top 10 countries by salary"
- */
-
-const AGGREGATION_ALIASES = {
-  "average": "avg",
-  "mean": "avg",
-  "total": "sum",
-  "highest": "max",
-  "lowest": "min",
-  "minimum": "min",
-  "maximum": "max",
-  "number of": "count",
-  "records": "count",
-  "count of": "count",
-};
-
-const CHART_TYPE_PATTERNS = {
-  "scatter": /scatter|correlation|vs|versus/i,
-  "line": /line|trend|over time|timeline/i,
-  "area": /area|stacked/i,
-  "histogram": /histogram|distribution/i,
-  "donut": /donut|pie chart/i,
-  "pie": /pie|percentage|share|proportion/i,
-  "horizontal_bar": /horizontal|rank|ranking/i,
-  "bar": /bar|chart|compare|by/i,
-};
-
-/**
- * Normalize a value to match column names
- * @param {string} value 
- * @returns {string}
- */
-function normalize(value = "") {
-  return String(value)
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^_+|_+$/g, "");
+function normalize(text = "") {
+  return String(text).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-/**
- * Find column in schema by exact or fuzzy match
- * @param {object} schemaProfile
- * @param {string} userInput
- * @returns {object|null}
- */
-function findColumnByFuzzyMatch(schemaProfile, userInput) {
-  if (!schemaProfile?.columns || !userInput) return null;
+function columnName(column = {}) {
+  return column.name || column.key || column.id || "";
+}
 
-  const normalized = normalize(userInput);
-  const columns = schemaProfile.columns;
-
-  // Exact match first
-  let found = columns.find((c) => normalize(c.name) === normalized);
-  if (found) return found;
-
-  // Substring match
-  found = columns.find((c) => normalize(c.name).includes(normalized) || normalized.includes(normalize(c.name)));
-  if (found) return found;
-
-  // Common semantic aliases
-  const aliases = {
-    "salary": ["salary_usd", "salary", "income", "pay", "compensation"],
-    "income": ["salary_usd", "salary", "income", "pay"],
-    "pay": ["salary_usd", "salary", "income"],
-    "nation": ["country"],
-    "location": ["country", "region", "state", "city"],
-    "qualification": ["education", "degree"],
-    "degree": ["education"],
-    "exp": ["experience"],
-    "years": ["experience"],
-    "tech": ["frameworks", "technologies"],
-    "tools": ["frameworks", "tools"],
-  };
-
-  const searchKey = normalize(userInput);
-  if (aliases[searchKey]) {
-    for (const alias of aliases[searchKey]) {
-      found = columns.find((c) => normalize(c.name) === normalize(alias));
-      if (found) return found;
-    }
-  }
-
+export function detectChartType(query = "") {
+  const lower = normalize(query);
+  if (/\bhorizontal\s+bar\b/.test(lower)) return "horizontal_bar";
+  if (/\b(line|trend|over time|time series)\b/.test(lower)) return "line";
+  if (/\b(pie|donut|breakdown|share)\b/.test(lower)) return lower.includes("donut") ? "donut" : "pie";
+  if (/\b(scatter|relationship|correlation)\b/.test(lower)) return "scatter";
+  if (/\b(histogram|distribution)\b/.test(lower)) return "histogram";
+  if (/\b(area)\b/.test(lower)) return "area";
+  if (/\b(bar|compare|by|vs|vary)\b/.test(lower)) return "bar";
   return null;
 }
 
-/**
- * Extract aggregation from query text
- * @param {string} query
- * @param {string} defaultAgg
- * @returns {string}
- */
-function extractAggregation(query = "", defaultAgg = "avg") {
-  const lower = query.toLowerCase();
-
-  for (const [alias, canonical] of Object.entries(AGGREGATION_ALIASES)) {
-    if (lower.includes(alias)) return canonical;
-  }
-
-  if (/average|mean/i.test(lower)) return "avg";
-  if (/sum|total/i.test(lower)) return "sum";
-  if (/max|highest/i.test(lower)) return "max";
-  if (/min|lowest/i.test(lower)) return "min";
-  if (/count|number of|records/i.test(lower)) return "count";
-  if (/median/i.test(lower)) return "median";
-
-  return defaultAgg;
+export function detectAggregation(query = "") {
+  const lower = normalize(query);
+  if (/\b(avg|average|mean)\b/.test(lower)) return "avg";
+  if (/\b(median)\b/.test(lower)) return "median";
+  if (/\b(min|minimum|lowest)\b/.test(lower)) return "min";
+  if (/\b(max|maximum|highest)\b/.test(lower)) return "max";
+  if (/\b(unique|distinct)\b/.test(lower)) return "count_unique";
+  if (/\b(count|number of|records)\b/.test(lower)) return "count";
+  if (/\b(sum|total)\b/.test(lower)) return "sum";
+  return null;
 }
 
-/**
- * Detect chart type from query
- * @param {string} query
- * @returns {string}
- */
-function detectChartType(query = "") {
-  for (const [type, pattern] of Object.entries(CHART_TYPE_PATTERNS)) {
-    if (pattern.test(query)) return type;
+function roleOf(column = {}) {
+  const name = normalize(columnName(column));
+  const type = normalize(column.type || column.inferredType || column.role || "");
+  const explicitRole = normalize(column.role || "");
+  if (explicitRole.includes("metric")) return "metric";
+  if (["category", "dimension", "location", "target", "numeric_category"].includes(explicitRole)) {
+    return explicitRole === "category" ? "dimension" : explicitRole;
   }
-  return "bar";
+  if (explicitRole === "date") return "date";
+  if (explicitRole === "id") return "id";
+  if (/date|time|timestamp|year|month/.test(name) || /date|time/.test(type)) return "date";
+  if (/number|numeric|int|float|double|decimal|metric/.test(type)) return "metric";
+  if (/country|state|city|region|market|location|geo/.test(name)) return "location";
+  return "dimension";
 }
 
-/**
- * Try to parse a simple chart query deterministically
- * Returns null if parsing is uncertain; lets AI handle it.
- * 
- * Examples:
- * - "Show average salary_usd by country" 
- *   → {metric: salary_usd, dimension: country, aggregation: avg, chartType: bar}
- * 
- * - "Create pie chart of country"
- *   → {dimension: country, chartType: donut, aggregation: count}
- * 
- * - "Show salary_usd distribution"
- *   → {metric: salary_usd, chartType: histogram}
- * 
- * - "Show experience vs salary_usd"
- *   → {x: experience, y: salary_usd, chartType: scatter}
- * 
- * @param {string} query
- * @param {object} schemaProfile
- * @returns {object|null} Canonical action or null
- */
+function findMentionedColumn(query = "", columns = [], predicate = () => true) {
+  const lower = normalize(query);
+  const ranked = columns
+    .filter(predicate)
+    .map((column) => {
+      const name = columnName(column);
+      const normalizedName = normalize(name);
+      const compactName = normalizedName.replace(/\s+/g, "");
+      const compactQuery = lower.replace(/\s+/g, "");
+      const score =
+        lower === normalizedName ? 4 :
+        lower.includes(normalizedName) ? 3 :
+        compactQuery.includes(compactName) ? 2 :
+        normalizedName.split(" ").some((part) => part.length > 2 && lower.includes(part)) ? 1 :
+        0;
+      return { column, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((left, right) => right.score - left.score);
+
+  return ranked[0]?.column || null;
+}
+
+function firstByRole(columns = [], roles = []) {
+  return columns.find((column) => roles.includes(roleOf(column))) || null;
+}
+
+export function categorizeSchemaColumns(schemaProfile = {}) {
+  const columns = Array.isArray(schemaProfile.columns) ? schemaProfile.columns : [];
+  return {
+    metrics: columns.filter((column) => roleOf(column) === "metric").map(columnName).filter(Boolean),
+    categories: columns.filter((column) => ["dimension", "location"].includes(roleOf(column))).map(columnName).filter(Boolean),
+    dates: columns.filter((column) => roleOf(column) === "date").map(columnName).filter(Boolean),
+  };
+}
+
+export function findColumnMatch(text = "", schemaProfile = {}, predicate = () => true) {
+  const columns = Array.isArray(schemaProfile.columns) ? schemaProfile.columns : [];
+  const match = findMentionedColumn(text, columns, predicate);
+  return match ? columnName(match) : null;
+}
+
+export function normalizeChartAction(action = {}) {
+  const x = action.x ?? action.xKey ?? action.dimension ?? action.chartSpec?.xKey;
+  const y = action.y ?? action.yKey ?? action.metric ?? action.measure ?? action.chartSpec?.yKey;
+  const chartType = action.chart_type ?? action.chartType ?? action.type ?? action.chartSpec?.type;
+
+  return {
+    ...action,
+    ...(x ? { x, xKey: x } : {}),
+    ...(y ? { y, yKey: y } : {}),
+    ...(chartType ? { chart_type: chartType, chartType, type: action.type || chartType } : {}),
+  };
+}
+
+function parseFilter(query = "", schemaProfile = {}) {
+  const match = String(query).match(/filter\s+(.+?)\s*(?:=|is|to)\s*(.+)$/i);
+  if (!match) return null;
+  const column = findColumnMatch(match[1], schemaProfile);
+  if (!column) return null;
+  return {
+    action: "filter",
+    filters: {
+      [column]: match[2].trim().replace(/^["']|["']$/g, ""),
+    },
+    schemaOnly: true,
+  };
+}
+
+function parseKpi(query = "", schemaProfile = {}) {
+  const aggregation = detectAggregation(query);
+  if (!aggregation || !/\b(total|sum|average|avg|mean|median|min|max|count|unique|distinct)\b/i.test(query)) {
+    return null;
+  }
+  const metric = findColumnMatch(query, schemaProfile, (column) => {
+    const role = roleOf(column);
+    return role === "metric" || (aggregation === "count_unique" && ["dimension", "location"].includes(role));
+  });
+  if (!metric) return null;
+  return {
+    action: "create_kpi",
+    metric,
+    aggregation,
+    title: `${aggregation} ${metric}`,
+    schemaOnly: true,
+  };
+}
+
+function queryParts(query = "") {
+  return normalize(query).split(/\s+(?:vs|by|over)\s+/).map((part) => part.trim()).filter(Boolean);
+}
+
 export function parseCustomChartQuery(query = "", schemaProfile = {}) {
-  if (!query || !schemaProfile?.columns?.length) return null;
+  const columns = Array.isArray(schemaProfile.columns) ? schemaProfile.columns : [];
+  if (!String(query).trim() || !columns.length) return null;
 
-  const lower = query.toLowerCase();
-  const words = query.split(/[\s,;]+/).filter(Boolean);
+  const filter = parseFilter(query, schemaProfile);
+  if (filter) return filter;
 
-  // Pattern 1: "Show [aggregation] [metric] by [dimension]"
-  // Example: "show average salary_usd by country"
-  const showByMatch = /show\s+(?:(\w+)\s+)?(\w+)\s+by\s+(\w+)/i.exec(query);
-  if (showByMatch) {
-    const aggWord = showByMatch[1];
-    const metricWord = showByMatch[2];
-    const dimensionWord = showByMatch[3];
+  const explicitChartType = detectChartType(query);
+  const kpi = explicitChartType ? null : parseKpi(query, schemaProfile);
+  if (kpi) return kpi;
 
-    const metric = findColumnByFuzzyMatch(schemaProfile, metricWord);
-    const dimension = findColumnByFuzzyMatch(schemaProfile, dimensionWord);
+  const chart_type = explicitChartType || "bar";
+  const aggregation = detectAggregation(query) || (/vary|relationship|compare|by/i.test(query) ? "avg" : "sum");
+  const parts = queryParts(query);
+  const metric =
+    findMentionedColumn(query, columns, (column) => roleOf(column) === "metric") ||
+    firstByRole(columns, ["metric"]);
+  const date = findMentionedColumn(query, columns, (column) => roleOf(column) === "date") || firstByRole(columns, ["date"]);
+  const dimension =
+    findMentionedColumn(query, columns, (column) => ["dimension", "location"].includes(roleOf(column))) ||
+    firstByRole(columns, ["location", "dimension"]);
 
-    if (metric && dimension) {
-      return {
-        action: "create_chart",
-        chart_type: detectChartType(lower),
-        title: `${aggWord || "Average"} ${metric.name || metricWord} by ${dimension.name || dimensionWord}`,
-        x: dimension.name,
-        y: metric.name,
-        aggregation: extractAggregation(aggWord || query, metric.type === "number" ? "avg" : "count"),
-      };
-    }
-  }
+  let xColumn = dimension;
+  let yColumn = metric;
 
-  // Pattern 2: "[metric] distribution" or "[metric] histogram"
-  // Example: "salary_usd distribution"
-  const distMatch = /(\w+)\s+(distribution|histogram)/i.exec(query);
-  if (distMatch) {
-    const metricWord = distMatch[1];
-    const metric = findColumnByFuzzyMatch(schemaProfile, metricWord);
-
-    if (metric && metric.type === "number") {
-      return {
-        action: "create_chart",
-        chart_type: "histogram",
-        title: `${metric.name} Distribution`,
-        x: metric.name,
-        y: metric.name,
-        aggregation: "none",
-      };
-    }
-  }
-
-  // Pattern 3: "[dimension] pie/donut" or "pie chart of [dimension]"
-  // Example: "Create pie chart of country" or "country pie"
-  const pieMatch = /(?:(?:pie|donut)\s+(?:chart\s+)?of|create\s+(?:pie|donut)\s+chart\s+of|(\w+)\s+(?:pie|donut))/i.exec(query);
-  if (pieMatch) {
-    // Extract dimension name from the query
-    let dimensionWord = null;
-    if (pieMatch[1]) {
-      dimensionWord = pieMatch[1];
-    } else {
-      // Try to find word after "of"
-      const ofMatch = /of\s+(\w+)/i.exec(query);
-      if (ofMatch) dimensionWord = ofMatch[1];
-    }
-
-    if (dimensionWord) {
-      const dimension = findColumnByFuzzyMatch(schemaProfile, dimensionWord);
-      if (dimension) {
-        return {
-          action: "create_chart",
-          chart_type: "donut",
-          title: `Records by ${dimension.name}`,
-          x: dimension.name,
-          y: "__row_count__",
-          aggregation: "count",
-        };
+  if (parts.length >= 2) {
+    const left = findMentionedColumn(parts[0], columns);
+    const right = findMentionedColumn(parts[1], columns);
+    if (left && right) {
+      const leftRole = roleOf(left);
+      const rightRole = roleOf(right);
+      if (["dimension", "location", "date"].includes(leftRole) && rightRole === "metric") {
+        xColumn = left;
+        yColumn = right;
+      } else if (leftRole === "metric" && ["dimension", "location", "date"].includes(rightRole)) {
+        xColumn = right;
+        yColumn = left;
+      } else {
+        xColumn = left;
+        yColumn = right;
       }
     }
   }
 
-  // Pattern 4: "[metric1] vs [metric2]" (scatter)
-  // Example: "experience vs salary_usd"
-  const vsMatch = /(\w+)\s+vs\s+(\w+)/i.exec(query);
-  if (vsMatch) {
-    const metric1Word = vsMatch[1];
-    const metric2Word = vsMatch[2];
-
-    const x = findColumnByFuzzyMatch(schemaProfile, metric1Word);
-    const y = findColumnByFuzzyMatch(schemaProfile, metric2Word);
-
-    if (x && y && x.type === "number" && y.type === "number") {
-      return {
-        action: "create_chart",
-        chart_type: "scatter",
-        title: `${x.name} vs ${y.name}`,
-        x: x.name,
-        y: y.name,
-        aggregation: "none",
-      };
-    }
+  if (chart_type === "line" && date) {
+    xColumn = date;
   }
 
-  // Pattern 5: "Top [N] [dimension] by [metric]"
-  // Example: "Top 10 countries by salary"
-  const topMatch = /top\s+(\d+)?\s+(\w+)\s+by\s+(\w+)/i.exec(query);
-  if (topMatch) {
-    const limit = topMatch[1] ? Number(topMatch[1]) : 10;
-    const dimensionWord = topMatch[2];
-    const metricWord = topMatch[3];
-
-    const dimension = findColumnByFuzzyMatch(schemaProfile, dimensionWord);
-    const metric = findColumnByFuzzyMatch(schemaProfile, metricWord);
-
-    if (metric && dimension) {
-      return {
-        action: "create_chart",
-        chart_type: detectChartType(lower),
-        title: `Top ${limit} ${dimension.name} by ${metric.name}`,
-        x: dimension.name,
-        y: metric.name,
-        aggregation: extractAggregation(query, "avg"),
-        limit,
-        sort: "desc",
-      };
-    }
+  if (chart_type === "histogram" && metric) {
+    xColumn = metric;
+    yColumn = metric;
   }
 
-  // Pattern 6: "KPI for [aggregation] [metric]"
-  // Example: "Add KPI for highest salary_usd"
-  const kpiMatch = /kpi\s+(?:for\s+)?(?:(\w+)\s+)?(\w+)/i.exec(query);
-  if (kpiMatch) {
-    const aggWord = kpiMatch[1];
-    const metricWord = kpiMatch[2];
-
-    const metric = findColumnByFuzzyMatch(schemaProfile, metricWord);
-    if (metric) {
-      return {
-        action: "create_kpi",
-        title: `${aggWord || "Total"} ${metric.name}`,
-        metric: metric.name,
-        aggregation: extractAggregation(aggWord || query, "sum"),
-      };
-    }
+  if (chart_type === "scatter") {
+    const numericColumns = columns.filter((column) => roleOf(column) === "metric");
+    const mentioned = numericColumns.filter((column) => normalize(query).includes(normalize(columnName(column)).split(" ")[0]));
+    xColumn = mentioned[0] || findMentionedColumn(query, numericColumns) || numericColumns[0] || metric;
+    yColumn = mentioned.find((column) => columnName(column) !== columnName(xColumn)) ||
+      numericColumns.find((column) => columnName(column) !== columnName(xColumn)) ||
+      metric;
   }
 
-  // Pattern 7: "[metric] by [dimension]" (bare form, default to bar + avg for numeric)
-  // Example: "salary_usd by country"
-  const bareByMatch = /(\w+)\s+by\s+(\w+)/i.exec(query);
-  if (bareByMatch && !showByMatch) {
-    // Avoid double-matching
-    const metricWord = bareByMatch[1];
-    const dimensionWord = bareByMatch[2];
-
-    const metric = findColumnByFuzzyMatch(schemaProfile, metricWord);
-    const dimension = findColumnByFuzzyMatch(schemaProfile, dimensionWord);
-
-    if (metric && dimension) {
-      const aggregation = metric.type === "number" ? "avg" : "count";
-      return {
-        action: "create_chart",
-        chart_type: "bar",
-        title: `${aggregation === "avg" ? "Average" : "Count"} ${metric.name} by ${dimension.name}`,
-        x: dimension.name,
-        y: metric.name,
-        aggregation,
-      };
-    }
+  if (!explicitChartType && !/\b(show|create|make|chart|plot|graph|distribution|scatter|vary|average|avg|sum|total|compare|by|vs)\b/i.test(query)) {
+    return null;
   }
 
-  // Pattern 8: "Filter [column] = [value]"
-  // Example: "Filter country = USA"
-  const filterMatch = /filter\s+(\w+)\s*=\s*(\w+)/i.exec(query);
-  if (filterMatch) {
-    const columnWord = filterMatch[1];
-    const columnValue = filterMatch[2];
-    const column = findColumnByFuzzyMatch(schemaProfile, columnWord);
+  if (!xColumn && !yColumn) return null;
 
-    if (column) {
-      return {
-        action: "filter",
-        filters: {
-          [column.name]: columnValue,
-        },
-      };
-    }
+  const xKey = columnName(xColumn);
+  let yKey = yColumn ? columnName(yColumn) : "count";
+
+  if (["pie", "donut"].includes(chart_type) && roleOf(xColumn) !== "metric") {
+    yKey = "count";
   }
 
-  // Uncertain pattern - let AI handle it
-  return null;
+  if (chart_type === "bar" && roleOf(yColumn) !== "metric") {
+    yKey = yKey || "count";
+  }
+
+  const safeAggregation = yKey === "count" || yKey === "__row_count__" || roleOf(yColumn) !== "metric" ? "count" : aggregation;
+
+  return normalizeChartAction({
+    action: "create_chart",
+    chart_type,
+    chartType: chart_type,
+    x: xKey,
+    xKey,
+    y: yKey,
+    yKey,
+    dimension: xKey,
+    measure: yKey,
+    aggregation: safeAggregation,
+    title: `${yKey === "__row_count__" ? "Records" : yKey} by ${xKey}`,
+    confidence: 0.9,
+    schemaOnly: true,
+  });
 }
 
-/**
- * Normalize a raw action to canonical shape
- * Ensures x/y/aggregation are consistent before validation
- * 
- * @param {object} action
- * @returns {object} Normalized action
- */
-export function normalizeChartAction(action = {}) {
-  const normalized = { ...action };
-
-  // Map old field names to canonical names
-  if (normalized.xKey && !normalized.x) normalized.x = normalized.xKey;
-  if (normalized.x && !normalized.xKey) normalized.xKey = normalized.x;
-
-  if (normalized.yKey && !normalized.y) normalized.y = normalized.yKey;
-  if (normalized.y && !normalized.yKey) normalized.yKey = normalized.y;
-
-  if (normalized.metric && !normalized.y) normalized.y = normalized.metric;
-  if (normalized.y && !normalized.metric && normalized.action !== "create_chart") normalized.metric = normalized.y;
-
-  if (normalized.dimension && !normalized.x) normalized.x = normalized.dimension;
-  if (normalized.x && !normalized.dimension) normalized.dimension = normalized.x;
-
-  if (normalized.category && !normalized.x) normalized.x = normalized.category;
-  if (normalized.x && !normalized.category) normalized.category = normalized.x;
-
-  if (normalized.groupBy && !normalized.x) normalized.x = normalized.groupBy;
-
-  // Normalize aggregation words
-  if (normalized.aggregation) {
-    const agg = String(normalized.aggregation).toLowerCase();
-    normalized.aggregation = AGGREGATION_ALIASES[agg] || agg;
-  }
-
-  // Map old chart type names
-  if (normalized.chart_type && !normalized.type) normalized.type = normalized.chart_type;
-  if (normalized.type && !normalized.chart_type) normalized.chart_type = normalized.type;
-
-  return normalized;
-}
-
-/**
- * Extract numeric and category columns from schema
- * For quick pattern detection
- * 
- * @param {object} schemaProfile
- * @returns {object}
- */
-export function categorizeSchemaColumns(schemaProfile = {}) {
-  const metrics = [];
-  const categories = [];
-  const dates = [];
-
-  for (const column of schemaProfile.columns || []) {
-    if (column.type === "number" || column.role?.includes("metric")) {
-      metrics.push(column);
-    } else if (column.type === "date" || column.role === "date") {
-      dates.push(column);
-    } else {
-      categories.push(column);
-    }
-  }
-
-  return { metrics, categories, dates };
-}
+export default {
+  parseCustomChartQuery,
+  normalizeChartAction,
+  categorizeSchemaColumns,
+  findColumnMatch,
+  detectChartType,
+  detectAggregation,
+};

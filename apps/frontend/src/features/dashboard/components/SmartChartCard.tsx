@@ -24,7 +24,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Download, MoreHorizontal, Trash2, Copy, AlertCircle } from "lucide-react";
+import { Download, MoreHorizontal, Trash2, Copy, AlertCircle, Edit3, Sparkles } from "lucide-react";
 import { Button } from "@/shared/components/ui/button";
 import {
   DropdownMenu,
@@ -35,7 +35,9 @@ import {
 import type { ChartType } from "@/features/dashboard/types/dashboardTypes";
 import type { DashboardChart } from "@/features/dashboard/utils/dashboardAnalytics";
 
-const COLORS = ["#7c3aed", "#2563eb", "#06b6d4", "#22c55e", "#f59e0b", "#ef4444"];
+const COLORS = ["#7C3AED", "#2563EB", "#06B6D4", "#22C55E", "#F59E0B", "#EF4444"];
+const VALUE_KEY_CANDIDATES = ["value", "count", "average", "sum", "total", "metricValue"];
+const LABEL_KEY_CANDIDATES = ["name", "range", "label", "category"];
 
 type Props = {
   chart: DashboardChart;
@@ -81,7 +83,7 @@ async function downloadSvgOrPng(root: HTMLDivElement | null, fileName: string, k
   canvas.height = Math.max(svg.clientHeight, 520);
   const context = canvas.getContext("2d");
   if (!context) return;
-  context.fillStyle = "#081121";
+  context.fillStyle = "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   canvas.toBlob((blob) => {
@@ -114,13 +116,13 @@ function HeatmapChart({ data }: { data: Array<Record<string, string | number>> }
       >
         <div />
         {xLabels.map((label) => (
-          <div key={label} className="truncate px-1 text-center text-xs text-slate-400">
+          <div key={label} className="truncate px-1 text-center text-xs text-slate-500">
             {label}
           </div>
         ))}
         {yLabels.map((rowLabel) => (
           <Fragment key={rowLabel}>
-            <div key={`${rowLabel}-label`} className="truncate px-1 py-2 text-xs text-slate-300">
+            <div key={`${rowLabel}-label`} className="truncate px-1 py-2 text-xs text-slate-600">
               {rowLabel}
             </div>
             {xLabels.map((columnLabel) => {
@@ -132,7 +134,7 @@ function HeatmapChart({ data }: { data: Array<Record<string, string | number>> }
               return (
                 <div
                   key={`${rowLabel}-${columnLabel}`}
-                  className="flex h-12 items-center justify-center rounded-xl border border-slate-700/60 text-xs font-medium text-white"
+                  className="flex h-12 items-center justify-center rounded-xl border text-xs font-medium text-gray-900"
                   style={{ background: getColor(value) }}
                   title={`${rowLabel} x ${columnLabel}: ${value}`}
                 >
@@ -145,6 +147,20 @@ function HeatmapChart({ data }: { data: Array<Record<string, string | number>> }
       </div>
     </div>
   );
+}
+
+function hasNumericValue(data: Array<Record<string, string | number>>, key?: string) {
+  if (!key) return false;
+  return data.some((entry) => Number.isFinite(Number(entry[key])));
+}
+
+function hasAnyValue(data: Array<Record<string, string | number>>, key?: string) {
+  if (!key) return false;
+  return data.some((entry) => entry[key] !== undefined && entry[key] !== null && String(entry[key]).trim() !== "");
+}
+
+function pickFirstKey(data: Array<Record<string, string | number>>, keys: string[], predicate = hasAnyValue) {
+  return keys.find((key) => predicate(data, key));
 }
 
 export default function SmartChartCard({
@@ -168,6 +184,23 @@ export default function SmartChartCard({
 }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const empty = !chart.data?.length;
+  const normalizedType = chart.type === "horizontal_bar" ? "horizontalBar" : chart.type;
+  const isHorizontalBar = normalizedType === "horizontalBar";
+  const isCountChart = chart.aggregation === "count" || chart.yKey === "count" || normalizedType === "histogram";
+  const renderXKey =
+    normalizedType === "histogram"
+      ? pickFirstKey(chart.data, ["range", "name", chart.xKey]) || chart.xKey
+      : hasAnyValue(chart.data, chart.xKey)
+        ? chart.xKey
+        : pickFirstKey(chart.data, LABEL_KEY_CANDIDATES) || chart.xKey;
+  const renderYKey =
+    hasNumericValue(chart.data, chart.yKey)
+      ? chart.yKey
+      : pickFirstKey(
+          chart.data,
+          isCountChart ? ["count", "value", chart.yKey, ...VALUE_KEY_CANDIDATES] : ["value", chart.yKey, ...VALUE_KEY_CANDIDATES],
+          hasNumericValue,
+        ) || chart.yKey;
 
   const pieData = useMemo(
     () =>
@@ -181,20 +214,25 @@ export default function SmartChartCard({
   const fileName = chart.title.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-900/70 p-4 shadow-xl backdrop-blur">
+    <div className="rounded-2xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold text-white">{chart.title}</h3>
-          <p className="truncate text-xs text-slate-400">
+          <h3 className="truncate text-base font-bold text-[#0F172A]">{chart.title}</h3>
+          <p className="truncate text-xs text-gray-500">
             {chart.subtitle || `${chart.aggregation.toUpperCase()} - ${chart.xKey} / ${chart.yKey}`}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="shrink-0 flex items-center gap-2">
+          <button type="button" className="rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#334155] shadow-sm">
+            <Sparkles className="mr-1 inline size-3.5 text-[#7C3AED]" />
+            Explain
+          </button>
           <select
             value={chart.type}
             onChange={(event) => onTypeChange?.(event.target.value as ChartType)}
-            className="rounded-xl border border-slate-700/60 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none"
+            className="max-w-24 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-[#334155] outline-none shadow-sm"
+            aria-label="Edit chart type"
           >
             {availableTypes.map((type) => (
               <option key={type} value={type}>
@@ -208,12 +246,12 @@ export default function SmartChartCard({
               <Button
                 variant="outline"
                 size="icon"
-                className="size-9 rounded-xl border-slate-700/60 bg-slate-950 text-slate-300 hover:bg-slate-800"
+                className="size-9 rounded-xl border border-[#E2E8F0] bg-white text-[#334155] shadow-sm hover:bg-gray-50"
               >
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="border-slate-700 bg-slate-950 text-slate-200">
+            <DropdownMenuContent align="end" className="border bg-white text-gray-700 shadow-md">
               <DropdownMenuItem onClick={() => downloadSvgOrPng(rootRef.current, fileName, "png")}>
                 <Download className="mr-2 size-4" />
                 Download PNG
@@ -226,7 +264,11 @@ export default function SmartChartCard({
                 <Copy className="mr-2 size-4" />
                 Duplicate chart
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onRemove} className="text-red-300 focus:text-red-200">
+              <DropdownMenuItem>
+                <Edit3 className="mr-2 size-4" />
+                Edit chart
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onRemove} className="text-red-600 focus:text-red-700">
                 <Trash2 className="mr-2 size-4" />
                 Remove chart
               </DropdownMenuItem>
@@ -236,120 +278,134 @@ export default function SmartChartCard({
       </div>
 
       {chart.warning && (
-        <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-700">
           <AlertCircle className="size-4" />
           {chart.warning}
         </div>
       )}
 
       {empty ? (
-        <div className="flex h-72 items-center justify-center rounded-2xl border border-dashed border-slate-700/60 bg-slate-950/40 text-sm text-slate-400">
+        <div className="flex h-72 items-center justify-center rounded-2xl border border-dashed bg-gray-50 text-sm text-gray-400">
           Not enough data to render this chart.
         </div>
       ) : chart.type === "heatmap" ? (
-        <div className="min-h-[18rem] overflow-auto rounded-2xl bg-slate-950/30 p-2">
+        <div className="min-h-[18rem] overflow-auto rounded-2xl bg-gray-50 p-2">
           <HeatmapChart data={chart.data} />
         </div>
       ) : (
         <div ref={rootRef} className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            {chart.type === "line" ? (
-              <LineChart data={chart.data}>
-                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-                <XAxis dataKey={chart.xKey} stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} />
+          <ResponsiveContainer key={normalizedType} width="100%" height="100%">
+            {normalizedType === "line" ? (
+              <LineChart data={chart.data} margin={{ top: 8, right: 18, bottom: 18, left: 8 }}>
+                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+                <XAxis dataKey={renderXKey} stroke="#9ca3af" fontSize={11} interval="preserveStartEnd" minTickGap={10} />
+                <YAxis stroke="#9ca3af" fontSize={11} />
                 <Tooltip />
-                <Line type="monotone" dataKey={chart.yKey} stroke="#7c3aed" strokeWidth={3} dot={false} />
+                <Line type="monotone" dataKey={renderYKey} stroke="#7C3AED" strokeWidth={3} dot={false} />
               </LineChart>
-            ) : chart.type === "area" ? (
-              <AreaChart data={chart.data}>
+            ) : normalizedType === "area" ? (
+              <AreaChart data={chart.data} margin={{ top: 8, right: 18, bottom: 18, left: 8 }}>
                 <defs>
                   <linearGradient id={`${chart.id}-gradient`} x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#7c3aed" stopOpacity={0.7} />
-                    <stop offset="100%" stopColor="#7c3aed" stopOpacity={0.05} />
+                    <stop offset="0%" stopColor="#7C3AED" stopOpacity={0.34} />
+                    <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.03} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-                <XAxis dataKey={chart.xKey} stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} />
+                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+                <XAxis dataKey={renderXKey} stroke="#9ca3af" fontSize={11} interval="preserveStartEnd" minTickGap={10} />
+                <YAxis stroke="#9ca3af" fontSize={11} />
                 <Tooltip />
                 <Area
                   type="monotone"
-                  dataKey={chart.yKey}
-                  stroke="#7c3aed"
+                  dataKey={renderYKey}
+                  stroke="#7C3AED"
                   fill={`url(#${chart.id}-gradient)`}
                   strokeWidth={2.5}
                 />
               </AreaChart>
-            ) : chart.type === "pie" || chart.type === "donut" ? (
-              <PieChart>
+            ) : normalizedType === "pie" || normalizedType === "donut" ? (
+              <PieChart margin={{ top: 8, right: 8, bottom: 20, left: 8 }}>
                 <Pie
                   data={pieData}
-                  dataKey={chart.yKey}
-                  nameKey={chart.xKey}
-                  innerRadius={chart.type === "donut" ? 60 : 0}
+                  dataKey={renderYKey}
+                  nameKey={renderXKey}
+                  innerRadius={normalizedType === "donut" ? 58 : 0}
                   outerRadius={88}
                   paddingAngle={2}
                 >
                   {pieData.map((entry, index) => (
-                    <Cell key={`${entry[chart.xKey]}-${index}`} fill={entry.fill as string} />
+                    <Cell key={`${entry[renderXKey]}-${index}`} fill={entry.fill as string} />
                   ))}
                 </Pie>
                 <Tooltip />
                 <Legend />
               </PieChart>
-            ) : chart.type === "scatter" ? (
-              <ScatterChart>
-                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-                <XAxis dataKey={chart.xKey} stroke="#94a3b8" fontSize={11} type="number" />
-                <YAxis dataKey={chart.yKey} stroke="#94a3b8" fontSize={11} type="number" />
+            ) : normalizedType === "scatter" ? (
+              <ScatterChart margin={{ top: 8, right: 18, bottom: 18, left: 12 }}>
+                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+                <XAxis dataKey={renderXKey} stroke="#9ca3af" fontSize={11} type="number" />
+                <YAxis dataKey={renderYKey} stroke="#9ca3af" fontSize={11} type="number" />
                 <Tooltip cursor={{ strokeDasharray: "3 3" }} />
-                <Scatter data={chart.data} fill="#06b6d4" />
+                <Scatter data={chart.data} fill="#06B6D4" />
               </ScatterChart>
-            ) : chart.type === "radar" ? (
+            ) : normalizedType === "radar" ? (
               <RadarChart data={chart.data}>
-                <PolarGrid stroke="#334155" />
-                <PolarAngleAxis dataKey={chart.xKey} stroke="#cbd5e1" />
-                <PolarRadiusAxis stroke="#64748b" />
-                <Radar dataKey={chart.yKey} stroke="#7c3aed" fill="#7c3aed" fillOpacity={0.45} />
+                <PolarGrid stroke="#E2E8F0" />
+                <PolarAngleAxis dataKey={renderXKey} stroke="#6b7280" />
+                <PolarRadiusAxis stroke="#9ca3af" />
+                <Radar dataKey={renderYKey} stroke="#7C3AED" fill="#7C3AED" fillOpacity={0.35} />
                 <Tooltip />
               </RadarChart>
-            ) : chart.type === "composed" ? (
-              <ComposedChart data={chart.data}>
-                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
-                <XAxis dataKey={chart.xKey} stroke="#94a3b8" fontSize={11} />
-                <YAxis stroke="#94a3b8" fontSize={11} />
+            ) : normalizedType === "composed" ? (
+              <ComposedChart data={chart.data} margin={{ top: 8, right: 18, bottom: 18, left: 8 }}>
+                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+                <XAxis dataKey={renderXKey} stroke="#9ca3af" fontSize={11} interval="preserveStartEnd" minTickGap={10} />
+                <YAxis stroke="#9ca3af" fontSize={11} />
                 <Tooltip />
-                <Bar dataKey={chart.yKey} fill="#2563eb" radius={[8, 8, 0, 0]} />
-                <Line type="monotone" dataKey={chart.yKey} stroke="#7c3aed" strokeWidth={2} />
+                <Bar dataKey={renderYKey} fill="#2563EB" radius={[6, 6, 0, 0]} />
+                <Line type="monotone" dataKey={renderYKey} stroke="#7C3AED" strokeWidth={2} />
               </ComposedChart>
             ) : (
               <BarChart
                 data={chart.data}
-                layout={chart.type === "horizontalBar" ? "vertical" : "horizontal"}
-                margin={{ left: chart.type === "horizontalBar" ? 24 : 0 }}
+                layout={isHorizontalBar ? "vertical" : "horizontal"}
+                margin={isHorizontalBar ? { top: 6, right: 18, bottom: 12, left: 12 } : { top: 8, right: 14, bottom: 18, left: 4 }}
               >
-                <CartesianGrid stroke="#1e293b" strokeDasharray="3 3" />
+                <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
                 <XAxis
-                  type={chart.type === "horizontalBar" ? "number" : "category"}
-                  dataKey={chart.type === "horizontalBar" ? undefined : chart.xKey}
-                  stroke="#94a3b8"
+                  type={isHorizontalBar ? "number" : "category"}
+                  dataKey={isHorizontalBar ? undefined : renderXKey}
+                  stroke="#9ca3af"
                   fontSize={11}
+                  interval="preserveStartEnd"
+                  minTickGap={10}
                 />
                 <YAxis
-                  type={chart.type === "horizontalBar" ? "category" : "number"}
-                  dataKey={chart.type === "horizontalBar" ? chart.xKey : undefined}
-                  stroke="#94a3b8"
+                  type={isHorizontalBar ? "category" : "number"}
+                  dataKey={isHorizontalBar ? renderXKey : undefined}
+                  stroke="#9ca3af"
                   fontSize={11}
-                  width={chart.type === "horizontalBar" ? 110 : 32}
+                  width={isHorizontalBar ? 118 : 34}
                 />
                 <Tooltip />
-                <Bar dataKey={chart.yKey} fill="#7c3aed" radius={[8, 8, 0, 0]} />
+                <Bar dataKey={renderYKey} fill="#7C3AED" radius={isHorizontalBar ? [0, 6, 6, 0] : [6, 6, 0, 0]} />
               </BarChart>
             )}
           </ResponsiveContainer>
         </div>
       )}
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[#E2E8F0] pt-3 text-xs text-[#64748B]">
+        <span>
+          Metric Used: <span className="font-semibold text-[#334155]">{chart.metricUsed || chart.yKey}</span>
+        </span>
+        <span>
+          Calculation Source: <span className="font-mono text-[11px] text-[#334155]">{chart.calculationSource || `${chart.aggregation}(${chart.yKey}) by ${chart.xKey}`}</span>
+        </span>
+        {chart.createdBy === "ai" && (
+          <span className="rounded-full bg-emerald-50 px-2 py-1 font-semibold text-emerald-600">New - Added by AI</span>
+        )}
+      </div>
     </div>
   );
 }

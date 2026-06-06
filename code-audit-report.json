@@ -1,10 +1,10 @@
 {
-  "scanned_files": 418,
-  "total_issues": 466,
+  "scanned_files": 460,
+  "total_issues": 488,
   "critical": 0,
   "high": 0,
-  "medium": 52,
-  "low": 414,
+  "medium": 53,
+  "low": 435,
   "issues": [
     {
       "file": ".tmp_schema_trained_patch\\apps\\backend\\scripts\\export-schema-training-jsonl.js",
@@ -407,16 +407,8 @@
       "code": "console.log(\"   Memory total:\", result.stats.total);"
     },
     {
-      "file": "apps\\backend\\src\\config\\agentic-models.js",
-      "line": 10,
-      "rule": "hardcoded-localhost",
-      "severity": "medium",
-      "message": "Hardcoded localhost found. Use environment variables.",
-      "code": "'http://localhost:11434';"
-    },
-    {
       "file": "apps\\backend\\src\\config\\environment.js",
-      "line": 53,
+      "line": 54,
       "rule": "hardcoded-localhost",
       "severity": "medium",
       "message": "Hardcoded localhost found. Use environment variables.",
@@ -424,11 +416,19 @@
     },
     {
       "file": "apps\\backend\\src\\config\\environment.js",
-      "line": 59,
+      "line": 60,
       "rule": "hardcoded-localhost",
       "severity": "medium",
       "message": "Hardcoded localhost found. Use environment variables.",
-      "code": "baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',"
+      "code": "baseUrl: process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || 'http://localhost:11434',"
+    },
+    {
+      "file": "apps\\backend\\src\\config\\model-router.js",
+      "line": 4,
+      "rule": "hardcoded-localhost",
+      "severity": "medium",
+      "message": "Hardcoded localhost found. Use environment variables.",
+      "code": "'http://localhost:11434';"
     },
     {
       "file": "apps\\backend\\src\\config\\serviceUrls.js",
@@ -444,7 +444,7 @@
       "rule": "hardcoded-localhost",
       "severity": "medium",
       "message": "Hardcoded localhost found. Use environment variables.",
-      "code": "ollama: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',"
+      "code": "ollama: process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || 'http://localhost:11434',"
     },
     {
       "file": "apps\\backend\\src\\config\\serviceUrls.js",
@@ -460,7 +460,7 @@
       "rule": "hardcoded-localhost",
       "severity": "medium",
       "message": "Hardcoded localhost found. Use environment variables.",
-      "code": "api: process.env.API_BASE_URL || 'http://localhost:3001',"
+      "code": "api: process.env.BACKEND_URL || process.env.API_BASE_URL || 'http://localhost:3001',"
     },
     {
       "file": "apps\\backend\\src\\core\\server.js",
@@ -485,6 +485,38 @@
       "severity": "low",
       "message": "Remove console.log before production.",
       "code": "console.log(`[DB] Creating database at: ${databasePath}`);"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\analyticsEngine.js",
+      "line": 32,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"🔄 Primary AI Provider: OLLAMA (Local)\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\analyticsEngine.js",
+      "line": 40,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"✅ Google Gemini AI initialized (Fallback)\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\analyticsEngine.js",
+      "line": 52,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`🔄 Primary AI Provider: ${this.activeProvider}`);"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\analyticsEngine.js",
+      "line": 137,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`✅ Ollama initialized with model: ${this.ollamaModel}`);"
     },
     {
       "file": "apps\\backend\\src\\genai\\analyticsEngine.ts",
@@ -533,6 +565,102 @@
       "severity": "low",
       "message": "Remove console.log before production.",
       "code": "console.log(`✅ Ollama initialized with model: ${this.ollamaModel}`);"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 9,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"🚀 Initializing Dashboard Generation Pipeline...\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 11,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"📊 Step 1: Analyzing dataset structure...\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 13,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"✅ Schema Generated:\", schema.dataset_domain);"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 15,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"📈 Step 2: Generating KPIs...\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 17,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`✅ Generated ${kpis.length} KPIs`);"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 19,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"📊 Step 3: Generating visualizations...\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 24,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`✅ Generated ${visualizations.length} charts`);"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 26,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"🎨 Step 4: Building executive dashboard...\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 32,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"✅ Dashboard structure created\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 34,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"🧠 Step 5: Generating AI insights...\");"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 36,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`✅ Generated ${insights.length} insights`);"
+    },
+    {
+      "file": "apps\\backend\\src\\genai\\dashboardBuilder.js",
+      "line": 53,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`🤖 Processing query: \"${query}\"`);"
     },
     {
       "file": "apps\\backend\\src\\genai\\dashboardBuilder.ts",
@@ -895,16 +1023,8 @@
       "code": "console.log('==========================================\\n');"
     },
     {
-      "file": "apps\\backend\\src\\routes\\agentic-api.js",
-      "line": 61,
-      "rule": "todo-found",
-      "severity": "low",
-      "message": "TODO/FIXME found. Complete or document it.",
-      "code": "// TODO: Replace placeholder rows/schema with real data from your dataset store — tracked as #agentic-dataset-hookup"
-    },
-    {
       "file": "apps\\backend\\src\\routes\\ai.js",
-      "line": 107,
+      "line": 211,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -912,7 +1032,7 @@
     },
     {
       "file": "apps\\backend\\src\\routes\\ai.js",
-      "line": 170,
+      "line": 274,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -920,7 +1040,7 @@
     },
     {
       "file": "apps\\backend\\src\\routes\\ai.js",
-      "line": 216,
+      "line": 320,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1005,6 +1125,14 @@
       "severity": "low",
       "message": "Remove console.log before production.",
       "code": "console.log(`[AgentRegistry] 🗑️  Unregistered \"${agentId}\"`);"
+    },
+    {
+      "file": "apps\\backend\\src\\services\\agentic-dashboard\\custom-chart-query-parser.js",
+      "line": 383,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log('[custom-chart-query-parser] Parsed action:', JSON.stringify(action, null, 2));"
     },
     {
       "file": "apps\\backend\\src\\services\\ai\\ai-manager.js",
@@ -1120,7 +1248,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai\\providers\\anthropic-provider.js",
-      "line": 28,
+      "line": 33,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1128,7 +1256,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai\\providers\\anthropic-provider.js",
-      "line": 35,
+      "line": 40,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1136,7 +1264,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai\\providers\\anthropic-provider.js",
-      "line": 69,
+      "line": 85,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1144,7 +1272,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai\\providers\\anthropic-provider.js",
-      "line": 85,
+      "line": 101,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1152,7 +1280,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai\\providers\\anthropic-provider.js",
-      "line": 118,
+      "line": 135,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1160,7 +1288,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai\\providers\\anthropic-provider.js",
-      "line": 134,
+      "line": 151,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1392,7 +1520,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 17,
+      "line": 18,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1400,7 +1528,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 18,
+      "line": 19,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1408,7 +1536,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 19,
+      "line": 20,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1416,7 +1544,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 25,
+      "line": 26,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1424,7 +1552,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 33,
+      "line": 34,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1432,7 +1560,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 36,
+      "line": 37,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1440,7 +1568,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 47,
+      "line": 48,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1448,7 +1576,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 55,
+      "line": 56,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1456,7 +1584,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 56,
+      "line": 57,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1464,7 +1592,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 60,
+      "line": 61,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1472,7 +1600,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 68,
+      "line": 69,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1480,7 +1608,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 69,
+      "line": 70,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1488,11 +1616,43 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ai-cascade-service.js",
-      "line": 72,
+      "line": 73,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
       "code": "console.log(\"[cascade] LEVEL 3: LOCAL SUCCESS\");"
+    },
+    {
+      "file": "apps\\backend\\src\\services\\ai-providers\\ai-router.js",
+      "line": 151,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`[aiProviderRouter] Racing Gemini and Ollama for important task: \"${userQuery}\"`);"
+    },
+    {
+      "file": "apps\\backend\\src\\services\\ai-providers\\ai-router.js",
+      "line": 162,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`[aiProviderRouter] Gemini score: ${geminiScore}, Ollama score: ${ollamaScore}`);"
+    },
+    {
+      "file": "apps\\backend\\src\\services\\ai-providers\\ai-router.js",
+      "line": 226,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(`[aiProviderRouter] Attempting primary provider: ${primaryName}`);"
+    },
+    {
+      "file": "apps\\backend\\src\\services\\ai-providers\\ollama-service.js",
+      "line": 6,
+      "rule": "hardcoded-localhost",
+      "severity": "medium",
+      "message": "Hardcoded localhost found. Use environment variables.",
+      "code": "this.baseUrl = (process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || 'http://localhost:11434').trim();"
     },
     {
       "file": "apps\\backend\\src\\services\\analytics-service.js",
@@ -1856,7 +2016,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ollama-ai-service.js",
-      "line": 22,
+      "line": 23,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -1864,7 +2024,7 @@
     },
     {
       "file": "apps\\backend\\src\\services\\ollama-ai-service.js",
-      "line": 84,
+      "line": 85,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -2056,15 +2216,15 @@
     },
     {
       "file": "apps\\frontend\\src\\config\\apiConfig.ts",
-      "line": 2,
+      "line": 4,
       "rule": "hardcoded-localhost",
       "severity": "medium",
       "message": "Hardcoded localhost found. Use environment variables.",
-      "code": "(import.meta.env.VITE_API_BASE_URL as string) || \"http://localhost:3001\";"
+      "code": "\"http://localhost:3001\";"
     },
     {
       "file": "apps\\frontend\\src\\config\\apiConfig.ts",
-      "line": 5,
+      "line": 7,
       "rule": "hardcoded-localhost",
       "severity": "medium",
       "message": "Hardcoded localhost found. Use environment variables.",
@@ -2072,7 +2232,7 @@
     },
     {
       "file": "apps\\frontend\\src\\config\\apiConfig.ts",
-      "line": 8,
+      "line": 10,
       "rule": "hardcoded-localhost",
       "severity": "medium",
       "message": "Hardcoded localhost found. Use environment variables.",
@@ -2080,11 +2240,11 @@
     },
     {
       "file": "apps\\frontend\\src\\config\\apiConfig.ts",
-      "line": 11,
+      "line": 15,
       "rule": "hardcoded-localhost",
       "severity": "medium",
       "message": "Hardcoded localhost found. Use environment variables.",
-      "code": "(import.meta.env.VITE_OLLAMA_BASE_URL as string) || \"http://localhost:11434\";"
+      "code": "\"http://localhost:11434\";"
     },
     {
       "file": "apps\\frontend\\src\\features\\analytics\\pages\\AgenticPage.tsx",
@@ -2248,7 +2408,7 @@
     },
     {
       "file": "apps\\frontend\\src\\features\\data\\api\\dataApi.ts",
-      "line": 294,
+      "line": 317,
       "rule": "console-log",
       "severity": "low",
       "message": "Remove console.log before production.",
@@ -2256,7 +2416,7 @@
     },
     {
       "file": "apps\\frontend\\src\\features\\data\\api\\schemaAiClient.ts",
-      "line": 56,
+      "line": 76,
       "rule": "any-type",
       "severity": "medium",
       "message": "Avoid TypeScript any. Use proper types.",
@@ -3461,6 +3621,22 @@
       "severity": "low",
       "message": "Remove console.log before production.",
       "code": "console.log(\"\\n\\n  QA Tester exiting. Reports saved in reports/qa-reports/\\n\");"
+    },
+    {
+      "file": "scratch_test_local_command.js",
+      "line": 25,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"METRIC:\", metric?.name, \"CATEGORY:\", category?.name);"
+    },
+    {
+      "file": "scratch_test_local_command.js",
+      "line": 31,
+      "rule": "console-log",
+      "severity": "low",
+      "message": "Remove console.log before production.",
+      "code": "console.log(\"PARSED BY CUSTOM PARSER:\", JSON.stringify(parsed, null, 2));"
     },
     {
       "file": "scratch_test_ollama.js",

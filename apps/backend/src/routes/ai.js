@@ -1,6 +1,7 @@
 // AI provider routes and status
 import QRCode from 'qrcode';
 import { serviceUrls } from "../config/serviceUrls.js";
+import { OLLAMA_HOST, getModelForTask, getConfiguredModels } from "../config/model-router.js";
 import { aiManager } from '../services/ai/ai-manager.js';
 import { getOllamaStatus } from '../services/ollama/ollama-dual-model-service.js';
 import {
@@ -13,6 +14,109 @@ import { ValidationError } from '../middleware/error-handler.js';
 
 export async function handleAIRoutes(request, response, pathname) {
   const { method } = request;
+
+  // GET /api/ai/providers/health - Unified health check
+  if (pathname === '/api/ai/providers/health' && method === 'GET') {
+    try {
+      const { providerHealthService } = await import('../services/ai-providers/provider-health-service.js');
+      const health = await providerHealthService.checkHealth();
+      sendJson(response, 200, health);
+      return true;
+    } catch (error) {
+      sendError(response, HTTP_STATUS.INTERNAL_SERVER_ERROR, error.message, ERROR_CODES.AI_ERROR);
+      return true;
+    }
+  }
+
+  // GET /api/ai/ollama/health - Ollama health check with model availability
+  if (pathname === '/api/ai/ollama/health' && method === 'GET') {
+    try {
+      const ollamaResponse = await fetch(`${OLLAMA_HOST}/api/tags`, {
+        signal: AbortSignal.timeout(5000),
+      });
+
+      if (!ollamaResponse.ok) {
+        sendJson(response, 200, {
+          success: false,
+          ollama_running: false,
+          host: OLLAMA_HOST,
+          models: {},
+          configured_models: getConfiguredModels(),
+          missing_models: Object.values(getConfiguredModels()),
+          install_commands: [
+            'ollama pull qwen3:8b',
+            'ollama pull qwen3:4b',
+            'ollama pull qwen2.5-coder:7b',
+            'ollama pull llama3.2:3b',
+            'ollama pull nomic-embed-text',
+          ],
+        });
+        return true;
+      }
+
+      const payload = await ollamaResponse.json();
+      const installedModels = (payload.models || []).map((m) => m.name);
+
+      const requiredModels = [
+        'qwen3:8b',
+        'qwen3:4b',
+        'qwen2.5-coder:7b',
+        'llama3.2:3b',
+        'nomic-embed-text',
+      ];
+
+      const modelStatus = {};
+      const missingModels = [];
+
+      for (const model of requiredModels) {
+        const found = installedModels.some((installed) => {
+          const installedBase = installed.split(':')[0];
+          const modelBase = model.split(':')[0];
+          const modelTag = model.split(':')[1] || 'latest';
+          const installedTag = installed.split(':')[1] || 'latest';
+          return installedBase === modelBase && installedTag === modelTag;
+        });
+        modelStatus[model] = found;
+        if (!found) missingModels.push(model);
+      }
+
+      const allPresent = missingModels.length === 0;
+
+      sendJson(response, 200, {
+        success: allPresent,
+        ollama_running: true,
+        host: OLLAMA_HOST,
+        models: modelStatus,
+        configured_models: getConfiguredModels(),
+        ...(allPresent
+          ? {}
+          : {
+              missing_models: missingModels,
+              install_commands: missingModels.map((m) => `ollama pull ${m}`),
+            }),
+      });
+
+      return true;
+    } catch (error) {
+      sendJson(response, 200, {
+        success: false,
+        ollama_running: false,
+        host: OLLAMA_HOST,
+        models: {},
+        configured_models: getConfiguredModels(),
+        missing_models: Object.values(getConfiguredModels()),
+        install_commands: [
+          'ollama pull qwen3:8b',
+          'ollama pull qwen3:4b',
+          'ollama pull qwen2.5-coder:7b',
+          'ollama pull llama3.2:3b',
+          'ollama pull nomic-embed-text',
+        ],
+        error: error.message,
+      });
+      return true;
+    }
+  }
 
   // GET /api/ai/ollama-status - Get dual Ollama model status
   if (pathname === '/api/ai/ollama-status' && method === 'GET') {

@@ -16,9 +16,13 @@ function normalizeColumns(columns = [], rows = []) {
 }
 
 export function sampleRows(rows = [], limit = MAX_ROWS_SENT_TO_ML) {
-  if (!Array.isArray(rows) || rows.length <= limit) return rows || [];
-  const step = rows.length / limit;
-  return Array.from({ length: limit }, (_, index) => rows[Math.floor(index * step)]);
+  const cleanRows = (rows || []).map(row => {
+    if (!row || typeof row !== 'object') return row;
+    return Object.fromEntries(Object.entries(row).filter(([k]) => !k.startsWith('__')));
+  });
+  if (cleanRows.length <= limit) return cleanRows;
+  const step = cleanRows.length / limit;
+  return Array.from({ length: limit }, (_, index) => cleanRows[Math.floor(index * step)]);
 }
 
 export function fingerprintDataset(datasetOrPayload = {}) {
