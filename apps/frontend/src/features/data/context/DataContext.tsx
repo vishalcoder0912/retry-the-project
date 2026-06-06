@@ -160,7 +160,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const columns: DataColumn[] = fields.map(name => ({
-    const columns: DataColumn[] = fields.map(name => ({
       name,
       type: inferType(name, rows.slice(0, 50).map(r => String(r[name] ?? ''))),
       sample: rows.slice(0, 3).map(r => String(r[name] ?? '')),
