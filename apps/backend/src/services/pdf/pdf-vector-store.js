@@ -4,6 +4,8 @@ import { vectorDbConfig, isQdrantEnabled } from "../../config/vector-db.js";
 import { embedSchemaMemoryText } from "../vector/embedding-client.js";
 import { ensureQdrantCollection, getQdrantClient } from "../vector/qdrant-client.js";
 import { getPdfIntelligenceAnalysis } from "./pdf-intelligence-store.js";
+import { pdfProcessingPolicy } from "./pdf-processing-policy.js";
+import { buildPdfRagChunks } from "./pdf-rag-chunker.js";
 
 function pointId(value) {
   const hex = createHash("sha1").update(String(value)).digest("hex").slice(0, 32);
@@ -14,37 +16,91 @@ function truncate(text, max = 3000) {
   return String(text || "").slice(0, max);
 }
 
-async function upsertTextPoints(collectionName, points) {
+function compactMetadata(payload = {}) {
+  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== undefined));
+}
+
+export function applyChunkLimit(chunks = []) {
+  const max = Number(pdfProcessingPolicy.maxIndexChunks || 0);
+  if (!max || max <= 0) return chunks;
+  return chunks.slice(0, max);
+}
+
+function toBatches(items = [], batchSize = pdfProcessingPolicy.vectorBatchSize) {
+  const size = Math.max(1, Number(batchSize || 1));
+  const batches = [];
+  for (let index = 0; index < items.length; index += size) {
+    batches.push(items.slice(index, index + size));
+  }
+  return batches;
+}
+
+async function upsertTextPoints(collectionName, points, { batchSize = pdfProcessingPolicy.vectorBatchSize } = {}) {
   if (!isQdrantEnabled()) {
     return { indexed: 0, skipped: true, reason: "Qdrant disabled" };
   }
-  const embedded = [];
-  for (const point of points) {
-    const embedding = await embedSchemaMemoryText(point.text, { allowFallback: true });
-    await ensureQdrantCollection(collectionName, embedding.dimension);
-    embedded.push({
-      id: pointId(point.id),
-      vector: embedding.embedding,
-      payload: {
-        ...point.payload,
-        text: truncate(point.text),
-        embeddingModel: embedding.model,
-        embeddingProvider: embedding.provider,
-        updatedAt: new Date().toISOString(),
-      },
-    });
+
+  const cleanPoints = points.filter((point) => String(point.text || "").trim());
+  if (!cleanPoints.length) return { indexed: 0, skippedEmpty: points.length };
+
+  let indexed = 0;
+  let skippedEmpty = points.length - cleanPoints.length;
+  let collectionEnsured = false;
+  let embeddingModel = pdfProcessingPolicy.embeddingModel;
+  let embeddingProvider = null;
+
+  for (const batch of toBatches(cleanPoints, batchSize)) {
+    const embedded = [];
+    for (const point of batch) {
+      const embedding = await embedSchemaMemoryText(point.text, {
+        allowFallback: true,
+        model: pdfProcessingPolicy.embeddingModel,
+      });
+      if (!collectionEnsured) {
+        await ensureQdrantCollection(collectionName, embedding.dimension);
+        collectionEnsured = true;
+      }
+      embeddingModel = embedding.model;
+      embeddingProvider = embedding.provider;
+      embedded.push({
+        id: pointId(point.id),
+        vector: embedding.embedding,
+        payload: compactMetadata({
+          ...point.payload,
+          text: truncate(point.text),
+          embeddingModel: embedding.model,
+          embeddingProvider: embedding.provider,
+          fullTextLength: point.fullTextLength ?? String(point.text || "").length,
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+    }
+
+    if (embedded.length) {
+      await getQdrantClient().upsert(collectionName, { wait: true, points: embedded });
+      indexed += embedded.length;
+    }
   }
-  if (!embedded.length) return { indexed: 0 };
-  await getQdrantClient().upsert(collectionName, { wait: true, points: embedded });
-  return { indexed: embedded.length, collection: collectionName };
+
+  return {
+    indexed,
+    skippedEmpty,
+    collection: collectionName,
+    batchSize: Math.max(1, Number(batchSize || 1)),
+    batches: toBatches(cleanPoints, batchSize).length,
+    embeddingModel,
+    embeddingProvider,
+  };
 }
 
 export async function indexPdfChunks(analysis = {}) {
-  const chunks = (analysis.chunks || []).slice(0, 5000).map((chunk) => ({
+  const sourceChunks = applyChunkLimit(buildPdfRagChunks(analysis));
+  const chunks = sourceChunks.map((chunk) => ({
     id: chunk.chunkId,
     text: chunk.text,
+    fullTextLength: chunk.metadata?.fullTextLength ?? String(chunk.text || "").length,
     payload: {
-      documentId: analysis.documentId,
+      documentId: analysis.documentId || analysis.id,
       chunkId: chunk.chunkId,
       type: chunk.type || chunk.chunkType,
       chunkType: chunk.chunkType || chunk.type,
@@ -52,6 +108,7 @@ export async function indexPdfChunks(analysis = {}) {
       source: chunk.metadata?.source,
       confidence: chunk.metadata?.confidence,
       fileName: analysis.fileName,
+      fullTextLength: chunk.metadata?.fullTextLength ?? String(chunk.text || "").length,
       createdAt: new Date().toISOString(),
     },
   }));
@@ -60,13 +117,14 @@ export async function indexPdfChunks(analysis = {}) {
 
 export async function indexPdfSummaries(analysis = {}) {
   const summaryTypes = new Set(["document_summary", "document_overview", "section_summary", "page_summary", "title_page", "key_points"]);
-  const chunks = (analysis.chunks || [])
+  const chunks = buildPdfRagChunks(analysis)
     .filter((chunk) => summaryTypes.has(chunk.type || chunk.chunkType))
     .map((chunk) => ({
       id: chunk.chunkId,
       text: chunk.text,
+      fullTextLength: chunk.metadata?.fullTextLength ?? String(chunk.text || "").length,
       payload: {
-        documentId: analysis.documentId,
+        documentId: analysis.documentId || analysis.id,
         chunkId: chunk.chunkId,
         type: chunk.type || chunk.chunkType,
         chunkType: chunk.chunkType || chunk.type,
@@ -76,6 +134,7 @@ export async function indexPdfSummaries(analysis = {}) {
         fileName: analysis.fileName,
         pageRange: chunk.metadata?.pageRange,
         keyPoints: chunk.metadata?.keyPoints,
+        fullTextLength: chunk.metadata?.fullTextLength ?? String(chunk.text || "").length,
         createdAt: new Date().toISOString(),
       },
     }));
@@ -88,8 +147,9 @@ export async function indexPdfTables(analysis = {}) {
     return {
       id: table.tableId,
       text: `PDF table ${table.tableId} columns ${JSON.stringify(table.cleanedColumns || [])} schema ${JSON.stringify(table.schema || {})} preview ${JSON.stringify(preview)}`,
+      fullTextLength: String(table.summary || "").length,
       payload: {
-        documentId: analysis.documentId,
+        documentId: analysis.documentId || analysis.id,
         tableId: table.tableId,
         chunkId: `${table.tableId}_summary`,
         type: "table_summary",
@@ -102,6 +162,7 @@ export async function indexPdfTables(analysis = {}) {
         confidence: table.quality?.score ?? table.confidence,
         usableForDashboard: table.usableForDashboard,
         preview,
+        fullTextLength: String(table.summary || "").length,
         createdAt: new Date().toISOString(),
       },
     };
@@ -117,14 +178,38 @@ export function detectPdfQueryIntent(query = "") {
   if (/\b(total|highest|lowest|average|metric|calculate|sum|count)\b/.test(value)) return { intent: "metric_question", pageNumber: pageMatch ? Number(pageMatch[1]) : null };
   if (/\b(chart|visual|graph|plot)\b/.test(value)) return { intent: "chart_question", pageNumber: pageMatch ? Number(pageMatch[1]) : null };
   if (pageMatch || /\bwhat is on page\b/.test(value)) return { intent: "page_question", pageNumber: pageMatch ? Number(pageMatch[1]) : null };
-  if (/\b(explain|overview|summary|summarize|about|key points|important points|whole pdf|document)\b/.test(value)) return { intent: "document_explanation", pageNumber: null };
+  if (/\b(summary|summarize|main points|key points|important points|full document overview|whole pdf)\b/.test(value)) return { intent: "document_summary", pageNumber: null };
+  if (/\b(explain|overview|about|what is this pdf about|what is this document about|document)\b/.test(value)) return { intent: "explain_pdf", pageNumber: null };
   if (/\b(where|find|mention|search)\b/.test(value)) return { intent: "search_question", pageNumber: pageMatch ? Number(pageMatch[1]) : null };
-  return { intent: "search_question", pageNumber: pageMatch ? Number(pageMatch[1]) : null };
+  return { intent: "general_pdf_question", pageNumber: pageMatch ? Number(pageMatch[1]) : null };
 }
 
 function priorityForType(intent, chunkType) {
   const type = chunkType || "page_text";
   const priorities = {
+    explain_pdf: {
+      document_summary: 120,
+      document_overview: 115,
+      section_summary: 105,
+      page_summary: 95,
+      title_page: 90,
+      key_points: 85,
+      page_text: 55,
+      ocr_text: 52,
+      visual_text: 50,
+      table_summary: 30,
+      table: 20,
+    },
+    document_summary: {
+      document_summary: 125,
+      document_overview: 118,
+      section_summary: 108,
+      page_summary: 98,
+      key_points: 92,
+      page_text: 52,
+      ocr_text: 50,
+      table_summary: 35,
+    },
     document_explanation: {
       document_summary: 120,
       document_overview: 115,
@@ -142,7 +227,8 @@ function priorityForType(intent, chunkType) {
     chart_question: { document_overview: 90, page_summary: 70, visual_text: 70, table_summary: 60 },
     page_question: { page_summary: 120, page_text: 100, visual_text: 95, table_summary: 55, document_overview: 35 },
     conversion_request: { table_summary: 125, table_schema: 110, page_summary: 40 },
-    search_question: { page_text: 95, visual_text: 90, page_summary: 70, section_summary: 60, document_summary: 50, table_summary: 35 },
+    search_question: { page_text: 95, ocr_text: 92, visual_text: 90, page_summary: 70, section_summary: 60, document_summary: 50, table_summary: 35 },
+    general_pdf_question: { page_text: 90, ocr_text: 88, page_summary: 75, document_summary: 60, table_summary: 45 },
   };
   return priorities[intent]?.[type] ?? 40;
 }
@@ -280,7 +366,7 @@ export async function searchPdfChunks({ documentId, query, intent, limit = 8, mi
     const collections =
       finalIntent === "table_question" || finalIntent === "conversion_request"
         ? [vectorDbConfig.qdrant.pdfTablesCollection, vectorDbConfig.qdrant.pdfSummariesCollection, vectorDbConfig.qdrant.pdfChunksCollection]
-        : finalIntent === "document_explanation"
+        : finalIntent === "document_explanation" || finalIntent === "explain_pdf" || finalIntent === "document_summary"
           ? [vectorDbConfig.qdrant.pdfSummariesCollection, vectorDbConfig.qdrant.pdfChunksCollection, vectorDbConfig.qdrant.pdfTablesCollection]
           : [vectorDbConfig.qdrant.pdfChunksCollection, vectorDbConfig.qdrant.pdfSummariesCollection, vectorDbConfig.qdrant.pdfTablesCollection];
     const batches = [];

@@ -24,6 +24,8 @@ import { answerPdfQuestion as answerPdfIntelligenceQuestion } from "../services/
 import { explainPdfDocument } from "../services/pdf/pdf-explanation-service.js";
 import { pdfProcessingPolicy, validatePdfUpload } from "../services/pdf/pdf-processing-policy.js";
 import { getPdfReadiness } from "../services/pdf/pdf-readiness.js";
+import { buildPdfRagChunks } from "../services/pdf/pdf-rag-chunker.js";
+import { buildHierarchicalPdfSummary } from "../services/pdf/pdf-hierarchical-summary.js";
 import {
   createUploadedPdfDocument,
   enqueuePdfJob,
@@ -342,6 +344,14 @@ function frontendPipelineStatus(analysis = {}) {
   );
 }
 
+function normalizePdfStatus(status = "") {
+  if (status === "partially_completed") return "partial";
+  if (["uploaded", "previewing", "text_extracted", "indexed", "tables_extracted"].includes(status)) return "processing";
+  if (status === "completed") return "completed";
+  if (status === "failed") return "failed";
+  return status || "processing";
+}
+
 export async function handlePdfRoutes(request, response, pathname) {
   const { method } = request;
 
@@ -400,14 +410,17 @@ export async function handlePdfRoutes(request, response, pathname) {
       });
 
       const documentId = analysis.documentId;
-      const vectorIndex = await indexPdfAnalysisBestEffort(analysis);
-      savePdfIntelligenceAnalysis(documentId, analysis, { vectorIndex });
+      const normalizedAnalysis = { ...analysis, chunks: buildPdfRagChunks(analysis) };
+      await buildHierarchicalPdfSummary(normalizedAnalysis);
+      const finalAnalysis = getPdfIntelligenceAnalysis(documentId) || normalizedAnalysis;
+      const vectorIndex = await indexPdfAnalysisBestEffort(finalAnalysis);
+      savePdfIntelligenceAnalysis(documentId, finalAnalysis, { vectorIndex });
 
       sendSuccess(
         response,
         {
-          analysis,
-          document: compactPdfAnalysis(analysis),
+          analysis: finalAnalysis,
+          document: compactPdfAnalysis(finalAnalysis),
           vectorIndex,
           privacy: {
             rawPdfSentToLLM: false,
@@ -480,31 +493,19 @@ export async function handlePdfRoutes(request, response, pathname) {
         sendError(response, HTTP_STATUS.BAD_REQUEST, "Query is required", ERROR_CODES.VALIDATION_ERROR);
         return true;
       }
-      const analysis = getPdfIntelligenceAnalysis(documentId);
-      if (!analysis) {
-        sendSuccess(
-          response,
-          {
-            answer: "No PDF uploaded.",
-            status: "no_pdf_uploaded",
-            confidence: 0,
-            sources: [],
-            warnings: [],
-          },
-          "No PDF uploaded",
-        );
-        return true;
-      }
-      const result = await answerPdfIntelligenceQuestion({ documentId, question: body.query, intent: body.intent });
+      const result = await answerPdfIntelligenceQuestion({ documentId, query: body.query, intent: body.intent });
       sendSuccess(response, result, "PDF intelligence question answered");
       return true;
     } catch (error) {
-      sendError(
-        response,
-        HTTP_STATUS.INTERNAL_SERVER_ERROR,
-        error.message || "PDF intelligence question failed",
-        ERROR_CODES.AI_GENERATION_FAILED,
-      );
+      sendSuccess(response, {
+        success: false,
+        answer: "I could not answer because the PDF index is still building.",
+        errorCode: "PDF_QUERY_FAILED",
+        canRetry: true,
+        readiness: {},
+        sources: [],
+        warnings: [error.message || "PDF intelligence question failed"],
+      }, "PDF intelligence question status returned");
       return true;
     }
   }
@@ -544,7 +545,7 @@ export async function handlePdfRoutes(request, response, pathname) {
       response,
       {
         documentId,
-        status: analysis.status || "completed",
+        status: normalizePdfStatus(analysis.status || "completed"),
         progress: analysis.progress ?? 100,
         pipelines: frontendPipelineStatus(analysis),
         jobs: Object.values(analysis.jobs || {}),
@@ -722,13 +723,16 @@ export async function handlePdfRoutes(request, response, pathname) {
             extractTables: true,
             maxPages: pdfProcessingPolicy.maxPages,
           });
-          const vectorIndex = await indexPdfAnalysisBestEffort(analysis);
+          const normalizedAnalysis = { ...analysis, chunks: buildPdfRagChunks(analysis) };
+          await buildHierarchicalPdfSummary(normalizedAnalysis);
+          const finalAnalysis = getPdfIntelligenceAnalysis(analysis.documentId) || normalizedAnalysis;
+          const vectorIndex = await indexPdfAnalysisBestEffort(finalAnalysis);
           const bestTable =
-            (analysis.tables || [])
+            (finalAnalysis.tables || [])
               .filter((table) => table.usableForDataset !== false && table.tableType !== "text_block_table" && Array.isArray(table.cleanedRows) && table.cleanedRows.length)
               .sort((a, b) => (b.quality?.score || 0) - (a.quality?.score || 0))[0] || null;
           const dataset = bestTable
-            ? datasetFromPdfTable({ fileName: file.originalName, documentId: analysis.documentId, table: bestTable })
+            ? datasetFromPdfTable({ fileName: file.originalName, documentId: finalAnalysis.documentId, table: bestTable })
             : null;
           const finalDataset =
             dataset ||
@@ -736,18 +740,18 @@ export async function handlePdfRoutes(request, response, pathname) {
               name: `${file.originalName} - PDF Text`,
               fileName: file.originalName,
               sourceType: "pdf",
-              columns: [{ name: "text", type: "string", sample: [analysis.summary?.short || ""] }],
-              rows: [{ text: analysis.summary?.short || "No analyzable table was extracted" }],
+              columns: [{ name: "text", type: "string", sample: [finalAnalysis.summary?.short || finalAnalysis.summary?.shortSummary || ""] }],
+              rows: [{ text: finalAnalysis.summary?.short || finalAnalysis.summary?.shortSummary || "No analyzable table was extracted" }],
             });
 
           updateDataset(finalDataset);
-          savePdfIntelligenceAnalysis(analysis.documentId, analysis, { vectorIndex, datasetId: finalDataset.id });
-          savePdfKnowledgeBase(analysis.documentId, {
-            pdfId: analysis.documentId,
+          savePdfIntelligenceAnalysis(finalAnalysis.documentId, finalAnalysis, { vectorIndex, datasetId: finalDataset.id });
+          savePdfKnowledgeBase(finalAnalysis.documentId, {
+            pdfId: finalAnalysis.documentId,
             datasetId: finalDataset.id,
             fileName: file.originalName,
-            knowledgeBase: knowledgeBaseFromPdfAnalysis(analysis),
-            tables: analysis.tables || [],
+            knowledgeBase: knowledgeBaseFromPdfAnalysis(finalAnalysis),
+            tables: finalAnalysis.tables || [],
             intelligenceEnabled: true,
           });
 
@@ -758,27 +762,27 @@ export async function handlePdfRoutes(request, response, pathname) {
             response,
             {
               pdf: {
-                id: analysis.documentId,
+                id: finalAnalysis.documentId,
                 datasetId: finalDataset.id,
                 fileName: file.originalName,
-                jobId: analysis.documentId,
-                pageCount: analysis.pageCount,
-                tableCount: analysis.tables?.length || 0,
-                chunkCount: analysis.chunks?.length || 0,
-                textElementCount: analysis.pages?.length || 0,
-                documentType: analysis.documentType,
-                ocrUsed: (analysis.extractionSummary?.ocrPages || 0) > 0,
-                qualityScore: analysis.quality?.overallScore,
-                ocrConfidence: analysis.quality?.ocrConfidence,
-                warnings: analysis.quality?.warnings || [],
+                jobId: finalAnalysis.documentId,
+                pageCount: finalAnalysis.pageCount,
+                tableCount: finalAnalysis.tables?.length || 0,
+                chunkCount: finalAnalysis.chunks?.length || 0,
+                textElementCount: finalAnalysis.pages?.length || 0,
+                documentType: finalAnalysis.documentType,
+                ocrUsed: (finalAnalysis.extractionSummary?.ocrPages || 0) > 0,
+                qualityScore: finalAnalysis.quality?.overallScore,
+                ocrConfidence: finalAnalysis.quality?.ocrConfidence,
+                warnings: finalAnalysis.quality?.warnings || [],
               },
               dataset: finalDataset,
               analysis: dashboardAnalysis,
-              pdfIntelligence: compactPdfAnalysis(analysis),
+              pdfIntelligence: compactPdfAnalysis(finalAnalysis),
               knowledgeBaseSummary: {
-                tableCount: analysis.tables?.length || 0,
-                chunkCount: analysis.chunks?.length || 0,
-                textElementCount: analysis.pages?.length || 0,
+                tableCount: finalAnalysis.tables?.length || 0,
+                chunkCount: finalAnalysis.chunks?.length || 0,
+                textElementCount: finalAnalysis.pages?.length || 0,
               },
               privacy: {
                 rawPdfSentToLLM: false,

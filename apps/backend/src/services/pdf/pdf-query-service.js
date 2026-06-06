@@ -4,12 +4,66 @@ import { pdfProcessingPolicy } from "./pdf-processing-policy.js";
 import { getPdfReadiness, getProcessingAnswer } from "./pdf-readiness.js";
 
 const PDF_QA_SYSTEM_PROMPT =
-  "You are InsightFlow PDF Intelligence AI. Answer only using the retrieved PDF context and stored document summaries. Do not invent facts. If the answer is not present in the context, say that it was not found in the indexed PDF content. If OCR confidence is low, clearly mention uncertainty. Prefer document summary and page summaries for overview questions. Prefer table chunks only for table-specific questions. Include page references when possible.";
+  `You are InsightFlow PDF Intelligence.
 
-export function buildPdfContext(matches = [], maxChars = 14000) {
+Answer the user using ONLY the provided PDF context.
+Do not invent facts.
+Do not use outside knowledge.
+If the answer is not present in the PDF context, say:
+"I could not find this information in the uploaded PDF."
+
+Rules:
+* Give a direct answer first.
+* Then explain clearly.
+* Use simple language.
+* Mention page/source numbers when available.
+* For summaries, organize the answer into key points.
+* For tables/numbers, preserve exact values from the PDF context.
+* Never claim you read pages that are not included in the provided sources.
+* If OCR or extraction quality is low, mention uncertainty.`;
+
+function getSummaryText(analysis = {}) {
+  const summary = analysis.summary || {};
+  return [
+    summary.documentTitle ? `Title: ${summary.documentTitle}` : "",
+    summary.shortSummary || summary.short || "",
+    summary.detailedSummary || summary.long || "",
+    Array.isArray(summary.keyPoints) && summary.keyPoints.length ? `Key points:\n${summary.keyPoints.map((item) => `- ${item}`).join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+}
+
+function isWholePdfIntent(intent) {
+  return ["document_summary", "explain_pdf", "document_explanation"].includes(intent);
+}
+
+export function buildPdfContext(matches = [], maxChars = pdfProcessingPolicy.contextMaxChars, analysis = null, intent = "") {
   let used = 0;
   const sources = [];
   const parts = [];
+
+  if (analysis && pdfProcessingPolicy.includeDocumentSummary && isWholePdfIntent(intent)) {
+    const summaryText = getSummaryText(analysis);
+    if (summaryText) {
+      const clipped = summaryText.slice(0, Math.min(maxChars, Math.max(0, Math.floor(maxChars * 0.35))));
+      used += clipped.length;
+      sources.push({
+        source: sources.length + 1,
+        id: `${analysis.documentId || analysis.id}_document_summary`,
+        chunkId: `${analysis.documentId || analysis.id}_document_summary`,
+        pageNumber: null,
+        chunkType: "document_summary",
+        confidence: analysis.quality?.overallScore ?? null,
+        extractionMethod: "stored_document_summary",
+        preview: clipped.slice(0, 260),
+        score: 1,
+      });
+      parts.push(`SOURCE ${sources.length} page=document chunkType=document_summary confidence=${analysis.quality?.overallScore ?? "unknown"}\n${clipped}`);
+    }
+  }
+
   for (const [index, match] of matches.entries()) {
     const text = String(match.text || "").trim();
     if (!text) continue;
@@ -20,11 +74,13 @@ export function buildPdfContext(matches = [], maxChars = 14000) {
     sources.push({
       source: sources.length + 1,
       id: match.chunkId || match.tableId || `source_${index + 1}`,
+      chunkId: match.chunkId || match.tableId || `source_${index + 1}`,
       pageNumber: match.pageNumber ?? null,
       chunkType: match.chunkType || match.type,
       confidence: match.confidence ?? null,
       extractionMethod: match.source,
       preview: clipped.slice(0, 260),
+      score: typeof match.score === "number" ? Number(match.score.toFixed(4)) : undefined,
     });
     parts.push(
       `SOURCE ${sources.length} page=${match.pageNumber ?? "document"} chunkType=${match.chunkType || match.type} confidence=${match.confidence ?? "unknown"}\n${clipped}`,
@@ -60,7 +116,7 @@ function fallbackAnswer({ analysis, intent, sources, matches }) {
   const summary = analysis?.summary || {};
   const lowConfidence = matches.some((match) => Number(match.confidence || 1) < 0.6);
   const overview = summary.detailedSummary || summary.long || summary.shortSummary || summary.short;
-  if (intent === "document_explanation" && overview) {
+  if (isWholePdfIntent(intent) && overview) {
     return {
       answer: [
         `What this PDF is about: ${summary.shortSummary || summary.short || overview}`,
@@ -72,7 +128,7 @@ function fallbackAnswer({ analysis, intent, sources, matches }) {
         `Important tables/data: ${(summary.detectedTables || []).slice(0, 8).join("; ") || "No important tables were detected."}`,
       ].join("\n"),
       warnings: [
-        "Local Ollama explanation model is offline or unavailable; returned stored extracted summaries instead.",
+        "Local AI model is not responding. Answer returned from stored PDF summary.",
         ...(lowConfidence ? ["Some retrieved context has low OCR/extraction confidence."] : []),
       ],
       confidence: lowConfidence ? 0.55 : 0.68,
@@ -81,27 +137,44 @@ function fallbackAnswer({ analysis, intent, sources, matches }) {
   }
   return {
     answer: matches.length
-      ? "I found indexed PDF context, but the local Ollama model is unavailable. Review the cited snippets for the closest extracted evidence."
-      : "The answer was not found in the indexed PDF content.",
-    warnings: ["Local Ollama explanation model is offline or unavailable."],
+      ? "Local AI model is not responding. I found relevant extracted PDF snippets; review the cited sources for the closest evidence."
+      : overview
+        ? `Local AI model is not responding. Stored PDF summary: ${overview}`
+        : "I could not find this information in the uploaded PDF.",
+    warnings: ["Local AI model is not responding."],
     confidence: matches.length ? 0.45 : 0.2,
     sources,
   };
 }
 
-export async function answerPdfQuestion({ documentId, question, intent: explicitIntent, limit = 10 }) {
+function ocrNeededWarning(analysis = {}, readiness = {}) {
+  const warnings = analysis.quality?.warnings || [];
+  const weakText = !readiness.hasPageText && !readiness.hasDocumentSummary;
+  const ocrRecommended = warnings.some((warning) => /ocr|scanned|image|weak text|low text/i.test(String(warning)));
+  return weakText || ocrRecommended ? "This PDF may need OCR for better answers. Please run Force OCR and Re-index." : null;
+}
+
+export async function answerPdfQuestion({ documentId, query, question, intent: explicitIntent, limit }) {
+  const userQuery = String(query || question || "").trim();
   const analysis = getPdfIntelligenceAnalysis(documentId);
   if (!analysis) {
     return {
-      answer: "No PDF uploaded.",
-      status: "no_pdf_uploaded",
+      answer: "I could not find this PDF document. Please upload it again.",
+      status: "pdf_not_found",
       confidence: 0,
       sources: [],
       warnings: [],
+      model: pdfProcessingPolicy.explainerModel,
+      intent: explicitIntent || "general_pdf_question",
+      contextUsed: {
+        retrievedChunks: 0,
+        usedDocumentSummary: false,
+        maxChars: pdfProcessingPolicy.contextMaxChars,
+      },
     };
   }
 
-  const detected = detectPdfQueryIntent(question);
+  const detected = detectPdfQueryIntent(userQuery);
   const intent = explicitIntent || detected.intent;
   const readiness = getPdfReadiness(analysis, { pageNumber: detected.pageNumber });
 
@@ -181,22 +254,25 @@ export async function answerPdfQuestion({ documentId, question, intent: explicit
   }
 
   if (!readiness.canAskQuestions) {
+    const warning = ocrNeededWarning(analysis, readiness);
     return getProcessingAnswer(analysis, readiness, {
       answer: "Your PDF is uploaded but still processing. Text extraction, summaries, or indexing are not query-ready yet.",
+      warnings: warning ? [warning] : [],
     });
   }
 
+  const topK = Math.max(1, Number(limit || pdfProcessingPolicy.queryTopK || 14));
   const retrieval = await searchPdfChunks({
     documentId,
-    query: question,
+    query: userQuery,
     intent,
     pageNumber: detected.pageNumber,
-    limit: intent === "document_explanation" ? Math.max(limit, 14) : limit,
+    limit: isWholePdfIntent(intent) ? Math.max(topK, pdfProcessingPolicy.queryTopK) : topK,
     minScore: 0.08,
   });
 
   let matches = retrieval.matches || [];
-  if (intent === "document_explanation") {
+  if (isWholePdfIntent(intent)) {
     const directSummaryMatches = [];
     const summary = analysis.summary || {};
     const documentSummaryText = summary.detailedSummary || summary.long || summary.shortSummary || summary.short;
@@ -244,25 +320,38 @@ export async function answerPdfQuestion({ documentId, question, intent: explicit
     matches = [...byId.values()].slice(0, Math.max(limit, 14));
   }
 
-  const { context, sources } = buildPdfContext(matches);
+  const { context, sources } = buildPdfContext(matches, pdfProcessingPolicy.contextMaxChars, analysis, intent);
   if (!context) {
+    const warning = ocrNeededWarning(analysis, readiness);
     return {
-      answer: "The answer was not found in the indexed PDF content.",
+      answer: warning || "I could not find this information in the uploaded PDF.",
       intent,
       confidence: 0.1,
       sources: [],
-      warnings: ["No indexed context matched the question."],
+      warnings: ["No relevant PDF chunks matched the question.", ...(warning ? [warning] : [])],
       model: pdfProcessingPolicy.explainerModel,
+      contextUsed: {
+        retrievedChunks: 0,
+        usedDocumentSummary: false,
+        maxChars: pdfProcessingPolicy.contextMaxChars,
+      },
     };
   }
 
   const lowConfidence = matches.some((match) => Number(match.confidence || 1) < 0.6);
+  const fallbackWarning = retrieval.fallback
+    ? "Answer generated from locally extracted PDF text because vector index is not ready."
+    : null;
+  const ocrWarning = ocrNeededWarning(analysis, readiness);
   try {
     const content = await callOllama({
       model: pdfProcessingPolicy.explainerModel,
       messages: [
         { role: "system", content: PDF_QA_SYSTEM_PROMPT },
-        { role: "user", content: `For user query:\n${question}\n\nUse retrieved context:\n${context}\n\nAnswer with answer, confidence, sources, and warnings.` },
+        {
+          role: "user",
+          content: `User question:\n${userQuery}\n\nPDF context:\n${context}\n\nReturn a helpful answer grounded only in these sources.`,
+        },
       ],
     });
     return {
@@ -270,10 +359,19 @@ export async function answerPdfQuestion({ documentId, question, intent: explicit
       intent,
       confidence: lowConfidence ? 0.62 : 0.82,
       sources,
-      warnings: lowConfidence ? ["Some retrieved context has low OCR/extraction confidence."] : [],
+      warnings: [
+        ...(fallbackWarning ? [fallbackWarning] : []),
+        ...(lowConfidence ? ["Some retrieved context has low OCR/extraction confidence."] : []),
+        ...(ocrWarning ? [ocrWarning] : []),
+      ],
       model: pdfProcessingPolicy.explainerModel,
       retrievalMode: retrieval.collection,
       rawPdfSentToLLM: false,
+      contextUsed: {
+        retrievedChunks: matches.length,
+        usedDocumentSummary: sources.some((source) => source.chunkType === "document_summary"),
+        maxChars: pdfProcessingPolicy.contextMaxChars,
+      },
     };
   } catch {
     const fallback = fallbackAnswer({ analysis, intent, sources, matches });
@@ -283,6 +381,11 @@ export async function answerPdfQuestion({ documentId, question, intent: explicit
       model: pdfProcessingPolicy.explainerModel,
       retrievalMode: retrieval.collection,
       rawPdfSentToLLM: false,
+      contextUsed: {
+        retrievedChunks: matches.length,
+        usedDocumentSummary: sources.some((source) => source.chunkType === "document_summary"),
+        maxChars: pdfProcessingPolicy.contextMaxChars,
+      },
     };
   }
 }

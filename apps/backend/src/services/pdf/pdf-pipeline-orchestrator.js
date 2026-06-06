@@ -12,6 +12,8 @@ import {
 } from "./pdf-intelligence-store.js";
 import { indexPdfAnalysisBestEffort, reindexPdfDocument } from "./pdf-vector-store.js";
 import { pdfProcessingPolicy } from "./pdf-processing-policy.js";
+import { buildHierarchicalPdfSummary } from "./pdf-hierarchical-summary.js";
+import { buildPdfRagChunks } from "./pdf-rag-chunker.js";
 
 const queue = [];
 let running = false;
@@ -136,13 +138,16 @@ export function queueInitialPdfPipelines(documentId) {
         extractTables: false,
         maxPages: pdfProcessingPolicy.maxPages,
       });
-      savePdfIntelligenceAnalysis(documentId, extracted, {
+      const normalized = {
         ...current,
         ...extracted,
+        chunks: buildPdfRagChunks({ ...current, ...extracted }),
         status: "text_extracted",
         progress: 55,
         statusMessage: "Digital text extracted and summarized.",
-      });
+      };
+      savePdfIntelligenceAnalysis(documentId, normalized);
+      await buildHierarchicalPdfSummary(normalized);
       savePdfJob(documentId, {
         id: `pdf.clean_${documentId}`,
         type: "pdf.clean",
@@ -204,7 +209,11 @@ export async function runTableExtractionPipeline(documentId) {
   const merged = {
     ...current,
     tables: extracted.tables || [],
-    chunks: mergeChunks(current.chunks || [], extracted.chunks || []),
+    chunks: buildPdfRagChunks({
+      ...current,
+      tables: extracted.tables || [],
+      chunks: mergeChunks(current.chunks || [], extracted.chunks || []),
+    }),
     extractionSummary: { ...(current.extractionSummary || {}), ...(extracted.extractionSummary || {}) },
     quality: extracted.quality || current.quality,
     tablesExtractedAt: new Date().toISOString(),
@@ -261,14 +270,20 @@ export function queueForceOcrPipeline(documentId) {
         extractTables: true,
         maxPages: pdfProcessingPolicy.maxPages,
       });
-      const vectorIndex = await indexPdfAnalysisBestEffort(analysis);
-      savePdfIntelligenceAnalysis(documentId, analysis, {
+      const normalized = {
+        ...analysis,
+        chunks: buildPdfRagChunks(analysis),
+      };
+      await buildHierarchicalPdfSummary(normalized);
+      const latest = getPdfIntelligenceAnalysis(documentId) || normalized;
+      const vectorIndex = await indexPdfAnalysisBestEffort(latest);
+      savePdfIntelligenceAnalysis(documentId, latest, {
         vectorIndex,
         status: "completed",
         progress: 100,
         statusMessage: "Forced OCR completed and affected chunks were reindexed.",
       });
-      return analysis;
+      return latest;
     },
   });
 }

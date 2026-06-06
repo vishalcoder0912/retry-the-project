@@ -45,6 +45,7 @@ export function getPdfReadiness(analysis = {}, options = {}) {
   const pagesWithText = pages.filter((page) => hasText(page.cleanedText) || hasText(page.text) || hasText(page.mergedText));
   const pageSummaries = pages.filter((page) => hasText(page.pageSummary));
   const hasPageText = pagesWithText.length > 0;
+  const hasChunks = chunks.some((chunk) => hasText(chunk.text) || hasText(chunk.content));
   const hasDocumentSummary = hasText(summary.detailedSummary) || hasText(summary.shortSummary) || hasText(summary.long) || hasText(summary.short);
   const hasPageSummaries = pageSummaries.length > 0;
   const hasSummary = hasDocumentSummary || hasPageSummaries;
@@ -100,7 +101,9 @@ export function getPdfReadiness(analysis = {}, options = {}) {
     documentId: analysis.documentId || analysis.id || null,
     status: readinessState,
     hasUploadedPdf,
+    hasText: hasPageText,
     hasPageText,
+    hasChunks,
     hasDocumentSummary,
     hasPageSummaries,
     hasVectorIndex,
@@ -108,6 +111,8 @@ export function getPdfReadiness(analysis = {}, options = {}) {
     hasRealDataTables: hasMetrics,
     canAskQuestions,
     canExplainPdf,
+    canUseVectorSearch: hasVectorIndex,
+    canUseLocalFallback: hasPageText || hasSummary || hasChunks,
     canSummarizePage,
     canShowMetrics,
     processingMessage,
@@ -132,4 +137,3 @@ export function getProcessingAnswer(analysis = {}, readiness = getPdfReadiness(a
     warnings: override.warnings || [],
   };
 }
-

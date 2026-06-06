@@ -34,6 +34,7 @@ type PdfMessage = {
   role: "user" | "assistant";
   content: string;
   sources?: PdfAskResult["sources"];
+  warnings?: string[];
 };
 
 function downloadFile(fileName: string, content: string, mime: string) {
@@ -246,7 +247,7 @@ export default function PdfUploadPage() {
       const response = isExplanation
         ? await api.explainPdf(activePdfDocumentId)
         : await api.askPdfIntelligence(activePdfDocumentId, text);
-      setMessages((current) => [...current, { role: "assistant", content: response.answer, sources: response.sources }]);
+      setMessages((current) => [...current, { role: "assistant", content: response.answer, sources: response.sources, warnings: response.warnings }]);
     } catch (err) {
       setMessages((current) => [...current, { role: "assistant", content: err instanceof Error ? err.message : "Could not answer PDF question.", sources: [] }]);
     } finally {
@@ -527,17 +528,29 @@ export default function PdfUploadPage() {
           ) : null}
 
           <div className="mt-5 space-y-3">
+            {activePdfDocumentId && readiness?.canAskQuestions && readiness?.hasVectorIndex === false ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                PDF is processing. I can answer from available extracted text if ready.
+              </div>
+            ) : null}
             {messages.map((message) => (
               <div key={`${message.role}-${message.content.slice(0, 80)}`} className={message.role === "user" ? "ml-8 rounded-2xl bg-violet-50 px-4 py-3 text-sm font-semibold text-[#0F172A]" : "mr-4 rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm text-[#334155]"}>
                 <p className="whitespace-pre-line leading-6">{message.content}</p>
+                {message.warnings?.length ? (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                    {message.warnings.slice(0, 3).join(" ")}
+                  </div>
+                ) : null}
                 {message.sources?.length ? (
                   <div className="mt-3 space-y-2">
                     {message.sources.map((source) => (
                       <div key={source.id} className="rounded-xl bg-[#F8FAFC] p-2 text-xs text-[#64748B]">
                         Source {source.source}
                         {source.pageNumber ? ` page ${source.pageNumber}` : ""}
+                        {source.chunkId || source.id ? ` chunk ${source.chunkId || source.id}` : ""}
                         {source.chunkType ? ` ${source.chunkType}` : ""}
-                        {typeof source.confidence === "number" ? ` confidence ${Math.round(source.confidence * 100)}%` : ""}: {source.preview}
+                        {typeof source.confidence === "number" ? ` confidence ${Math.round(source.confidence * 100)}%` : ""}
+                        {typeof source.score === "number" ? ` score ${source.score.toFixed(2)}` : ""}: {source.preview}
                       </div>
                     ))}
                   </div>

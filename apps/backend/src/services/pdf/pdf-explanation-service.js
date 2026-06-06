@@ -6,8 +6,8 @@ export async function explainPdfDocument({ documentId }) {
   const analysis = getPdfIntelligenceAnalysis(documentId);
   if (!analysis) {
     return {
-      answer: "No PDF uploaded.",
-      status: "no_pdf_uploaded",
+      answer: "I could not find this PDF document. Please upload it again.",
+      status: "pdf_not_found",
       confidence: 0,
       sources: [],
       warnings: [],
@@ -21,9 +21,8 @@ export async function explainPdfDocument({ documentId }) {
   }
   return answerPdfQuestion({
     documentId,
-    question: "explain the PDF",
-    intent: "document_explanation",
-    limit: 16,
+    query: "explain the PDF",
+    intent: "explain_pdf",
   });
 }
 

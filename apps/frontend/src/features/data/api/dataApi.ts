@@ -280,11 +280,18 @@ export interface PdfAskResult {
     confidence?: number | null;
     extractionMethod?: string;
     chunkType?: string;
+    chunkId?: string;
+    score?: number;
   }>;
   intent?: string;
   confidence?: number;
   warnings?: string[];
   model?: string;
+  contextUsed?: {
+    retrievedChunks: number;
+    usedDocumentSummary: boolean;
+    maxChars: number;
+  };
 }
 
 export interface PdfUploadPipelineResult {
@@ -313,13 +320,17 @@ export interface PdfPipelineStatus {
     documentId?: string | null;
     status: string;
     hasUploadedPdf?: boolean;
+    hasText?: boolean;
     hasPageText?: boolean;
+    hasChunks?: boolean;
     hasDocumentSummary?: boolean;
     hasVectorIndex?: boolean;
     hasTables?: boolean;
     hasRealDataTables?: boolean;
     canAskQuestions: boolean;
     canExplainPdf: boolean;
+    canUseVectorSearch?: boolean;
+    canUseLocalFallback?: boolean;
     canSummarizePage: boolean;
     canShowMetrics: boolean;
     processingMessage?: string;
