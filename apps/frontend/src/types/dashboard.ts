@@ -182,6 +182,8 @@ export interface DashboardCommandResponse {
   schema_safe?: boolean;
   chartSpec?: ChartSpec;
   kpiSpec?: KpiSpec;
+  targetId?: string;
+  targetTitle?: string;
   filters?: Record<string, unknown> | Array<{ key?: string; column?: string; operator?: string; value?: unknown }>;
   dashboard?: DashboardPlan;
   dashboardPlan?: DashboardPlan;
@@ -216,6 +218,10 @@ export interface DashboardActionItem {
   filters?: Record<string, unknown>;
   chartSpec?: ChartSpec;
   kpiSpec?: KpiSpec;
+  targetId?: string;
+  targetTitle?: string;
+  chart_id?: string;
+  chart?: Partial<ChartSpec>;
 }
 
 export interface AiDashboardCommand {
