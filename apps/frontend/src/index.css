@@ -7,42 +7,42 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 0 0% 0%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 249 58% 52%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 0 0% 0%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 249 58% 52%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 0 0% 0%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 0% 0%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 14% 91%;
-    --input: 214 14% 91%;
-    --ring: 249 58% 52%;
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 0 0% 0%;
     --radius: 0.75rem;
-    --success: 142 71% 45%;
-    --warning: 38 92% 50%;
-    --info: 215 16% 47%;
-    --chart-1: 249 58% 52%;
-    --chart-2: 142 71% 45%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 199 89% 48%;
-    --chart-5: 270 96% 62%;
+    --success: 0 0% 30%;
+    --warning: 0 0% 50%;
+    --info: 0 0% 40%;
+    --chart-1: 0 0% 0%;
+    --chart-2: 0 0% 30%;
+    --chart-3: 0 0% 50%;
+    --chart-4: 0 0% 70%;
+    --chart-5: 0 0% 85%;
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 249 58% 52%;
+    --sidebar-foreground: 0 0% 0%;
+    --sidebar-primary: 0 0% 0%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 40% 98%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 214 14% 91%;
-    --sidebar-ring: 249 58% 52%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 0 0% 88%;
+    --sidebar-ring: 0 0% 0%;
   }
 
   .dark {
@@ -52,36 +52,36 @@
     --card-foreground: 210 20% 98%;
     --popover: 222 47% 14%;
     --popover-foreground: 210 20% 98%;
-    --primary: 249 58% 65%;
-    --primary-foreground: 222 47% 11%;
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    --accent: 249 58% 65%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 62% 50%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 217 33% 22%;
-    --input: 217 33% 17%;
-    --ring: 249 58% 65%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 0 0% 100%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 0% 100%;
+    --destructive-foreground: 0 0% 0%;
+    --border: 0 0% 20%;
+    --input: 0 0% 15%;
+    --ring: 0 0% 100%;
     --radius: 0.75rem;
-    --success: 142 71% 55%;
-    --warning: 38 92% 60%;
-    --info: 215 20% 65%;
-    --chart-1: 249 58% 65%;
-    --chart-2: 142 71% 55%;
-    --chart-3: 38 92% 60%;
-    --chart-4: 199 89% 58%;
-    --chart-5: 270 96% 72%;
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 249 58% 65%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 217 33% 17%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 217 33% 22%;
-    --sidebar-ring: 249 58% 65%;
+    --success: 0 0% 60%;
+    --warning: 0 0% 70%;
+    --info: 0 0% 65%;
+    --chart-1: 0 0% 100%;
+    --chart-2: 0 0% 70%;
+    --chart-3: 0 0% 50%;
+    --chart-4: 0 0% 30%;
+    --chart-5: 0 0% 15%;
+    --sidebar-background: 0 0% 0%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 0 0% 100%;
   }
 }
 
@@ -92,30 +92,17 @@
   }
 
   html {
-    @apply dark;
     min-height: 100%;
-    width: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
-    background: #07111f;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, sans-serif;
     min-height: 100%;
-    width: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
-    background: #07111f;
   }
 
   #root {
     min-height: 100%;
-    width: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
-    background: #07111f;
   }
 
   .recharts-wrapper,
@@ -137,6 +124,69 @@
   .glass {
     @apply border border-border/50 bg-card/80 backdrop-blur-sm;
   }
+}
+
+/* ─── Light mode overrides for hardcoded dark classes ─── */
+:root:not(.dark) .bg-slate-950,
+:root:not(.dark) .bg-slate-950\/70,
+:root:not(.dark) .bg-slate-950\/60,
+:root:not(.dark) .bg-slate-950\/40,
+:root:not(.dark) .bg-slate-950\/30,
+:root:not(.dark) .bg-slate-900,
+:root:not(.dark) .bg-slate-900\/70,
+:root:not(.dark) .bg-slate-900\/60,
+:root:not(.dark) .bg-slate-900\/80,
+:root:not(.dark) .bg-slate-900\/90 {
+  background-color: #ffffff;
+}
+
+:root:not(.dark) .bg-slate-800\/70,
+:root:not(.dark) .bg-slate-800\/80 {
+  background-color: #f3f4f6;
+}
+
+:root:not(.dark) .hover\:bg-slate-800:hover,
+:root:not(.dark) .hover\:bg-slate-800\/70:hover,
+:root:not(.dark) .hover\:bg-slate-800\/80:hover {
+  background-color: #f3f4f6;
+}
+
+:root:not(.dark) .hover\:bg-slate-900:hover {
+  background-color: #f9fafb;
+}
+
+:root:not(.dark) .text-white,
+:root:not(.dark) .text-slate-100 {
+  color: #111827;
+}
+
+:root:not(.dark) .text-slate-200 {
+  color: #374151;
+}
+
+:root:not(.dark) .text-slate-300 {
+  color: #4b5563;
+}
+
+:root:not(.dark) .text-slate-400 {
+  color: #6b7280;
+}
+
+:root:not(.dark) .text-slate-500 {
+  color: #9ca3af;
+}
+
+:root:not(.dark) .border-slate-700\/60,
+:root:not(.dark) .border-slate-700\/50,
+:root:not(.dark) .border-slate-700\/70,
+:root:not(.dark) .border-slate-800\/70,
+:root:not(.dark) .border-slate-800\/80 {
+  border-color: #e5e7eb;
+}
+
+:root:not(.dark) .border-slate-700,
+:root:not(.dark) .border-slate-800 {
+  border-color: #d1d5db;
 }
 
 @media (prefers-reduced-motion: reduce) {

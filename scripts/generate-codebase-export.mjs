@@ -1,6 +1,6 @@
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const PROJECT_ROOT = process.cwd();
 const OUTPUT_FILE = path.join(PROJECT_ROOT, 'CODEBASE_EXPORT.md');
@@ -188,7 +188,7 @@ function detectPackageInfo(files) {
   const results = [];
   for (const pkg of packages) {
     try {
-      const content = JSON.parse(fs.readFileSync(pkg.absolutePath, 'utf8'));
+      const content = JSON.parse(fsSync.readFileSync(pkg.absolutePath, 'utf8'));
       results.push({
         file: pkg.file,
         name: content.name || '(unnamed)',
@@ -213,7 +213,7 @@ function detectEnvVars(files) {
   const vars = new Map();
   for (const file of files) {
     try {
-      const content = fs.readFileSync(file.absolutePath, 'utf8');
+      const content = fsSync.readFileSync(file.absolutePath, 'utf8');
       let match;
       while ((match = pattern.exec(content)) !== null) {
         if (!vars.has(match[1])) vars.set(match[1], []);
@@ -229,7 +229,7 @@ function detectApiEndpoints(files) {
   const endpoints = new Map();
   for (const file of files) {
     try {
-      const content = fs.readFileSync(file.absolutePath, 'utf8');
+      const content = fsSync.readFileSync(file.absolutePath, 'utf8');
       let match;
       while ((match = pattern.exec(content)) !== null) {
         if (!endpoints.has(match[1])) endpoints.set(match[1], []);
@@ -245,7 +245,7 @@ function detectRoutes(files) {
   const routes = [];
   for (const file of files) {
     try {
-      const content = fs.readFileSync(file.absolutePath, 'utf8');
+      const content = fsSync.readFileSync(file.absolutePath, 'utf8');
       let match;
       while ((match = pattern.exec(content)) !== null) {
         routes.push({ route: match[1], file: file.file });
@@ -267,6 +267,37 @@ function mdTable(headers, rows) {
   const d = '| ' + headers.map(() => '---').join(' | ') + ' |';
   const b = rows.map(r => '| ' + r.map(c => String(c).replace(/\|/g, '\\|')).join(' | ') + ' |');
   return [h, d, ...b].join('\n');
+}
+
+async function writeExportFile(content) {
+  const tempFile = path.join(
+    PROJECT_ROOT,
+    `.CODEBASE_EXPORT.${process.pid}.${Date.now()}.tmp`
+  );
+
+  await fs.writeFile(tempFile, content, 'utf8');
+
+  try {
+    await fs.rename(tempFile, OUTPUT_FILE);
+    return OUTPUT_FILE;
+  } catch (error) {
+    if (!['EACCES', 'EPERM', 'EBUSY', 'UNKNOWN'].includes(error.code)) {
+      try {
+        await fs.unlink(tempFile);
+      } catch {}
+      throw error;
+    }
+
+    const fallbackFile = path.join(
+      PROJECT_ROOT,
+      `CODEBASE_EXPORT_${new Date().toISOString().replace(/[:.]/g, '-')}.md`
+    );
+
+    await fs.rename(tempFile, fallbackFile);
+    console.warn(`Warning: could not replace CODEBASE_EXPORT.md (${error.code}).`);
+    console.warn(`Generated fallback export instead: ${path.basename(fallbackFile)}`);
+    return fallbackFile;
+  }
 }
 
 async function generate() {
@@ -361,8 +392,8 @@ async function generate() {
 
   output += `---\n\n*Export complete. ${files.length} files, ${skipped.length} skipped.*\n`;
 
-  await fs.writeFile(OUTPUT_FILE, output, 'utf8');
-  console.log(`\nDone! Generated ${path.relative(PROJECT_ROOT, OUTPUT_FILE)}`);
+  const writtenFile = await writeExportFile(output);
+  console.log(`\nDone! Generated ${path.relative(PROJECT_ROOT, writtenFile)}`);
   console.log(`  Included: ${files.length} files`);
   console.log(`  Skipped: ${skipped.length} paths`);
 }

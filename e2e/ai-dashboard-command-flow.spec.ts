@@ -1,9 +1,9 @@
 import { expect, test } from "@playwright/test";
-import { mockInsightFlowApi } from "./helpers";
+import { gotoApp, mockInsightFlowApi } from "./helpers";
 
 test("AI dashboard command flow supports chart, KPI, and clear filters commands", async ({ page }) => {
   await mockInsightFlowApi(page);
-  await page.goto("/elite-dashboard");
+  await gotoApp(page, "/dashboard");
 
   await expect(page.getByRole("heading", { name: /salary-small/i })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));

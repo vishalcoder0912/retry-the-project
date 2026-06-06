@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { buildAnalyticsPlaybook } from "./analytics-playbook-engine.js";
+import { serviceUrls } from "../config/serviceUrls.js";
+import { getModelForTask } from "../config/model-router.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /(?:\+?\d[\s().-]*){8,}/;
@@ -174,8 +176,8 @@ function safeJsonParse(text) {
 }
 
 export async function callSchemaOnlyLLMPlanner(schemaPacket, query) {
-  const model = process.env.OLLAMA_CHAT_MODEL || "llama3.2";
-  const baseUrl = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+  const model = getModelForTask("dashboard_planner");
+  const baseUrl = serviceUrls.ollama;
   const response = await fetch(`${baseUrl}/api/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

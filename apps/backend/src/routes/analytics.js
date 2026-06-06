@@ -28,10 +28,20 @@ export async function handleAnalyticsRoutes(request, response, pathname) {
         dataset,
         () => ({ method: 'pearson', matrix: [], strongPairs: calculateCorrelations(dataset) }),
       );
+
+      if (correlations && Array.isArray(correlations.strongPairs)) {
+        correlations.strongPairs = correlations.strongPairs.map(c => ({
+          ...c,
+          column1: c.column1 || c.columnA,
+          column2: c.column2 || c.columnB,
+          columnA: c.columnA || c.column1,
+          columnB: c.columnB || c.column2
+        }));
+      }
       
       sendSuccess(response, {
         correlations,
-        summary: `Found ${correlations.length} correlations in the dataset`,
+        summary: `Found ${correlations.strongPairs?.length || 0} correlations in the dataset`,
         hasGemini: false
       }, 'Correlations calculated');
       return true;
@@ -211,7 +221,9 @@ function calculateCorrelations(dataset) {
       
       correlations.push({
         column1: col1,
+        columnA: col1,
         column2: col2,
+        columnB: col2,
         coefficient: parseFloat(coef.toFixed(3)),
         strength: absCoef > 0.7 ? 'strong' : absCoef > 0.4 ? 'moderate' : 'weak',
         interpretation: coef > 0 ? 'positive correlation' : 'negative correlation',

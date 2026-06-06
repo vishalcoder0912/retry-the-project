@@ -50,7 +50,7 @@ describe("Ollama schema-only safety", () => {
     expect(JSON.stringify(result)).not.toContain("\"data\"");
     expect(result.dashboard.charts.length).toBeGreaterThan(0);
     expect(result.dashboard.charts.every((chart) => !chart.data)).toBe(true);
-    expect(result.llm?.source).toBe("ollama:neural-chat:7b");
+    expect(result.llm?.source).toBe(`ollama:${process.env.DASHBOARD_LLM_MODEL || "qwen3:4b"}`);
   });
 
   it("falls back to local dashboard plan when Ollama is down", async () => {

@@ -77,7 +77,7 @@ describe("schema-trained AI routes", () => {
     expect(payload.data.schemaOnly).toBe(true);
   });
 
-  it("answers schema chat without fake KPI values or raw row packet", async () => {
+  it("answers schema chat like an analyst without fake KPI values or raw row packet", async () => {
     const { payload } = await callRoute("/api/datasets/test-local/schema-chat", {
       ...salaryDataset,
       query: "Explain this dataset",
@@ -85,7 +85,12 @@ describe("schema-trained AI routes", () => {
     });
 
     expect(payload.success).toBe(true);
-    expect(payload.data.assistantMessage.content).toContain("3 rows");
+    expect(payload.data.assistantMessage.content).toContain("workforce compensation dataset");
+    expect(payload.data.assistantMessage.content).toContain("The most useful fields appear to be");
+    expect(payload.data.assistantMessage.content).toContain("Recommended Starting Point");
+    expect(payload.data.assistantMessage.content).not.toContain("3 rows");
+    expect(payload.data.assistantMessage.content).not.toContain("detected domain");
+    expect(payload.data.assistantMessage.content).not.toContain("Confidence Score");
     expect(payload.data.assistantMessage.schemaOnly).toBe(true);
     expect(JSON.stringify(payload)).not.toContain("\"rows\"");
   });

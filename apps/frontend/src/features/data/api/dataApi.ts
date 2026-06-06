@@ -225,7 +225,7 @@ export type SchemaDashboardResponse = {
     }>;
     charts: Array<{
       id?: string;
-      type: "bar" | "line" | "area" | "pie" | "donut" | "histogram" | "scatter" | "radar" | "composed" | "heatmap";
+      type: "bar" | "horizontalBar" | "line" | "area" | "pie" | "donut" | "histogram" | "scatter" | "radar" | "composed" | "heatmap";
       title: string;
       xKey: string;
       yKey: string;
@@ -233,6 +233,25 @@ export type SchemaDashboardResponse = {
       limit?: number;
     }>;
   };
+  dashboardType?: string;
+  executiveSummary?: {
+    overview?: string;
+    topTrend?: string | null;
+    biggestOpportunity?: string | null;
+    biggestRisk?: string | null;
+    businessRecommendation?: string;
+    confidenceScore?: number;
+  } | null;
+  geoAnalysis?: Array<Record<string, unknown>>;
+  insights?: Array<Record<string, unknown>>;
+  recommendations?: Array<Record<string, unknown>>;
+  storyMode?: {
+    whatHappened?: string;
+    whyItHappened?: string;
+    whatWillHappen?: string;
+    recommendedAction?: string;
+  } | null;
+  confidenceScore?: number;
 };
 
 export interface PdfImportResult {
@@ -241,9 +260,23 @@ export interface PdfImportResult {
     datasetId: string;
     fileName: string;
     jobId: string;
+    pageCount?: number;
     tableCount: number;
     chunkCount: number;
     textElementCount: number;
+    documentType?: string;
+    ocrUsed?: boolean;
+    qualityScore?: number;
+    ocrConfidence?: number | null;
+    warnings?: string[];
+  };
+  pdfIntelligence?: {
+    summary?: Record<string, any>;
+    pages?: Array<Record<string, any>>;
+    sections?: Array<Record<string, any>>;
+    quality?: Record<string, any>;
+    tables?: Array<Record<string, any>>;
+    readiness?: PdfPipelineStatus["readiness"];
   };
   dataset: Dataset;
   analysis: DatasetAnalysis;
@@ -265,7 +298,70 @@ export interface PdfAskResult {
     source: number;
     id: string;
     preview: string;
+    pageNumber?: number | null;
+    confidence?: number | null;
+    extractionMethod?: string;
+    chunkType?: string;
+    chunkId?: string;
+    score?: number;
   }>;
+  intent?: string;
+  confidence?: number;
+  warnings?: string[];
+  model?: string;
+  contextUsed?: {
+    retrievedChunks: number;
+    usedDocumentSummary: boolean;
+    maxChars: number;
+  };
+}
+
+export interface PdfUploadPipelineResult {
+  documentId: string;
+  status: string;
+  message: string;
+  next: {
+    statusUrl: string;
+    documentUrl: string;
+  };
+}
+
+export interface PdfPipelineStatus {
+  documentId: string;
+  status: string;
+  progress: number;
+  pipelines?: Record<string, {
+    status: string;
+    progress: number;
+    currentPage?: number | null;
+    totalPages?: number | null;
+    error?: string | null;
+  }>;
+  jobs?: Array<Record<string, any>>;
+  readiness?: {
+    documentId?: string | null;
+    status: string;
+    hasUploadedPdf?: boolean;
+    hasText?: boolean;
+    hasPageText?: boolean;
+    hasChunks?: boolean;
+    hasDocumentSummary?: boolean;
+    hasVectorIndex?: boolean;
+    hasTables?: boolean;
+    hasRealDataTables?: boolean;
+    canAskQuestions: boolean;
+    canExplainPdf: boolean;
+    canUseVectorSearch?: boolean;
+    canUseLocalFallback?: boolean;
+    canSummarizePage: boolean;
+    canShowMetrics: boolean;
+    processingMessage?: string;
+    activePipelines?: Array<Record<string, any>>;
+    progress?: number;
+  };
+  currentPage?: number | null;
+  totalPages?: number | null;
+  message?: string;
 }
 
 export interface AgenticConfigResponse {
@@ -280,6 +376,29 @@ export interface AgenticHealthResponse {
     model: string;
     installed: boolean;
   }>;
+}
+
+export interface SchemaOnlyAnalysisResponse {
+  success: boolean;
+  response_type: string;
+  natural_response: string;
+  dataset_id: string;
+  actions: Array<{
+    action: string;
+    id?: string;
+    title?: string;
+    metric?: string;
+    aggregation?: string;
+    chart_type?: string;
+    x?: string;
+    y?: string;
+  }>;
+  computed_results: Record<string, { value?: number; data?: Array<Record<string, unknown>>; calculated?: boolean }>;
+  warnings: string[];
+  errors: Array<{ action: string; reason: string; suggestion?: string }>;
+  schema_safe: boolean;
+  dashboard_health?: { status: string; score: number; issues: Array<Record<string, unknown>>; warnings: Array<Record<string, unknown>> };
+  audit: { schemaColumnsReceived: number; rawRowsSent: number; actionsValidated: number; actionsRejected: number };
 }
 
 
@@ -324,6 +443,11 @@ export async function safeApiFetch<T>(
 
       throw new ApiError(message, response.status, payload?.error?.code || payload?.code);
     }
+
+    logger.debug(`API: ${method} ${path}`, {
+      statusCode: response.status,
+      duration,
+    });
 
     if (response.status === 204) {
       return {} as T;
@@ -429,10 +553,51 @@ export const api = {
     const payload = await response.json() as ApiEnvelope<PdfImportResult>;
     return payload.data as PdfImportResult;
   },
+  uploadPdfIntelligence: async (file: File): Promise<PdfUploadPipelineResult> => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${apiBaseUrl}/api/pdf-intelligence/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorPayload = await response.json().catch(() => null);
+      throw new ApiError(errorPayload?.error?.message || "PDF upload failed", response.status, errorPayload?.error?.code);
+    }
+
+    const payload = await response.json() as ApiEnvelope<PdfUploadPipelineResult>;
+    return payload.data as PdfUploadPipelineResult;
+  },
+  getPdfIntelligenceDocument: (pdfId: string): Promise<PdfImportResult["pdfIntelligence"] & { documentId: string; fileName?: string; pageCount?: number; tableCount?: number; chunkCount?: number; status?: string; progress?: number }> =>
+    request(`/api/pdf-intelligence/${pdfId}`),
+  getPdfPipelineStatus: (pdfId: string): Promise<PdfPipelineStatus> =>
+    request<PdfPipelineStatus>(`/api/pdf-intelligence/${pdfId}/status`),
   askPdf: (pdfId: string, query: string): Promise<PdfAskResult> =>
     request<PdfAskResult>(`/api/pdf/${pdfId}/ask`, {
       method: "POST",
       body: JSON.stringify({ query }),
+    }),
+  askPdfIntelligence: (pdfId: string, query: string, intent?: string): Promise<PdfAskResult> =>
+    request<PdfAskResult>(`/api/pdf-intelligence/${pdfId}/query`, {
+      method: "POST",
+      body: JSON.stringify({ query, intent }),
+    }),
+  explainPdf: (pdfId: string): Promise<PdfAskResult> =>
+    request<PdfAskResult>(`/api/pdf-intelligence/${pdfId}/explain`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  reindexPdf: (pdfId: string) =>
+    request(`/api/pdf-intelligence/${pdfId}/reindex`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  forceOcrPdf: (pdfId: string) =>
+    request<{ document: PdfImportResult["pdfIntelligence"] & { documentId?: string }; vectorIndex?: unknown }>(`/api/pdf-intelligence/${pdfId}/force-ocr`, {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
   updateRow: (datasetId: string, rowId: number, column: string, value: unknown) =>
     request<{ dataset: Dataset }>(`/api/datasets/${datasetId}/rows/${rowId}`, {
@@ -735,6 +900,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ goal }),
     }),
+  runSchemaOnlyAnalysis: (
+    datasetId: string,
+    goal: string,
+    currentDashboardState?: Record<string, unknown>,
+    options?: { sampleSize?: number }
+  ) =>
+    request<SchemaOnlyAnalysisResponse>(
+      `/api/agentic-models/datasets/${datasetId}/analyze`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          goal,
+          currentDashboardState: currentDashboardState || {},
+          schema_only: true,
+          sampleSize: options?.sampleSize,
+        }),
+      }
+    ),
 };
 
 async function postDashboardAi<T>(path: string, body: unknown): Promise<T> {
@@ -754,6 +937,33 @@ async function postDashboardAi<T>(path: string, body: unknown): Promise<T> {
   return payload as T;
 }
 
+export interface ChartQueryResponse {
+  chart: ChartConfig;
+  confidence: number;
+  columnStats: {
+    uniqueValues: number;
+    sampleValues: string[];
+    min?: number;
+    max?: number;
+    avg?: number;
+    median?: number;
+  } | null;
+  ragContext: {
+    matchedViaRag: boolean;
+    ragMemoryCount: number;
+    instructionsUsed?: string[];
+  };
+  schemaSummary: {
+    datasetName: string;
+    rowCount: number;
+    totalColumns: number;
+    metrics: string[];
+    dimensions: string[];
+  };
+  removedChartId: string | null;
+  message: string;
+}
+
 export const dashboardAiApi = {
   generateDashboard(body: DashboardAiPayload) {
     return postDashboardAi<DashboardAiResponse>("/api/dashboard-ai/generate", body);
@@ -765,5 +975,15 @@ export const dashboardAiApi = {
 
   validateAndFixDashboard(body: DashboardAiFixPayload) {
     return postDashboardAi<DashboardAiResponse>("/api/dashboard-ai/fix", body);
+  },
+
+  chartQuery(body: { query: string; datasetId?: string; existingCharts?: ChartConfig[] }) {
+    return postDashboardAi<ChartQueryResponse>("/api/dashboard/chart-query", body);
+  },
+
+  removeChart(chartId: string) {
+    return postDashboardAi<{ removedChartId: string; message: string }>("/api/dashboard/remove-chart", {
+      chartId,
+    });
   },
 };

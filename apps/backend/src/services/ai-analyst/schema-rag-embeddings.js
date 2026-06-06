@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
-import { OLLAMA_AGENT_MODELS, OLLAMA_HOST } from "../../config/ollama-agent-models.js";
+const DEFAULT_OLLAMA_BASE_URL =
+  process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 
 const DEFAULT_EMBEDDING_MODEL =
   process.env.RAG_EMBEDDING_MODEL || OLLAMA_AGENT_MODELS.embedding;

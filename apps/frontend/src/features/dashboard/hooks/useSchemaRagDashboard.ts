@@ -26,8 +26,8 @@ type UseSchemaRagDashboardOptions = {
   setDashboard: (next: DashboardState | ((previous: DashboardState) => DashboardState)) => void;
 };
 
-function unwrapResponse(response: any) {
-  return response?.data || response;
+function unwrapResponse<T>(response: T | { data?: T }): T {
+  return (response as { data?: T })?.data || (response as T);
 }
 
 export function useSchemaRagDashboard({

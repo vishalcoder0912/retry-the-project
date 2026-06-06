@@ -1,5 +1,7 @@
-const OLLAMA_BASE_URL =
-  process.env.OLLAMA_BASE_URL || "http://localhost:11434";
+import { serviceUrls } from "../../config/serviceUrls.js";
+import { getModelForTask } from "../../config/model-router.js";
+
+const OLLAMA_BASE_URL = serviceUrls.ollama;
 
 export async function callOllamaJson({
   model,
@@ -52,7 +54,7 @@ export async function callOllamaJson({
 }
 
 export async function createEmbedding(text) {
-  const model = process.env.EMBEDDING_MODEL || "nomic-embed-text:latest";
+  const model = getModelForTask("embedding");
 
   const response = await fetch(`${OLLAMA_BASE_URL}/api/embeddings`, {
     method: "POST",

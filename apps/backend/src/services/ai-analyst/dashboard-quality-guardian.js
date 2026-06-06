@@ -24,6 +24,7 @@ const CATEGORY_ROLES = new Set([
 
 const CHART_TYPES = new Set([
   "bar",
+  "horizontalBar",
   "line",
   "area",
   "pie",
@@ -255,7 +256,8 @@ export function validateChartCombination(profile, chartSpec = {}) {
     return { ok: true, chart };
   }
 
-  if (["bar", "radar", "composed", "heatmap"].includes(chart.type)) {
+  if (["bar", "horizontalBar", "radar", "composed", "heatmap"].includes(chart.type)) {
+    if (!x) return { ok: false, reason: `Column ${chart.xKey} does not exist.` };
     if (chart.yKey !== "count" && (!y || !isMetricColumn(y))) {
       return { ok: false, reason: "This chart needs numeric metric on Y." };
     }

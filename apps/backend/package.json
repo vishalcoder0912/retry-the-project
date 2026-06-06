@@ -12,15 +12,20 @@
     "test": "vitest",
     "test:run": "vitest run",
     "rag:seed": "node scripts/train-smart-rag-seeds.js",
+    "rag:migrate:qdrant": "node scripts/migrate-schema-rag-json-to-qdrant.mjs",
+    "rag:demo:qdrant": "node scripts/demo-qdrant-schema-rag-sales.mjs",
     "train:agentic-domains": "node scripts/train-agentic-analytics-domains.js",
     "train:deep-agentic": "node scripts/train-deep-agentic-analytics.js",
-    "train:agentic-master": "node scripts/train-agentic-master-pack.js"
+    "train:agentic-master": "node scripts/train-agentic-master-pack.js",
+    "train:genai-agentic-domains": "node scripts/train-genai-agentic-domains.js",
+    "export:agentic-finetune": "node scripts/export-agentic-finetune-jsonl.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.3",
     "@google/generative-ai": "^0.24.1",
     "@insightflow/shared-analytics": "../packages/shared-analytics",
     "@opendataloader/pdf": "^2.4.4",
+    "@qdrant/js-client-rest": "^1.15.1",
     "axios": "^1.15.1",
     "busboy": "^1.6.0",
     "dotenv": "^17.4.2",
@@ -35,7 +40,8 @@
     "papaparse": "^5.4.1",
     "pdfkit": "^0.15.2",
     "qrcode": "^1.5.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

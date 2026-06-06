@@ -91,6 +91,7 @@ export interface KPI {
   insight?: string;
   sparkline?: number[];
   icon: string;
+  businessKpi?: boolean;
 }
 
 export interface ChartConfig {
@@ -556,8 +557,7 @@ export const generateDemoKPIs = (data: Dataset): KPI[] => {
   const secondaryMetric = pickSecondaryMetric(numericColumns, primaryMetric);
   const rowCount = data.rowCount || data.rows.length;
   const kpis: KPI[] = [
-    { title: "Rows", value: rowCount.toLocaleString(), icon: "rows" },
-    { title: "Columns", value: data.columns.length.toLocaleString(), icon: "columns" },
+    { title: "Total Records", value: rowCount.toLocaleString(), icon: "rows", businessKpi: true },
   ];
 
   if (primaryMetric) {
@@ -566,6 +566,7 @@ export const generateDemoKPIs = (data: Dataset): KPI[] => {
       title: `Total ${humanize(primaryMetric.name)}`,
       value: formatMetricValue(primaryMetric.name, total),
       icon: iconForMetric(primaryMetric.name),
+      businessKpi: true,
     });
   }
 
@@ -575,6 +576,7 @@ export const generateDemoKPIs = (data: Dataset): KPI[] => {
       title: `Avg ${humanize(secondaryMetric.name)}`,
       value: formatMetricValue(secondaryMetric.name, average),
       icon: iconForMetric(secondaryMetric.name),
+      businessKpi: true,
     });
   } else if (dimensionColumns[0]) {
     const distinctCount = new Set(
@@ -587,6 +589,7 @@ export const generateDemoKPIs = (data: Dataset): KPI[] => {
       title: `Distinct ${humanize(dimensionColumns[0].name)}`,
       value: distinctCount.toLocaleString(),
       icon: "chart",
+      businessKpi: true,
     });
   }
 

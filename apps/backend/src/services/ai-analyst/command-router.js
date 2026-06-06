@@ -1,25 +1,6 @@
+import { serviceUrls } from "../../config/serviceUrls.js";
 import { findColumn } from "./schema-profiler.js";
-import { OLLAMA_AGENT_MODELS, OLLAMA_HOST, OLLAMA_OPTIONS } from "../../config/ollama-agent-models.js";
-
-function toStructuredCommand(plan = {}) {
-  const action = String(plan.action || "ANSWER").toUpperCase();
-  const intentByAction = {
-    GENERATE_CHART: "add_chart",
-    MODIFY_CHART: "update_chart",
-    DELETE_CHART: "remove_chart",
-    FILTER: "filter",
-    CLEAR_FILTERS: "filter",
-    ADD_KPI: "add_kpi",
-    ANSWER: "answer",
-  };
-
-  return {
-    intent: plan.intent || intentByAction[action] || "answer",
-    action: plan.chartSpec || plan.filters || plan.actionPayload || {},
-    answer: plan.answer || plan.message || "Done.",
-    reason: plan.reason || "",
-  };
-}
+import { assertNoRawRowsInString } from "../ai/llm-payload-sanitizer.js";
 
 function deterministicCommand(schema, command) {
   const text = String(command || "").toLowerCase();
@@ -67,10 +48,19 @@ function deterministicCommand(schema, command) {
 }
 
 async function callLlmForPlan(schema, command) {
-  const model = OLLAMA_AGENT_MODELS.dashboardChat;
+  const baseUrl = serviceUrls.ollama;
+  const model = process.env.OLLAMA_MODEL || "llama3.2:latest";
+
+  try {
+    assertNoRawRowsInString(JSON.stringify({ schema, command }));
+  } catch (error) {
+    console.error(`[command-router BLOCKED] ${error.message}`);
+    throw new Error(`Blocked unsafe LLM payload: ${error.message}`);
+  }
 
   const prompt = `
-You are DashboardChatAgent.
+You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows.
+You are an AI data analyst planner.
 You do not calculate KPI values.
 You do not create chart data.
 You only return JSON dashboard actions.

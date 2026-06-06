@@ -1,9 +1,8 @@
 import { callOllamaJson } from "./ollamaClient.js";
+import { getModelForTask } from "../../config/model-router.js";
+import { aiProviderRouter } from "../ai-providers/ai-router.js";
 
-const DASHBOARD_MODEL =
-  process.env.DASHBOARD_LLM_MODEL ||
-  process.env.DASHBOARD_MASTER_MODEL ||
-  "insightflow-master";
+const DASHBOARD_MODEL = getModelForTask("dashboard_planner");
 
 const dashboardSchema = {
   type: "object",
@@ -349,33 +348,53 @@ export async function planDashboardWithAI({
   currentDashboard = null,
 }) {
   try {
-    const result = await callOllamaJson({
-      model: DASHBOARD_MODEL,
-      schema: dashboardSchema,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Return strict JSON only. Never return chart.data. Use schema columns only.",
-        },
-        {
-          role: "user",
-          content: JSON.stringify(
-            {
-              userQuery,
-              schemaOnly: true,
-              schemaProfile: compactSchema(schemaProfile),
-              currentDashboard,
-            },
-            null,
-            2
-          ),
-        },
-      ],
+    const compact = compactSchema(schemaProfile);
+    const result = await aiProviderRouter.runAITask({
+      taskType: "dashboard_planner",
+      schemaPacket: compact,
+      userQuery,
+      dashboardState: currentDashboard || {}
     });
 
-    return validatePlan(result, schemaProfile);
-  } catch {
+    if (result.success) {
+      const actions = result.actions || [];
+      const dashboardPlan = {
+        kpis: actions.filter(a => a.action === 'create_kpi').map((k, index) => ({
+          id: k.id || `kpi-${index}`,
+          title: k.title,
+          metric: k.metric,
+          aggregation: k.aggregation || 'sum',
+          format: k.format || 'number'
+        })),
+        charts: actions.filter(a => a.action === 'create_chart' || a.action === 'create_chart_spec').map((c, index) => ({
+          id: c.id || `chart-${index}`,
+          type: c.chart_type || c.type || 'bar',
+          title: c.title,
+          xKey: c.xKey || c.x,
+          yKey: c.yKey || c.y,
+          aggregation: c.aggregation || 'count',
+          limit: c.limit || 10
+        })),
+        filters: actions.filter(a => a.action === 'create_filter').map((f) => ({
+          key: f.column || f.field,
+          label: f.column || f.field,
+          type: 'select'
+        }))
+      };
+
+      const finalResult = {
+        action: actions.length ? 'BUILD_DASHBOARD' : 'ANSWER',
+        schemaOnly: true,
+        message: result.natural_response || 'Dashboard generated.',
+        dashboardPlan
+      };
+
+      return validatePlan(finalResult, schemaProfile);
+    }
+    
+    return fallbackDashboardPlan(schemaProfile);
+  } catch (error) {
+    console.error('[dashboardPlanner] runAITask failed:', error);
     return fallbackDashboardPlan(schemaProfile);
   }
 }

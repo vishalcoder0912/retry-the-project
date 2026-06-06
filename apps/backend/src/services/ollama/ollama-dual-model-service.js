@@ -1,8 +1,12 @@
-const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
+import { serviceUrls } from "../../config/serviceUrls.js";
+import { getModelForTask } from "../../config/model-router.js";
+import { assertNoRawRowsInString } from "../ai/llm-payload-sanitizer.js";
+
+const OLLAMA_BASE_URL = serviceUrls.ollama;
 
 export const OLLAMA_MODELS = {
-  dashboard: process.env.OLLAMA_DASHBOARD_MODEL || 'neural-chat:7b',
-  chat: process.env.OLLAMA_CHAT_MODEL || 'llama3.2',
+  dashboard: getModelForTask('dashboard_planner'),
+  chat: getModelForTask('chatbot'),
 };
 
 const DEFAULT_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 120000);
@@ -93,6 +97,13 @@ export async function callOllamaChat({
   topP = 0.9,
   numCtx = 8192,
 }) {
+  try {
+    assertNoRawRowsInString(JSON.stringify(messages));
+  } catch (error) {
+    console.error(`[OLLAMA DUAL MODEL BLOCKED] ${error.message}`);
+    throw new Error(`Blocked unsafe LLM payload: ${error.message}`);
+  }
+
   await assertOllamaModelAvailable(model);
 
   const timeout = makeTimeout();

@@ -65,3 +65,10 @@ def test_compare_datasets():
     assert body["sameSchema"] is False
     assert body["missingColumns"] == ["b"]
     assert body["extraColumns"] == ["c"]
+
+
+def test_bad_input():
+    # Sending malformed input to profile endpoint should return unprocessable entity (422)
+    response = client.post("/profile", json={"rows": "not an array"})
+    assert response.status_code == 422
+

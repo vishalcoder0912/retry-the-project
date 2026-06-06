@@ -1,5 +1,6 @@
 // Environment configuration with validation
 import dotenv from 'dotenv';
+import { MODELS } from './model-router.js';
 
 dotenv.config();
 
@@ -56,15 +57,30 @@ export const config = {
 
   // Ollama Configuration (Local LLM)
   ollama: {
-    baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+    baseUrl: process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
     enabled: process.env.OLLAMA_ENABLED !== 'false',
-    primaryModel: process.env.OLLAMA_MODEL || 'llama3.2',
-    chatModel: process.env.OLLAMA_CHAT_MODEL || 'neural-chat:7b',
+    primaryModel: process.env.OLLAMA_MODEL || 'llama3.2:3b',
+    chatModel: process.env.OLLAMA_CHAT_MODEL || 'qwen3:4b',
     timeout: parseInt(process.env.OLLAMA_TIMEOUT_MS || '120000', 10),
     maxTokens: parseInt(process.env.OLLAMA_MAX_TOKENS || '4096', 10),
     temperature: parseFloat(process.env.OLLAMA_TEMPERATURE || '0.7'),
     topP: parseFloat(process.env.OLLAMA_TOP_P || '0.9'),
     frequencyPenalty: parseFloat(process.env.OLLAMA_FREQUENCY_PENALTY || '0.0')
+  },
+
+  // Model Router Configuration (see model-router.js for full details)
+  models: {
+    mainAnalyst:       MODELS.mainAnalyst,
+    dashboardPlanner:  MODELS.dashboardPlanner,
+    chatbot:           MODELS.chatbot,
+    kpiValidator:      MODELS.kpiValidator,
+    chartValidator:    MODELS.chartValidator,
+    factChecker:       MODELS.factChecker,
+    jsonValidator:     MODELS.jsonValidator,
+    coding:            MODELS.coding,
+    fast:              MODELS.fast,
+    quickChat:         MODELS.quickChat,
+    embedding:         MODELS.embedding,
   },
 
   // Google Gemini Configuration
@@ -131,6 +147,13 @@ export const config = {
     outlierDetection: process.env.OUTLIER_DETECTION !== 'false',
     chatHistory: process.env.CHAT_HISTORY_ENABLED !== 'false',
     smartChart: process.env.SMARTCHART_ENABLED !== 'false'
+  },
+
+  // Rate Limiting
+  rateLimit: {
+    rpm: parseInt(process.env.AI_RATE_LIMIT_RPM || '10', 10),
+    rph: parseInt(process.env.AI_RATE_LIMIT_RPH || '100', 10),
+    cooldownAfterErrorMs: parseInt(process.env.AI_COOLDOWN_AFTER_ERROR_MS || '30000', 10)
   }
 };
 
@@ -147,7 +170,7 @@ export function validateConfig() {
   try {
     new URL(config.ollama.baseUrl);
   } catch {
-    errors.push('Invalid OLLAMA_BASE_URL: must be a valid URL');
+    errors.push('Invalid OLLAMA_HOST/OLLAMA_BASE_URL: must be a valid URL');
   }
 
   // Validate AI provider priority
@@ -163,45 +186,50 @@ export function validateConfig() {
   }
 
   if (errors.length > 0) {
-    console.error('❌ Configuration validation failed:');
-    errors.forEach(error => console.error(`   - ${error}`));
+    console.error('❌ Configuration validation failed:'); // audit-ignore: console-log
+    errors.forEach(error => console.error(`   - ${error}`)); // audit-ignore: console-log
     process.exit(1);
   }
 
-  console.log('✅ Configuration validation passed');
+  console.log('✅ Configuration validation passed'); // audit-ignore: console-log
   return true;
 }
 
 // Print configuration summary
 export function printConfigSummary() {
-  console.log('\n🤖 ===== AI CONFIGURATION SUMMARY =====');
-  console.log('\n📍 OLLAMA (LOCAL LLM)');
-  console.log(`   Base URL: ${config.ollama.baseUrl}`);
-  console.log(`   Primary Model: ${config.ollama.primaryModel}`);
-  console.log(`   Chat Model: ${config.ollama.chatModel}`);
-  console.log(`   Status: ${config.ollama.enabled ? '✅ ENABLED' : '❌ DISABLED'}`);
+  console.log('\n🤖 ===== AI CONFIGURATION SUMMARY ====='); // audit-ignore: console-log
+  console.log('\n📍 OLLAMA (LOCAL LLM)'); // audit-ignore: console-log
+  console.log(`   Base URL: ${config.ollama.baseUrl}`); // audit-ignore: console-log
+  console.log(`   Primary Model: ${config.ollama.primaryModel}`); // audit-ignore: console-log
+  console.log(`   Chat Model: ${config.ollama.chatModel}`); // audit-ignore: console-log
+  console.log(`   Status: ${config.ollama.enabled ? '✅ ENABLED' : '❌ DISABLED'}`); // audit-ignore: console-log
 
-  console.log('\n📍 GOOGLE GEMINI');
-  console.log(`   Status: ${config.gemini.enabled ? '✅ ENABLED' : '❌ DISABLED (No API key)'}`);
+  console.log('\n📍 GOOGLE GEMINI'); // audit-ignore: console-log
+  console.log(`   Status: ${config.gemini.enabled ? '✅ ENABLED' : '❌ DISABLED (No API key)'}`); // audit-ignore: console-log
 
-  console.log('\n📍 OPENAI');
-  console.log(`   Status: ${config.openai.enabled ? '✅ ENABLED' : '❌ DISABLED (No API key)'}`);
+  console.log('\n📍 OPENAI'); // audit-ignore: console-log
+  console.log(`   Status: ${config.openai.enabled ? '✅ ENABLED' : '❌ DISABLED (No API key)'}`); // audit-ignore: console-log
 
-  console.log('\n📍 ANTHROPIC');
-  console.log(`   Status: ${config.anthropic.enabled ? '✅ ENABLED' : '❌ DISABLED (No API key)'}`);
+  console.log('\n📍 ANTHROPIC'); // audit-ignore: console-log
+  console.log(`   Status: ${config.anthropic.enabled ? '✅ ENABLED' : '❌ DISABLED (No API key)'}`); // audit-ignore: console-log
 
-  console.log('\n⚙️  GLOBAL SETTINGS');
-  console.log(`   Fallback Enabled: ${config.ai.fallbackEnabled}`);
-  console.log(`   Local Only Mode: ${config.ai.localOnlyMode}`);
+  console.log('\n📍 MODEL ROUTER'); // audit-ignore: console-log
+  for (const [task, model] of Object.entries(config.models)) {
+    console.log(`   ${task.padEnd(20)} → ${model}`); // audit-ignore: console-log
+  }
+
+  console.log('\n⚙️  GLOBAL SETTINGS'); // audit-ignore: console-log
+  console.log(`   Fallback Enabled: ${config.ai.fallbackEnabled}`); // audit-ignore: console-log
+  console.log(`   Local Only Mode: ${config.ai.localOnlyMode}`); // audit-ignore: console-log
 
   const available = getAvailableProviders();
-  console.log(`\n✅ Configured Providers: ${available.join(', ') || 'NONE'}`);
-  console.log(`\n🎯 Dynamic Priority (auto-arranged):`);
+  console.log(`\n✅ Configured Providers: ${available.join(', ') || 'NONE'}`); // audit-ignore: console-log
+  console.log(`\n🎯 Dynamic Priority (auto-arranged):`); // audit-ignore: console-log
   config.ai.providerPriority.forEach((p, i) => {
     const status = i === 0 ? '(Primary)' : `(Fallback ${i})`;
-    console.log(`   ${i + 1}. ${p.toUpperCase()} ${status}`);
+    console.log(`   ${i + 1}. ${p.toUpperCase()} ${status}`); // audit-ignore: console-log
   });
-  console.log('\n' + '='.repeat(40) + '\n');
+  console.log('\n' + '='.repeat(40) + '\n'); // audit-ignore: console-log
 }
 
 // Get available providers

@@ -24,6 +24,18 @@ from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.cluster import KMeans
 
+try:
+    import duckdb
+except Exception:  # pragma: no cover - optional health visibility
+    duckdb = None
+
+from fast_dashboard_engine import prepare_dataset_file, run_fast_dashboard
+from pdf_intelligence.pdf_detector import detect_pdf_page_modes
+from pdf_intelligence.pdf_intelligence_engine import analyze_pdf
+from pdf_intelligence.pdf_ocr_engine import run_ocr_for_pdf
+from pdf_intelligence.pdf_table_extractor import extract_tables_hybrid
+from pdf_intelligence.messy_table_cleaner import clean_extracted_table
+
 
 MAX_ANALYTICS_ROWS = 50_000
 MAX_RESPONSE_ROWS = 500
@@ -56,6 +68,45 @@ class RagTrainingPayload(DatasetPayload):
     dataset_name: str = "dataset"
     goal: str = "agentic analytics"
     max_examples: int = 50
+
+
+class FastDashboardRequest(BaseModel):
+    file_path: str
+    metric_priority: list[str] | None = None
+    group_limit: int = 10
+
+
+class PrepareDatasetRequest(BaseModel):
+    file_path: str
+    output_path: str | None = None
+
+
+class PdfAnalyzeRequest(BaseModel):
+    file_path: str
+    document_id: str | None = None
+    ocr_enabled: bool = True
+    force_ocr: bool = False
+    extract_tables: bool = True
+    store_chunks: bool = False
+    max_pages: int | None = None
+
+
+class PdfAnalyzePageRequest(BaseModel):
+    file_path: str
+    document_id: str | None = None
+    page_number: int
+    ocr_enabled: bool = True
+
+
+class PdfTableExtractRequest(BaseModel):
+    file_path: str
+    ocr_enabled: bool = True
+
+
+class PdfOcrRequest(BaseModel):
+    file_path: str
+    pages: list[int] | None = None
+    dpi: int | None = None
 
 
 def _json_safe(value: Any) -> Any:
@@ -166,8 +217,122 @@ def health():
         "status": "healthy",
         "engine": "fastapi",
         "polarsAvailable": pl is not None,
+        "duckdbAvailable": duckdb is not None,
+        "fastDashboardEngine": duckdb is not None,
+        "pdfIntelligenceAvailable": True,
         "cacheEntries": len(analytics_cache),
     }
+
+
+@app.post("/fast-dashboard")
+def fast_dashboard(payload: FastDashboardRequest):
+    try:
+        return run_fast_dashboard(
+            file_path=payload.file_path,
+            metric_priority=payload.metric_priority,
+            group_limit=payload.group_limit,
+        )
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/prepare-dataset")
+def prepare_dataset(payload: PrepareDatasetRequest):
+    try:
+        return prepare_dataset_file(
+            file_path=payload.file_path,
+            output_path=payload.output_path,
+        )
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.get("/pdf-intelligence/health")
+def pdf_intelligence_health():
+    def available(module_name: str) -> bool:
+        try:
+            __import__(module_name)
+            return True
+        except Exception:
+            return False
+
+    tesseract_available = False
+    try:
+        import pytesseract
+
+        pytesseract.get_tesseract_version()
+        tesseract_available = True
+    except Exception:
+        tesseract_available = False
+
+    return {
+        "available": True,
+        "engines": {
+            "pymupdf": available("fitz"),
+            "pdfplumber": available("pdfplumber"),
+            "tesseract": tesseract_available,
+            "opencv": available("cv2"),
+        },
+    }
+
+
+@app.post("/pdf-intelligence/analyze")
+def pdf_intelligence_analyze(payload: PdfAnalyzeRequest):
+    try:
+        return analyze_pdf(
+            file_path=payload.file_path,
+            document_id=payload.document_id,
+            options={
+                "ocr_enabled": payload.ocr_enabled,
+                "force_ocr": payload.force_ocr,
+                "extract_tables": payload.extract_tables,
+                "store_chunks": payload.store_chunks,
+                "max_pages": payload.max_pages,
+            },
+        )
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/pdf-intelligence/analyze-page")
+def pdf_intelligence_analyze_page(payload: PdfAnalyzePageRequest):
+    try:
+        return analyze_pdf(
+            file_path=payload.file_path,
+            document_id=payload.document_id,
+            options={
+                "ocr_enabled": payload.ocr_enabled,
+                "extract_tables": False,
+                "max_pages": payload.page_number,
+            },
+        )
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/pdf-intelligence/ocr")
+def pdf_intelligence_ocr(payload: PdfOcrRequest):
+    try:
+        return run_ocr_for_pdf(file_path=payload.file_path, pages=payload.pages, dpi=payload.dpi or 250)
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+
+@app.post("/pdf-intelligence/extract-tables")
+def pdf_intelligence_extract_tables(payload: PdfTableExtractRequest):
+    try:
+        detection = detect_pdf_page_modes(payload.file_path)
+        pages = []
+        for page in detection.get("pages", []):
+            if page.get("needsOCR") and payload.ocr_enabled:
+                ocr = run_ocr_for_pdf(payload.file_path, pages=[page["pageNumber"]])
+                pages.extend(ocr.get("pages", []))
+            else:
+                pages.append({"pageNumber": page["pageNumber"], "method": "digital_text", "text": ""})
+        tables = [clean_extracted_table(table) for table in extract_tables_hybrid(payload.file_path, pages) if table.get("rawRows")]
+        return {"tables": tables, "tableCount": len(tables), "warnings": [warning for table in tables for warning in table.get("warnings", [])]}
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=str(error))
 
 
 @app.post("/profile")

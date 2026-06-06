@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -12,6 +12,8 @@ const dataDir = process.env.DATA_DIR || path.join(__dirname, "..", "..", "data")
 mkdirSync(dataDir, { recursive: true });
 
 const databasePath = path.join(dataDir, "insightflow.sqlite");
+const localDatasetDir = path.join(dataDir, "local-datasets");
+mkdirSync(localDatasetDir, { recursive: true });
 
 if (!existsSync(databasePath)) {
   console.log(`[DB] Creating database at: ${databasePath}`);
@@ -90,6 +92,18 @@ try {
   // Index might already exist, ignore error
 }
 
+for (const statement of [
+  "ALTER TABLE datasets ADD COLUMN original_file_path TEXT",
+  "ALTER TABLE datasets ADD COLUMN optimized_file_path TEXT",
+  "ALTER TABLE datasets ADD COLUMN optimized_format TEXT",
+]) {
+  try {
+    db.exec(statement);
+  } catch (e) {
+    // Column might already exist, ignore error
+  }
+}
+
 const parseJson = (value, fallback) => {
   if (!value) return fallback;
   try {
@@ -119,8 +133,19 @@ const setMeta = db.prepare(`
 
 const getMeta = db.prepare("SELECT value FROM meta WHERE key = ?");
 const insertDataset = db.prepare(`
-  INSERT INTO datasets (id, name, source_type, file_name, uploaded_at, row_count, column_count)
-  VALUES (?, ?, ?, ?, ?, ?, ?)
+  INSERT INTO datasets (
+    id,
+    name,
+    source_type,
+    file_name,
+    uploaded_at,
+    row_count,
+    column_count,
+    original_file_path,
+    optimized_file_path,
+    optimized_format
+  )
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const insertDatasetColumn = db.prepare(`
   INSERT INTO dataset_columns (dataset_id, name, type, sample_json)
@@ -166,16 +191,57 @@ const mapDataset = (datasetRecord) => {
     rowCount: datasetRecord.row_count,
     sourceType: datasetRecord.source_type,
     fileName: datasetRecord.file_name,
+    originalFilePath: datasetRecord.original_file_path || undefined,
+    optimizedFilePath: datasetRecord.optimized_file_path || undefined,
+    optimizedFormat: datasetRecord.optimized_format || undefined,
+    metadata: {
+      originalFilePath: datasetRecord.original_file_path || undefined,
+      optimizedFilePath: datasetRecord.optimized_file_path || undefined,
+      optimizedFormat: datasetRecord.optimized_format || undefined,
+      rowCount: datasetRecord.row_count,
+    },
   };
 };
 
-export const createDataset = ({ id = null, name, fileName = null, columns, rows, sourceType = "upload", rowCount = null, isLocal = false, localDatasetId = null }) => {
-  const datasetId = id || randomUUID();
+function csvEscape(value) {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function writeDatasetCsvCache(datasetId, columns = [], rows = []) {
+  if (!Array.isArray(rows) || !rows.length || !Array.isArray(columns) || !columns.length) {
+    return null;
+  }
+
+  const filePath = path.join(localDatasetDir, `${datasetId}.csv`);
+  const names = columns.map((column) => column.name || String(column)).filter(Boolean);
+  const header = names.map(csvEscape).join(",");
+  const body = rows.map((row) => names.map((name) => csvEscape(row[name])).join(",")).join("\n");
+  writeFileSync(filePath, `${header}\n${body}\n`, "utf8");
+  return filePath;
+}
+
+export const createDataset = ({
+  name,
+  fileName = null,
+  columns,
+  rows,
+  sourceType = "upload",
+  originalFilePath = null,
+  optimizedFilePath = null,
+  optimizedFormat = null,
+}) => {
+  const datasetId = randomUUID();
   const uploadedAt = new Date().toISOString();
   const cleanRows = rows.map((row) =>
     Object.fromEntries(Object.entries(row).filter(([key]) => key !== "__rowId")),
   );
-  const finalRowCount = rowCount !== null ? rowCount : cleanRows.length;
+  const csvCachePath = optimizedFilePath || originalFilePath || writeDatasetCsvCache(datasetId, columns, cleanRows);
+  const resolvedOptimizedFormat = optimizedFormat || (csvCachePath ? "csv" : null);
 
   return withTransaction(() => {
     insertDataset.run(
@@ -186,6 +252,9 @@ export const createDataset = ({ id = null, name, fileName = null, columns, rows,
       uploadedAt,
       finalRowCount,
       columns.length,
+      originalFilePath || csvCachePath,
+      csvCachePath,
+      resolvedOptimizedFormat,
     );
 
     // Save extra local fields if table supports them
@@ -236,6 +305,9 @@ const mapDatasetLight = (datasetRecord) => {
     columnCount: datasetRecord.column_count,
     sourceType: datasetRecord.source_type,
     fileName: datasetRecord.file_name,
+    originalFilePath: datasetRecord.original_file_path || undefined,
+    optimizedFilePath: datasetRecord.optimized_file_path || undefined,
+    optimizedFormat: datasetRecord.optimized_format || undefined,
   };
 };
 

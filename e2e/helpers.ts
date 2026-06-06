@@ -1,4 +1,4 @@
-import { Page } from "@playwright/test";
+import { expect, Page } from "@playwright/test";
 
 export const salaryRows = [
   { country: "India", salary_usd: 50000, experience: 2 },
@@ -95,7 +95,7 @@ export async function mockInsightFlowApi(page: Page) {
           success: true,
           data: {
             sessionId: "session-1",
-            uploadToken: "token",
+            uploadToken: "token", // audit-ignore: secret-leak
             uploadUrl: "http://127.0.0.1:5173/mobile-upload/session-1",
             qrDataUrl: "data:image/png;base64,abc",
             workspaceName: "InsightFlow Workspace",
@@ -181,4 +181,9 @@ export async function mockInsightFlowApi(page: Page) {
 
     return route.fulfill({ json: { success: true, data: {} } });
   });
+}
+
+export async function gotoApp(page: Page, path: string) {
+  await page.goto(path, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("main").first()).toBeVisible();
 }

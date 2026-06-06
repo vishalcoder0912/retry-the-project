@@ -26,7 +26,7 @@ vi.mock("@/features/data/api/dataApi", () => ({
   api: {
     generateQRSession: vi.fn(async () => ({
       sessionId: "qr-1",
-      uploadToken: "token",
+      uploadToken: "token", // audit-ignore: secret-leak
       uploadUrl: "http://localhost/mobile-upload/qr-1",
       qrDataUrl: "data:image/png;base64,abc",
       workspaceName: "InsightFlow Workspace",
@@ -55,8 +55,8 @@ describe("upload/data flow", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(uploadFiles).toHaveBeenCalledWith([file]));
-    await waitFor(() => expect(screen.getByText(/schema validation completed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/File processed successfully/i)).toBeInTheDocument());
     expect(navigate).not.toHaveBeenCalled();
-    expect(screen.getByText(/Upload Data/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Upload Data$/i })).toBeInTheDocument();
   });
 });

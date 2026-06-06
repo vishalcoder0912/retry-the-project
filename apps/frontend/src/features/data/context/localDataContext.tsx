@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { api } from '@/features/data/api/dataApi';
+import { API_BASE_URL } from '@/config/apiConfig';
 import { Dataset, DatasetRow, ChatMessage } from '@/features/data/model/dataStore';
 
 export interface LocalDataset {
@@ -53,7 +54,7 @@ export const LocalDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   ) => {
     setIsProcessing(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/datasets/local-import`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || API_BASE_URL}/api/datasets/local-import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -95,7 +96,7 @@ export const LocalDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
 
       // Generate SQL using AI (schema only, no data)
-      const aiResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/datasets/schema-ai-query`, {
+      const aiResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || API_BASE_URL}/api/datasets/schema-ai-query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ schema, query }),
@@ -114,7 +115,7 @@ export const LocalDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
 
       // Execute SQL locally
-      const queryResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/datasets/${localDataset.localDatasetId}/local-query`, {
+      const queryResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || API_BASE_URL}/api/datasets/${localDataset.localDatasetId}/local-query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sql }),
@@ -161,7 +162,7 @@ export const LocalDataProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     const response = await fetch(
-      `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'}/api/datasets/${localDataset.localDatasetId}/local-data?page=${page}&limit=${limit}`
+      `${import.meta.env.VITE_API_BASE_URL || API_BASE_URL}/api/datasets/${localDataset.localDatasetId}/local-data?page=${page}&limit=${limit}`
     );
 
     if (!response.ok) {

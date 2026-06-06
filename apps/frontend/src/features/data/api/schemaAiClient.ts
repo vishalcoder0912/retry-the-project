@@ -3,6 +3,7 @@ export type DatasetPayload = {
   name?: string;
   rows?: Array<Record<string, unknown>>;
   columns?: Array<{ name?: string; key?: string; type?: string; role?: string } | string>;
+  runtimeContext?: Record<string, unknown>;
 };
 
 export type DashboardCommandResponse = {
@@ -17,6 +18,26 @@ export type DashboardCommandResponse = {
     | "CLEAR_FILTERS"
     | "ANSWER";
   message?: string;
+  response_type?: "dashboard_action";
+  natural_response?: string;
+  actions?: Array<{
+    action: string;
+    chart_type?: string;
+    type?: string;
+    title?: string;
+    x?: string;
+    y?: string;
+    xKey?: string;
+    yKey?: string;
+    metric?: string;
+    aggregation?: string;
+    reason?: string;
+    filters?: Record<string, unknown>;
+    chartSpec?: Record<string, unknown>;
+    kpiSpec?: Record<string, unknown>;
+  }>;
+  warnings?: string[];
+  schema_safe?: boolean;
   chartSpec?: Record<string, unknown>;
   kpiSpec?: Record<string, unknown>;
   filters?: Record<string, unknown> | Array<{ key?: string; column?: string; operator?: string; value?: unknown }>;
@@ -34,42 +55,40 @@ export type SchemaChatResponse = {
   assistantMessage: { role: "assistant"; content: string; model?: string; provider?: string; schemaOnly: true; timestamp?: string };
 };
 
-export type ExcelAnalystResponse = {
-  userMessage?: { role: "user"; content: string; timestamp?: string };
-  assistantMessage?: { role: "assistant"; content: string; model?: string; provider?: string; schemaOnly: true; timestamp?: string };
-  analysis?: {
-    schemaOnly: true;
-    provider: string;
-    model: string;
-    query: string;
-    intent: string;
-    answer: string;
-    plan: Record<string, unknown>;
-    calculation: { ok: boolean; type?: string; warning?: string; result: unknown };
-    suggestedCharts?: unknown[];
-    suggestedKpis?: unknown[];
-    confidence?: number;
-    warnings?: unknown[];
-  };
-};
+import { API_BASE_URL } from "@/config/apiConfig";
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || API_BASE_URL).replace(/\/$/, "");
+const DEFAULT_REQUEST_TIMEOUT_MS = 18000;
 
 function endpoint(path: string) {
   return `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(endpoint(path), {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+  let response: Response;
+
+  try {
+    response = await fetch(endpoint(path), {
+      ...init,
+      signal: init.signal || controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      },
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error("Request timed out. The local AI service may still be working, but the UI has recovered.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 
   const text = await response.text();
-  let payload: any = null;
+  let payload: unknown = null;
 
   try {
     payload = text ? JSON.parse(text) : null;
@@ -77,13 +96,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     payload = { raw: text };
   }
 
-  if (!response.ok || payload?.success === false) {
-    const message = payload?.error?.message || payload?.message || `HTTP ${response.status}`;
-    const details = payload?.error?.details || payload?.raw || "";
+  const envelope = payload as {
+    success?: boolean;
+    data?: unknown;
+    message?: string;
+    raw?: string;
+    error?: { message?: string; details?: string };
+  } | null;
+
+  if (!response.ok || envelope?.success === false) {
+    const message = envelope?.error?.message || envelope?.message || `HTTP ${response.status}`;
+    const details = envelope?.error?.details || envelope?.raw || "";
     throw new Error(details ? `${message}: ${details}` : message);
   }
 
-  return (payload?.data ?? payload) as T;
+  return (envelope?.data ?? payload) as T;
 }
 
 function safeDatasetBody(dataset?: DatasetPayload) {
@@ -92,6 +119,7 @@ function safeDatasetBody(dataset?: DatasetPayload) {
     name: dataset?.name,
     rows: Array.isArray(dataset?.rows) ? dataset.rows : undefined,
     columns: Array.isArray(dataset?.columns) ? dataset.columns : undefined,
+    runtimeContext: dataset?.runtimeContext,
   };
 }
 
@@ -283,14 +311,27 @@ export function runSchemaChat(datasetId: string, payload: Record<string, unknown
   });
 }
 
-export function runExcelAnalyze(datasetId: string, payload: Record<string, unknown>) {
-  return schemaAiClient.runExcelAnalyze(datasetId, payload);
+// ─── InsightFlow Engine API ──────────────────────────────────
+
+export function runInsightFlowAnalysis(payload: {
+  datasetId?: string;
+  rows?: Array<Record<string, unknown>>;
+  columns?: string[];
+}) {
+  return request("/api/insight-flow/analyze", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
-export function runExcelChat(datasetId: string, payload: Record<string, unknown>) {
-  return schemaAiClient.runExcelChat(datasetId, payload);
-}
-
-export function trainExcelRagSeeds(payload: Record<string, unknown> = {}) {
-  return schemaAiClient.trainExcelRagSeeds(payload);
+export function runInsightFlowValidation(payload: {
+  charts?: unknown[];
+  kpis?: unknown[];
+  geoIntelligence?: unknown;
+  schema?: unknown;
+}) {
+  return request("/api/insight-flow/validate", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

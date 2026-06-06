@@ -69,6 +69,11 @@ export interface DashboardChart extends ChartSpec {
   subtitle: string;
   data: Array<Record<string, string | number>>;
   warning?: string;
+  metricUsed?: string;
+  dimensionUsed?: string;
+  calculationSource?: string;
+  createdBy?: "system" | "ai";
+  filtersApplied?: DashboardFilters;
 }
 
 export interface DashboardKpi extends KpiSpec {
@@ -78,6 +83,10 @@ export interface DashboardKpi extends KpiSpec {
   subtitle: string;
   status?: "good" | "warning" | "critical";
   insight?: string;
+  change?: number;
+  sparkline?: number[];
+  source?: string;
+  createdBy?: "system" | "ai";
 }
 
 export interface DataQualityScore {
@@ -410,7 +419,12 @@ export function applyFilters(rows: Row[], filters: DashboardFilters = {}) {
       const cell = String(row[key] ?? "").toLowerCase();
       const expected = String(rawValue).toLowerCase();
 
-      if (cell !== expected) return false;
+      if (key === "languages" || key === "frameworks") {
+        const parts = cell.split(/[;,]/).map((p) => p.trim());
+        if (!parts.includes(expected)) return false;
+      } else {
+        if (cell !== expected) return false;
+      }
     }
 
     for (const condition of conditions) {
@@ -492,6 +506,7 @@ export function countUnique(values: unknown[]) {
 }
 
 function aggregateValues(values: unknown[], aggregation: Aggregation | "count_unique") {
+  if (aggregation === "none") return values.filter((value) => !isMissing(value)).length;
   if (aggregation === "count") {
     return values.filter((value) => !isMissing(value)).length;
   }
@@ -501,6 +516,26 @@ function aggregateValues(values: unknown[], aggregation: Aggregation | "count_un
   if (aggregation === "max") return max(values);
   if (aggregation === "median") return median(values);
   return countUnique(values);
+}
+
+function topGroupByAverage(rows: Row[], groupKey: string, metricKey = "salary_usd") {
+  const groups = new Map<string, { total: number; count: number }>();
+
+  rows.forEach((row) => {
+    const group = row[groupKey];
+    const metric = safeNumber(row[metricKey]);
+    if (isMissing(group) || metric === null) return;
+
+    const key = String(group).trim();
+    const current = groups.get(key) || { total: 0, count: 0 };
+    current.total += metric;
+    current.count += 1;
+    groups.set(key, current);
+  });
+
+  return Array.from(groups.entries())
+    .map(([name, stats]) => ({ name, average: stats.total / stats.count }))
+    .sort((left, right) => right.average - left.average)[0]?.name || "N/A";
 }
 
 export function groupByAggregate(
@@ -702,9 +737,7 @@ function buildTrendData(rows: Row[], xKey: string, yKey: string, aggregation: Ag
 
   for (const row of rows) {
     const raw = row[xKey];
-    const label = xKey === "__row_index__"
-      ? String(row.__row_index__ ?? "")
-      : isDateLike(raw)
+    const label = isDateLike(raw)
       ? new Date(String(raw)).toISOString().slice(0, 10)
       : String(raw ?? "");
     if (!label) continue;
@@ -747,27 +780,64 @@ function expandMultiValueRows(rows: Row[], xKey: string) {
   return expanded;
 }
 
-function makeChart(spec: ChartSpec, data: Array<Record<string, string | number>>, warning?: string): DashboardChart {
+function rowMatchesSpecFilter(row: Row, filter: NonNullable<KpiSpec["filters"]>[number]) {
+  const actual = row[filter.column];
+  const expected = filter.value;
+  const operator = String(filter.operator || "equals").toLowerCase();
+  const actualText = String(actual ?? "").trim().toLowerCase();
+  const expectedText = String(expected ?? "").trim().toLowerCase();
+  const actualNumber = safeNumber(actual);
+  const expectedNumber = safeNumber(expected);
+
+  if (operator === "not_equals") return actualText !== expectedText;
+  if (operator === "contains") return actualText.includes(expectedText);
+  if (operator === "gt") return actualNumber !== null && expectedNumber !== null && actualNumber > expectedNumber;
+  if (operator === "gte") return actualNumber !== null && expectedNumber !== null && actualNumber >= expectedNumber;
+  if (operator === "lt") return actualNumber !== null && expectedNumber !== null && actualNumber < expectedNumber;
+  if (operator === "lte") return actualNumber !== null && expectedNumber !== null && actualNumber <= expectedNumber;
+  return actualText === expectedText;
+}
+
+function applySpecFilters<T extends Row>(rows: T[], filters: KpiSpec["filters"] = []) {
+  if (!filters.length) return rows;
+  return rows.filter((row) => filters.every((filter) => rowMatchesSpecFilter(row, filter)));
+}
+
+function makeChart(
+  spec: ChartSpec,
+  data: Array<Record<string, string | number>>,
+  warning?: string,
+  extras: Partial<DashboardChart> = {},
+): DashboardChart {
   return {
     id: crypto.randomUUID(),
     ...spec,
     subtitle: `${spec.aggregation.toUpperCase()} - ${titleCase(spec.xKey)} vs ${titleCase(spec.yKey)}`,
     data,
     warning,
+    metricUsed: spec.yKey,
+    dimensionUsed: spec.xKey,
+    calculationSource: `${spec.aggregation.toUpperCase()}(${spec.yKey}) grouped by ${spec.xKey}`,
+    createdBy: "system",
+    ...extras,
   };
 }
 
 export function buildChartFromSpec(rows: Row[], chartSpec: ChartSpec): DashboardChart {
-  const withIndex = buildRowIndexRows(cleanDatasetRows(rows));
+  const withIndex = buildRowIndexRows(applySpecFilters(cleanDatasetRows(rows), chartSpec.filters));
   const limit = chartSpec.limit ?? 10;
-  const xKey = chartSpec.xKey || "__row_index__";
+  const xKey = chartSpec.xKey || "";
   const yKey = chartSpec.yKey || "count";
 
   if (!withIndex.length) {
     return makeChart(chartSpec, [], "Not enough data to render this chart.");
   }
 
-  const chartRows = chartSpec.splitValues ? expandMultiValueRows(withIndex, xKey) : withIndex;
+  const chartRows = chartSpec.splitValues || chartSpec.multiValue ? expandMultiValueRows(withIndex, xKey) : withIndex;
+
+  if (xKey === "__row_index__") {
+    return makeChart(chartSpec, [], "Row index is not a real business dimension.");
+  }
 
   if (chartSpec.type === "histogram") {
     return makeChart(
@@ -786,9 +856,12 @@ export function buildChartFromSpec(rows: Row[], chartSpec: ChartSpec): Dashboard
   }
 
   if (chartSpec.type === "line" || chartSpec.type === "area") {
-    const resolvedXKey = xKey === "__row_index__" ? "__row_index__" : xKey;
-    const trendRows = buildTrendData(chartRows, resolvedXKey, yKey, chartSpec.aggregation);
-    return makeChart({ ...chartSpec, xKey: resolvedXKey }, trendRows);
+    const sampleHasDate = chartRows.slice(0, 50).some((row) => isDateLike(row[xKey]));
+    if (!sampleHasDate) {
+      return makeChart(chartSpec, [], "Trend charts require a real date/time column.");
+    }
+    const trendRows = buildTrendData(chartRows, xKey, yKey, chartSpec.aggregation);
+    return makeChart({ ...chartSpec, xKey }, trendRows);
   }
 
   return makeChart(
@@ -798,20 +871,36 @@ export function buildChartFromSpec(rows: Row[], chartSpec: ChartSpec): Dashboard
 }
 
 export function buildKpiFromSpec(rows: Row[], kpiSpec: KpiSpec): DashboardKpi {
-  const cleanRows = cleanDatasetRows(rows);
+  const cleanRows = applySpecFilters(cleanDatasetRows(rows), kpiSpec.filters);
   const quality = buildDataQualityScore(cleanRows);
   let rawValue: number | string = 0;
+  const metricValues =
+    kpiSpec.metric && !kpiSpec.metric.startsWith("__")
+      ? cleanRows
+          .map((row) => safeNumber(row[kpiSpec.metric!]))
+          .filter((value): value is number => value !== null)
+      : [];
 
   if (kpiSpec.metric === "__row_count__" || !kpiSpec.metric) {
     rawValue = cleanRows.length;
   } else if (kpiSpec.metric === "__quality_score__") {
     rawValue = quality.finalScore;
+  } else if (kpiSpec.aggregation === "top_by_avg") {
+    rawValue = topGroupByAverage(cleanRows, kpiSpec.metric);
   } else {
     rawValue = aggregateValues(
       cleanRows.map((row) => row[kpiSpec.metric!]),
       kpiSpec.aggregation || "count",
     );
   }
+
+  const midpoint = Math.floor(metricValues.length / 2);
+  const previous = midpoint ? aggregateValues(metricValues.slice(0, midpoint), kpiSpec.aggregation || "avg") : 0;
+  const current = midpoint ? aggregateValues(metricValues.slice(midpoint), kpiSpec.aggregation || "avg") : 0;
+  const change =
+    typeof previous === "number" && previous !== 0 && typeof current === "number"
+      ? Number((((current - previous) / Math.abs(previous)) * 100).toFixed(1))
+      : undefined;
 
   return {
     ...kpiSpec,
@@ -820,79 +909,58 @@ export function buildKpiFromSpec(rows: Row[], kpiSpec: KpiSpec): DashboardKpi {
     value: formatMetric(rawValue, kpiSpec.format),
     subtitle: kpiSpec.metric === "__quality_score__" ? "Data quality" : `${(kpiSpec.aggregation || "count").toUpperCase()} - ${titleCase(kpiSpec.metric || "Rows")}`,
     status: typeof rawValue === "number" && rawValue < 0 ? "critical" : "good",
+    createdBy: "system",
+    change,
+    sparkline: metricValues.length
+      ? Array.from({ length: Math.min(14, metricValues.length) }, (_, index) => {
+          const start = Math.floor((index / Math.min(14, metricValues.length)) * metricValues.length);
+          const end = Math.max(start + 1, Math.floor(((index + 1) / Math.min(14, metricValues.length)) * metricValues.length));
+          return average(metricValues.slice(start, end));
+        })
+      : undefined,
+    source: kpiSpec.metric === "__quality_score__" ? "Schema quality checks" : `${kpiSpec.aggregation || "count"}(${kpiSpec.metric || "rows"})`,
   };
 }
 
 export function buildKpis(rows: Row[]) {
   const cleanRows = cleanDatasetRows(rows);
   const profile = buildDatasetProfile(cleanRows);
-  const quality = buildDataQualityScore(cleanRows);
   const kpis: DashboardKpi[] = [
-    buildKpiFromSpec(cleanRows, { title: "Total Rows", metric: "__row_count__", aggregation: "count", format: "number" }),
-    buildKpiFromSpec(cleanRows, {
-      title: "Attributes / Columns",
-      metric: "__row_count__",
-      aggregation: "count",
-      format: "number",
-    }),
-    {
-      id: crypto.randomUUID(),
-      title: "Numeric Columns",
-      metric: "__numeric_columns__",
-      aggregation: "count",
-      format: "number",
-      rawValue: profile.numericColumns.length,
-      value: profile.numericColumns.length.toLocaleString(),
-      subtitle: "Metric-ready columns",
-    },
-    {
-      id: crypto.randomUUID(),
-      title: "Categorical Columns",
-      metric: "__categorical_columns__",
-      aggregation: "count",
-      format: "number",
-      rawValue: profile.categoryColumns.length,
-      value: profile.categoryColumns.length.toLocaleString(),
-      subtitle: "Segment columns",
-    },
-    {
-      id: crypto.randomUUID(),
-      title: "Missing Values",
-      metric: "__missing_values__",
-      aggregation: "count",
-      format: "number",
-      rawValue: quality.missingCells,
-      value: quality.missingCells.toLocaleString(),
-      subtitle: `${quality.completeness}% complete`,
-      status: quality.missingCells > 0 ? "warning" : "good",
-    },
-    buildKpiFromSpec(cleanRows, {
-      title: "Data Quality Score",
-      metric: "__quality_score__",
-      aggregation: "avg",
-      format: "percent",
-    }),
+    buildKpiFromSpec(cleanRows, { title: "Total Records", metric: "__row_count__", aggregation: "count", format: "number", businessKpi: true }),
   ];
-
-  kpis[1] = {
-    ...kpis[1],
-    rawValue: profile.columns.length,
-    value: profile.columns.length.toLocaleString(),
-    subtitle: "Detected columns",
-  };
 
   if (profile.primaryMetric) {
     kpis.push(
+      buildKpiFromSpec(cleanRows, {
+        title: `Average ${titleCase(profile.primaryMetric.name)}`,
+        metric: profile.primaryMetric.name,
+        aggregation: "avg",
+        format: "number",
+        businessKpi: true,
+      }),
       buildKpiFromSpec(cleanRows, {
         title: `Highest ${titleCase(profile.primaryMetric.name)}`,
         metric: profile.primaryMetric.name,
         aggregation: "max",
         format: "number",
+        businessKpi: true,
       }),
     );
   }
 
-  return kpis;
+  if (profile.primaryCategory) {
+    kpis.push(
+      buildKpiFromSpec(cleanRows, {
+        title: `${titleCase(profile.primaryCategory.name)} Count`,
+        metric: profile.primaryCategory.name,
+        aggregation: "count_unique",
+        format: "number",
+        businessKpi: true,
+      }),
+    );
+  }
+
+  return kpis.filter((kpi) => kpi.businessKpi === true);
 }
 
 export function buildDefaultCharts(rows: Row[]) {
@@ -942,14 +1010,12 @@ export function buildDefaultCharts(rows: Row[]) {
     );
   }
 
-  if (profile.primaryMetric) {
+  if (profile.primaryMetric && profile.dateColumn) {
     charts.push(
       buildChartFromSpec(withIndex, {
         type: "line",
-        title: profile.dateColumn
-          ? `${titleCase(profile.primaryMetric.name)} Over Time`
-          : `${titleCase(profile.primaryMetric.name)} Trend (By Row Index)`,
-        xKey: profile.dateColumn?.name || "__row_index__",
+        title: `${titleCase(profile.primaryMetric.name)} Over Time`,
+        xKey: profile.dateColumn.name,
         yKey: profile.primaryMetric.name,
         aggregation: "avg",
         limit: 24,

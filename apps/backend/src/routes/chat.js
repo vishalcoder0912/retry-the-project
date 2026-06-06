@@ -9,6 +9,7 @@ import {
 } from '../database/dataset-repository.js';
 import { runDashboardAIAgent } from '../services/dashboard-ai-agent.js';
 import { runLlamaDatasetChat } from '../services/llama-chat-agent.js';
+import { handleAnalyticsChat } from '../services/chat/analytics-chat-orchestrator.js';
 
 async function getRequestBody(request) {
   return new Promise((resolve, reject) => {
@@ -50,6 +51,69 @@ function normalizeMessage(message) {
 export async function handleChatRoutes(request, response, pathname) {
   const { method } = request;
 
+  if (pathname === '/api/dashboard/action' && method === 'POST') {
+    try {
+      const body = await getRequestBody(request);
+      const action = body.action || {};
+      const type = action.type;
+      if (!body.datasetId) {
+        sendSuccess(response, { success: false, answer: 'Dataset id is required.', errorCode: 'DATASET_REQUIRED' }, 'Dashboard action rejected safely');
+        return true;
+      }
+      if (!['ADD_CHART', 'ADD_KPI', 'APPLY_FILTER', 'CLEAR_FILTER'].includes(type)) {
+        sendSuccess(response, { success: false, answer: 'Unsupported dashboard action.', errorCode: 'UNSUPPORTED_DASHBOARD_ACTION' }, 'Dashboard action rejected safely');
+        return true;
+      }
+      sendSuccess(response, {
+        success: true,
+        datasetId: body.datasetId,
+        action,
+        dashboard: {
+          updated: true,
+          storage: 'frontend-local-state',
+        },
+      }, 'Dashboard action accepted');
+      return true;
+    } catch (error) {
+      sendSuccess(response, { success: false, answer: error.message || 'Dashboard action failed safely.', errorCode: 'DASHBOARD_ACTION_FAILED' }, 'Dashboard action rejected safely');
+      return true;
+    }
+  }
+
+  if (pathname === '/api/chat/analytics' && method === 'POST') {
+    try {
+      const body = await getRequestBody(request);
+      const result = await handleAnalyticsChat({
+        datasetId: body.datasetId,
+        message: body.message || body.query,
+        activeFilters: body.activeFilters || [],
+        mode: body.mode || 'analysis',
+      });
+
+      if (result.success === false) {
+        sendSuccess(response, result, 'Analytics chat returned a safe error response');
+        return true;
+      }
+
+      sendSuccess(response, result, 'Analytics chat response generated');
+      return true;
+    } catch (error) {
+      console.error('[ANALYTICS CHAT ERROR]', error);
+      sendSuccess(response, {
+        success: false,
+        answer: error.message || 'I could not process that chat request safely.',
+        errorCode: 'CHAT_ROUTE_ERROR',
+        details: error.message,
+        safety: {
+          schemaOnlyAI: true,
+          rawRowsSentToAI: false,
+          sqlValidated: false,
+        },
+      }, 'Analytics chat returned a safe error response');
+      return true;
+    }
+  }
+
   if (
     pathname.match(/^\/api\/datasets\/[^/]+\/dashboard-command$/) &&
     method === 'POST'
@@ -81,7 +145,9 @@ export async function handleChatRoutes(request, response, pathname) {
         return true;
       }
 
-      const result = await runDashboardAIAgent(dataset, query);
+      const result = await runDashboardAIAgent(dataset, query, {
+        dashboardCharts: body.currentDashboard?.charts || body.dashboardCharts || [],
+      });
 
       sendSuccess(response, result, 'Dashboard AI command completed');
       return true;
@@ -180,11 +246,14 @@ export async function handleChatRoutes(request, response, pathname) {
     } catch (error) {
       console.error('[AI CHAT ERROR]', error);
 
+      const statusCode = error.statusCode || HTTP_STATUS.INTERNAL_SERVER_ERROR;
+      const errorCode = statusCode === 400 ? ERROR_CODES.VALIDATION_ERROR : ERROR_CODES.AI_GENERATION_FAILED;
+
       sendError(
         response,
-        HTTP_STATUS.INTERNAL_SERVER_ERROR,
+        statusCode,
         error.message || 'AI chat failed',
-        ERROR_CODES.AI_GENERATION_FAILED,
+        errorCode,
       );
 
       return true;

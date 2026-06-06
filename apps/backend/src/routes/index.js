@@ -7,7 +7,6 @@ import { handleAIRoutes } from './ai.js';
 import { handleHealthRoutes } from './health.js';
 import { handleExportRoutes } from './export.js';
 import { handleMLRoutes } from './machine-learning.js';
-import { handleMlAnalyticsRoutes } from './ml-analytics.js';
 import { handleStateRoutes } from './state.js';
 import { handleQrUploadRoutes } from './qr-upload.js';
 import { handlePlaybookAnalysisRoutes } from './playbook-analysis.js';
@@ -17,9 +16,6 @@ import { handleSchemaTrainedAIRoutes } from './schema-trained-ai.routes.js';
 import { handleDashboardQualityRoutes } from './dashboard-quality.js';
 import { handleDashboardAiRoutes } from './dashboardAiRoutes.js';
 import { handleAgenticModelRoutes } from './agentic-models.js';
-import { handleAgenticDataScienceRoutes } from './agentic-data-science.js';
-import { handleSchemaAgentRoutes } from './schema-agent.js';
-import { handleDeepAgenticTrainingRoutes } from './deep-agentic-training.js';
 import {
   handleE2ECompatRoutes,
   handleE2ENotFound,
@@ -31,16 +27,6 @@ export async function setupRoutes(request, response) {
   const { method, pathname } = request;
 
   try {
-    // Python ML gateway and agentic data science routes should run before
-    // compatibility routes because the E2E shim owns a few legacy /api/ml paths.
-    if (await handleMlAnalyticsRoutes(request, response, pathname)) {
-      return;
-    }
-
-    if (await handleAgenticDataScienceRoutes(request, response, pathname)) {
-      return;
-    }
-
     if (await handleE2ECompatRoutes(request, response, pathname)) {
       return;
     }
@@ -67,16 +53,6 @@ export async function setupRoutes(request, response) {
 
     // Dashboard quality validation routes
     if (await handleDashboardQualityRoutes(request, response, pathname)) {
-      return;
-    }
-
-    // Schema Agent: schema profiling, memory/RAG, dashboard planning, deterministic calculation
-    if (await handleSchemaAgentRoutes(request, response, pathname)) {
-      return;
-    }
-
-    // Deep agentic analytics training
-    if (await handleDeepAgenticTrainingRoutes(request, response, pathname)) {
       return;
     }
 
@@ -112,11 +88,6 @@ export async function setupRoutes(request, response) {
 
     // Analytics routes
     if (await handleAnalyticsRoutes(request, response, pathname)) {
-      return;
-    }
-
-    // Python-backed deterministic analytics routes
-    if (await handleMlAnalyticsRoutes(request, response, pathname)) {
       return;
     }
 
