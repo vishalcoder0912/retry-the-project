@@ -279,6 +279,29 @@ export interface AgenticHealthResponse {
   }>;
 }
 
+export interface SchemaOnlyAnalysisResponse {
+  success: boolean;
+  response_type: string;
+  natural_response: string;
+  dataset_id: string;
+  actions: Array<{
+    action: string;
+    id?: string;
+    title?: string;
+    metric?: string;
+    aggregation?: string;
+    chart_type?: string;
+    x?: string;
+    y?: string;
+  }>;
+  computed_results: Record<string, { value?: number; data?: Array<Record<string, unknown>>; calculated?: boolean }>;
+  warnings: string[];
+  errors: Array<{ action: string; reason: string; suggestion?: string }>;
+  schema_safe: boolean;
+  dashboard_health?: { status: string; score: number; issues: Array<Record<string, unknown>>; warnings: Array<Record<string, unknown>> };
+  audit: { schemaColumnsReceived: number; rawRowsSent: number; actionsValidated: number; actionsRejected: number };
+}
+
 
 type ApiEnvelope<T> = {
   success?: boolean;
@@ -325,7 +348,7 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
       throw new ApiError(errorMessage, response.status, errorPayload?.error?.code || errorPayload?.code);
     }
 
-    logger.info(`API: ${method} ${path}`, {
+    logger.debug(`API: ${method} ${path}`, {
       statusCode: response.status,
       duration,
     });
@@ -665,6 +688,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ goal }),
     }),
+  runSchemaOnlyAnalysis: (
+    datasetId: string,
+    goal: string,
+    currentDashboardState?: Record<string, unknown>,
+    options?: { sampleSize?: number }
+  ) =>
+    request<SchemaOnlyAnalysisResponse>(
+      `/api/agentic-models/datasets/${datasetId}/analyze`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          goal,
+          currentDashboardState: currentDashboardState || {},
+          schema_only: true,
+          sampleSize: options?.sampleSize,
+        }),
+      }
+    ),
 };
 
 async function postDashboardAi<T>(path: string, body: unknown): Promise<T> {
@@ -689,6 +730,33 @@ async function postDashboardAi<T>(path: string, body: unknown): Promise<T> {
   return payload as T;
 }
 
+export interface ChartQueryResponse {
+  chart: ChartConfig;
+  confidence: number;
+  columnStats: {
+    uniqueValues: number;
+    sampleValues: string[];
+    min?: number;
+    max?: number;
+    avg?: number;
+    median?: number;
+  } | null;
+  ragContext: {
+    matchedViaRag: boolean;
+    ragMemoryCount: number;
+    instructionsUsed?: string[];
+  };
+  schemaSummary: {
+    datasetName: string;
+    rowCount: number;
+    totalColumns: number;
+    metrics: string[];
+    dimensions: string[];
+  };
+  removedChartId: string | null;
+  message: string;
+}
+
 export const dashboardAiApi = {
   generateDashboard(body: DashboardAiPayload) {
     return postDashboardAi<DashboardAiResponse>("/api/dashboard-ai/generate", body);
@@ -700,5 +768,15 @@ export const dashboardAiApi = {
 
   validateAndFixDashboard(body: DashboardAiFixPayload) {
     return postDashboardAi<DashboardAiResponse>("/api/dashboard-ai/fix", body);
+  },
+
+  chartQuery(body: { query: string; datasetId?: string; existingCharts?: ChartConfig[] }) {
+    return postDashboardAi<ChartQueryResponse>("/api/dashboard/chart-query", body);
+  },
+
+  removeChart(chartId: string) {
+    return postDashboardAi<{ removedChartId: string; message: string }>("/api/dashboard/remove-chart", {
+      chartId,
+    });
   },
 };
