@@ -2,7 +2,7 @@ import type { Row } from "@/features/dashboard/utils/dashboardAnalytics";
 import { normalizeLocation } from "./geoLocationNormalizer";
 
 const GEO_FIELD_KEYWORDS = [
-  "country", "state", "city", "region", "territory",
+  "country", "countryname", "nation", "state", "city", "region", "territory",
   "province", "zone", "market", "latitude", "longitude",
   "location", "address", "postal", "zip",
 ];
