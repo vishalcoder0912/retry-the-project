@@ -55,8 +55,8 @@ describe("upload/data flow", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(uploadFiles).toHaveBeenCalledWith([file]));
-    await waitFor(() => expect(screen.getByText(/schema validation completed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/File processed successfully/i)).toBeInTheDocument());
     expect(navigate).not.toHaveBeenCalled();
-    expect(screen.getByText(/Upload Data/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /^Upload Data$/i })).toBeInTheDocument();
   });
 });

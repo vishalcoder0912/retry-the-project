@@ -1,7 +1,21 @@
 type Props = {
   loading: boolean;
   error?: string | null;
-  result?: any;
+  result?: {
+    message?: string;
+    profile?: {
+      rowCount?: number;
+      columnCount?: number;
+    };
+    dashboardSpec?: {
+      kpis?: unknown[];
+      charts?: unknown[];
+    };
+    guardian?: {
+      valid?: boolean;
+      errors?: string[];
+    };
+  };
 };
 
 export function SchemaTrainingStatus({ loading, error, result }: Props) {
