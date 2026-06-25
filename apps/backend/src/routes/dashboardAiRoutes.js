@@ -2,6 +2,7 @@ import { generateSchemaProfile } from "../services/dashboard/schemaProfiler.js";
 import { planDashboardWithAI } from "../services/ai/dashboardPlanner.js";
 import { buildDashboardFromPlan } from "../services/dashboard/dashboardAnalytics.js";
 import { validateAndFixDashboard } from "../services/dashboard/dashboardFixEngine.js";
+import { getDatasetById } from "../database/dataset-repository.js";
 
 async function readJsonBody(request) {
   try {
@@ -28,12 +29,19 @@ export async function handleDashboardAiRoutes(request, response, pathname) {
 
   if (method === "POST" && pathname === "/api/dashboard-ai/generate") {
     try {
-      const {
-        rows = [],
-        dataDictionary = [],
-        datasetName = "Uploaded Dataset",
-        filters = {},
-      } = await readJsonBody(request);
+      const body = await readJsonBody(request);
+      let rows = body.rows || [];
+      let dataDictionary = body.dataDictionary || [];
+      let datasetName = body.datasetName || "Uploaded Dataset";
+      const filters = body.filters || {};
+
+      if (body.datasetId) {
+        const dataset = getDatasetById(body.datasetId);
+        if (dataset) {
+          rows = dataset.rows || [];
+          datasetName = dataset.name || datasetName;
+        }
+      }
 
       const schemaProfile = generateSchemaProfile({
         rows,
@@ -69,14 +77,21 @@ export async function handleDashboardAiRoutes(request, response, pathname) {
 
   if (method === "POST" && pathname === "/api/dashboard-ai/command") {
     try {
-      const {
-        query = "",
-        rows = [],
-        dataDictionary = [],
-        datasetName = "Uploaded Dataset",
-        currentDashboard = {},
-        filters = {},
-      } = await readJsonBody(request);
+      const body = await readJsonBody(request);
+      const query = body.query || "";
+      let rows = body.rows || [];
+      let dataDictionary = body.dataDictionary || [];
+      let datasetName = body.datasetName || "Uploaded Dataset";
+      const currentDashboard = body.currentDashboard || {};
+      const filters = body.filters || {};
+
+      if (body.datasetId) {
+        const dataset = getDatasetById(body.datasetId);
+        if (dataset) {
+          rows = dataset.rows || [];
+          datasetName = dataset.name || datasetName;
+        }
+      }
 
       if (/fix|validate|correct|wrong|repair|regenerate/i.test(query)) {
         const result = await validateAndFixDashboard({
@@ -131,7 +146,26 @@ export async function handleDashboardAiRoutes(request, response, pathname) {
 
   if (method === "POST" && pathname === "/api/dashboard-ai/fix") {
     try {
-      const result = await validateAndFixDashboard(await readJsonBody(request));
+      const body = await readJsonBody(request);
+      let rows = body.rows || [];
+      let dataDictionary = body.dataDictionary || [];
+      let datasetName = body.datasetName || "Uploaded Dataset";
+      const currentDashboard = body.currentDashboard || {};
+
+      if (body.datasetId) {
+        const dataset = getDatasetById(body.datasetId);
+        if (dataset) {
+          rows = dataset.rows || [];
+          datasetName = dataset.name || datasetName;
+        }
+      }
+
+      const result = await validateAndFixDashboard({
+        rows,
+        dataDictionary,
+        datasetName,
+        currentDashboard,
+      });
 
       sendJson(response, 200, {
         success: true,

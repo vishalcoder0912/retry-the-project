@@ -232,7 +232,7 @@ function validateDashboardActionEnvelope(command = {}, schemaProfile = {}, curre
       result = validateKpiAction(action, schemaProfile);
     } else if (["filter", "add_filter", "apply_filter"].includes(actionName)) {
       result = validateFilterAction(action, schemaProfile);
-    } else if (["clear_filters", "reset_filters", "delete_chart", "remove_chart"].includes(actionName)) {
+    } else if (["clear_filters", "reset_filters", "delete_chart", "remove_chart", "delete_all_charts", "remove_all_charts", "clear_charts", "generate_code"].includes(actionName)) {
       result = { valid: true, reasons: [], warnings: [], action };
     } else {
       result = { valid: false, reasons: [`Unsupported dashboard action ${action.action || "unknown"}.`], warnings: [], action };
@@ -274,12 +274,17 @@ export async function governDashboardCommand({
 } = {}) {
   const schemaProfile = buildSchemaProfile(dataset || {});
   
-  // Try deterministic parser FIRST
+  // Try deterministic parser FIRST unless a schema-safe local planner already
+  // produced a dashboard action. Re-parsing here can drop filters, sort order,
+  // and calculation metadata from richer deterministic specs.
   let parsedAction = null;
-  try {
-    parsedAction = parseCustomChartQuery(query, schemaProfile);
-  } catch (err) {
-    console.error("[ChartParser] Error in deterministic parsing:", err.message);
+  const hasLocalDashboardAction = command?.schemaOnly === true && command?.response_type === "dashboard_action";
+  if (!hasLocalDashboardAction) {
+    try {
+      parsedAction = parseCustomChartQuery(query, schemaProfile);
+    } catch (err) {
+      console.error("[ChartParser] Error in deterministic parsing:", err.message);
+    }
   }
 
   // If deterministic parser succeeded, use its action

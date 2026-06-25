@@ -8,7 +8,7 @@
 import { exec } from "child_process";
 import { platform } from "os";
 
-const port = basePort || 3001;
+const port = 3001;
 
 console.log(`🔍 Attempting to kill process on port ${port}...\n`);
 

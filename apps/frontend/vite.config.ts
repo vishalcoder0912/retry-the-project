@@ -18,8 +18,7 @@ export default defineConfig({
     proxy: {
       // Main API proxy
       "/api": {
-        // Match the backend's default local bind behavior on Windows.
-        target: "http://localhost:3001",
+        target: "http://127.0.0.1:3001",
         changeOrigin: true,
         secure: false,
         configure: (proxy, _options) => {

@@ -67,7 +67,7 @@ describe("dashboard-quality-guardian", () => {
       "Average Salary by Country",
       "Salary Distribution",
       "Salary vs Experience",
-      "Education Distribution",
+      "Average Salary by Education",
       "Average Salary by Company Size",
       "Average Salary by Language",
       "Average Salary by Framework",

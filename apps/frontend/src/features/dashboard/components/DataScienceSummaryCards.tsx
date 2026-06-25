@@ -1,5 +1,32 @@
 import type { ReactNode } from "react";
 
+<<<<<<< HEAD
+type DataScienceSummaryProps = {
+  profile?: {
+    rowCount?: number;
+    columnCount?: number;
+    qualityScore?: number | string;
+    measures?: string[];
+    dimensions?: string[];
+  };
+  anomalies?: {
+    summary?: {
+      anomalyCount?: number;
+      count?: number;
+    };
+    method?: string;
+  };
+  correlations?: {
+    strongPairs?: unknown[];
+  };
+  model?: {
+    metrics?: Record<string, number>;
+    modelType?: string;
+  };
+};
+
+=======
+>>>>>>> origin/main
 function Card({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -10,7 +37,11 @@ function Card({ label, value, hint }: { label: string; value: ReactNode; hint?: 
   );
 }
 
+<<<<<<< HEAD
+export function DataScienceSummaryCards({ profile, anomalies, correlations, model }: DataScienceSummaryProps) {
+=======
 export function DataScienceSummaryCards({ profile, anomalies, correlations, model }: any) {
+>>>>>>> origin/main
   const anomalyCount = anomalies?.summary?.anomalyCount ?? anomalies?.summary?.count ?? "-";
   const modelScore = model?.metrics ? Object.values(model.metrics)[0] : null;
 

@@ -1,5 +1,6 @@
 // Environment configuration with validation
 import dotenv from 'dotenv';
+import { MODELS } from './model-router.js';
 
 dotenv.config();
 
@@ -67,6 +68,21 @@ export const config = {
     frequencyPenalty: parseFloat(process.env.OLLAMA_FREQUENCY_PENALTY || '0.0')
   },
 
+  // Model Router Configuration (see model-router.js for full details)
+  models: {
+    mainAnalyst:       MODELS.mainAnalyst,
+    dashboardPlanner:  MODELS.dashboardPlanner,
+    chatbot:           MODELS.chatbot,
+    kpiValidator:      MODELS.kpiValidator,
+    chartValidator:    MODELS.chartValidator,
+    factChecker:       MODELS.factChecker,
+    jsonValidator:     MODELS.jsonValidator,
+    coding:            MODELS.coding,
+    fast:              MODELS.fast,
+    quickChat:         MODELS.quickChat,
+    embedding:         MODELS.embedding,
+  },
+
   // Google Gemini Configuration
   gemini: {
     apiKey: process.env.GOOGLE_API_KEY || '',
@@ -131,6 +147,13 @@ export const config = {
     outlierDetection: process.env.OUTLIER_DETECTION !== 'false',
     chatHistory: process.env.CHAT_HISTORY_ENABLED !== 'false',
     smartChart: process.env.SMARTCHART_ENABLED !== 'false'
+  },
+
+  // Rate Limiting
+  rateLimit: {
+    rpm: parseInt(process.env.AI_RATE_LIMIT_RPM || '10', 10),
+    rph: parseInt(process.env.AI_RATE_LIMIT_RPH || '100', 10),
+    cooldownAfterErrorMs: parseInt(process.env.AI_COOLDOWN_AFTER_ERROR_MS || '30000', 10)
   }
 };
 
@@ -189,6 +212,11 @@ export function printConfigSummary() {
 
   console.log('\n📍 ANTHROPIC'); // audit-ignore: console-log
   console.log(`   Status: ${config.anthropic.enabled ? '✅ ENABLED' : '❌ DISABLED (No API key)'}`); // audit-ignore: console-log
+
+  console.log('\n📍 MODEL ROUTER'); // audit-ignore: console-log
+  for (const [task, model] of Object.entries(config.models)) {
+    console.log(`   ${task.padEnd(20)} → ${model}`); // audit-ignore: console-log
+  }
 
   console.log('\n⚙️  GLOBAL SETTINGS'); // audit-ignore: console-log
   console.log(`   Fallback Enabled: ${config.ai.fallbackEnabled}`); // audit-ignore: console-log

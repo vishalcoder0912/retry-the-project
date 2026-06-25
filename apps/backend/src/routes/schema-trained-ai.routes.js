@@ -1,16 +1,20 @@
 import {
   generateSchemaDashboard,
+  generateSeniorAnalystDashboard,
+  runExcelAnalystChat,
   runDashboardCommand,
   runSchemaChat,
   trainSchemaDashboard,
   trainSchemaRagDashboard,
 } from "../services/ai-analyst/schema-trained-ai-service.js";
 import { generateUnifiedDashboard } from "../services/agentic-dashboard/unified-dashboard-orchestrator.js";
+import { chooseAnalyticsExecutionPolicy } from "../services/performance/analytics-execution-policy.js";
+import { requestFastDashboard } from "../services/ml/fast-dashboard-client.js";
 import { getMemoryStats, readSchemaTrainingMemory, trainManySchemaExamples } from "../services/ai-analyst/schema-training-store.js";
 import { validateAndFixDashboard } from "../services/dashboard/dashboard-integrity-engine.js";
 import { buildSchemaProfile } from "../services/ai-analyst/schema-fingerprint.js";
 import {
-  getSchemaRagStats,
+  getSchemaRagStatsSmart,
   readSchemaRagMemory,
 } from "../services/ai-analyst/schema-rag-store.js";
 import {
@@ -22,6 +26,8 @@ import {
   explainDatasetSchemaForUser,
   trainSmartRagFromApprovedDashboard,
 } from "../services/ai-analyst/smart-rag-training-service.js";
+import { trainExcelAnalystRagSeeds } from "../../scripts/train-excel-analyst-rag.js";
+import { trainSeniorAnalystSeeds } from "../../scripts/train-senior-analyst-rag.js";
 
 async function readJsonBody(request) {
   try {
@@ -141,6 +147,109 @@ async function loadDatasetById(datasetId, body = {}) {
   return null;
 }
 
+function metricPriorityForDataset(dataset = {}) {
+  const columnNames = (dataset.columns || []).map((column) => column.name || column).filter(Boolean);
+  return [
+    "revenue",
+    "profit",
+    "sales",
+    "salary_usd",
+    "orders",
+    "customers",
+    "patients",
+    "risk_score",
+    "amount",
+    "price",
+    "cost",
+    "total",
+    "count",
+    ...columnNames,
+  ];
+}
+
+function toDashboardKpis(fastResult = {}) {
+  const kpis = fastResult.kpis || {};
+  const metric = fastResult.selectedMetric || kpis.mainMetric || "records";
+  const items = [
+    { title: "Total Records", value: kpis.rowCount ?? fastResult.rowCount, rawValue: kpis.rowCount ?? fastResult.rowCount, icon: "rows", businessKpi: true },
+  ];
+
+  if (fastResult.selectedMetric) {
+    items.push(
+      { title: `Total ${metric}`, value: kpis.mainMetricTotal, rawValue: kpis.mainMetricTotal, metric, aggregation: "sum", icon: "chart", businessKpi: true },
+      { title: `Average ${metric}`, value: kpis.mainMetricAverage, rawValue: kpis.mainMetricAverage, metric, aggregation: "avg", icon: "chart", businessKpi: true },
+      { title: `Min ${metric}`, value: kpis.mainMetricMin, rawValue: kpis.mainMetricMin, metric, aggregation: "min", icon: "chart", businessKpi: true },
+      { title: `Max ${metric}`, value: kpis.mainMetricMax, rawValue: kpis.mainMetricMax, metric, aggregation: "max", icon: "chart", businessKpi: true },
+    );
+  }
+
+  return items.filter((item) => item.value !== undefined && item.value !== null);
+}
+
+function buildFastDashboardPayload(dataset = {}, fastResult = {}, executionPolicy = {}) {
+  const kpis = toDashboardKpis(fastResult);
+  const charts = (fastResult.charts || []).map((chart) => ({
+    ...chart,
+    calculated: true,
+    engine: fastResult.engine || "duckdb",
+  }));
+  const insights = [
+    {
+      type: "summary",
+      source: "deterministic-analytics-engine",
+      text: `Computed ${Number(fastResult.rowCount || 0).toLocaleString()} rows with ${fastResult.engine || "duckdb"}.`,
+      metrics: {
+        totalRecords: fastResult.rowCount,
+        primaryMetric: fastResult.selectedMetric,
+        totalValue: fastResult.kpis?.mainMetricTotal,
+        averageValue: fastResult.kpis?.mainMetricAverage,
+      },
+    },
+  ];
+
+  const dashboard = {
+    engine: fastResult.engine || "duckdb",
+    rowCount: fastResult.rowCount,
+    kpis,
+    charts,
+    insights,
+    warnings: fastResult.warnings || [],
+    durationMs: fastResult.durationMs,
+    cacheHit: Boolean(fastResult.cacheHit),
+    selectedMetric: fastResult.selectedMetric,
+    selectedDimension: fastResult.selectedDimension,
+    schemaOnly: true,
+  };
+
+  return {
+    success: true,
+    ok: true,
+    schemaOnly: true,
+    dashboard,
+    dashboardPlan: dashboard,
+    executionPolicy,
+    llmUsage: {
+      rawRowsSentToLLM: false,
+      modelUsedForNarrative: null,
+      modelUsedForValidation: process.env.JSON_VALIDATOR_MODEL || "qwen3:4b",
+    },
+    data: {
+      dashboard,
+      dashboardPlan: dashboard,
+      insights,
+      provider: "fast-analytics-service",
+      model: "deterministic-duckdb",
+      profile: {
+        datasetId: dataset.id,
+        datasetName: dataset.name,
+        rowCount: fastResult.rowCount,
+        columns: fastResult.columns,
+      },
+    },
+    message: "Large dataset dashboard calculated by deterministic DuckDB analytics service.",
+  };
+}
+
 export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
   const method = request.method;
 
@@ -167,7 +276,7 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
     ok(
       response,
       {
-        stats: getSchemaRagStats(),
+        ...(await getSchemaRagStatsSmart()),
         memory: readSchemaRagMemory().map((item) => {
           const { embedding, ...safe } = item;
           return safe;
@@ -252,6 +361,36 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
     }
   }
 
+  if (method === "POST" && pathname === "/api/ai/excel-rag/train-seeds") {
+    try {
+      const body = await readJsonBody(request);
+      const result = await trainExcelAnalystRagSeeds({
+        useOllama: body.useOllama !== false,
+      });
+
+      ok(response, result, "Excel Analyst RAG seeds trained");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Excel Analyst RAG seed training failed");
+      return true;
+    }
+  }
+
+  if (method === "POST" && pathname === "/api/ai/senior-analyst/train-seeds") {
+    try {
+      const body = await readJsonBody(request);
+      const result = await trainSeniorAnalystSeeds({
+        useOllama: body.useOllama === true,
+      });
+
+      ok(response, result, "Senior analyst RAG seeds trained");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Senior analyst RAG seed training failed");
+      return true;
+    }
+  }
+
   const understandMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/schema-understand$/);
   if (method === "POST" && understandMatch) {
     try {
@@ -325,6 +464,32 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
       const body = await readJsonBody(request);
       const dataset = await loadDatasetById(dashboardMatch[1], body);
       if (!dataset) return fail(response, 404, "Dataset not found. Pass {rows, columns} in body or check dataset repository integration.");
+      const executionPolicy = chooseAnalyticsExecutionPolicy(dataset);
+
+      if (executionPolicy.mode === "fast-analytics-service") {
+        const filePath =
+          dataset.optimizedFilePath ||
+          dataset.metadata?.optimizedFilePath ||
+          dataset.originalFilePath ||
+          dataset.metadata?.originalFilePath ||
+          dataset.filePath;
+
+        if (!filePath) {
+          return fail(response, 422, "Large dataset has no file path for fast analytics.", {
+            executionPolicy,
+          });
+        }
+
+        const fastResult = await requestFastDashboard({
+          filePath,
+          metricPriority: body.metricPriority || metricPriorityForDataset(dataset),
+          groupLimit: body.groupLimit || 10,
+        });
+
+        sendJson(response, 200, buildFastDashboardPayload(dataset, fastResult, executionPolicy));
+        return true;
+      }
+
       const result = await generateUnifiedDashboard(dataset, {
         useLlm: body.useLlm !== false,
         threshold: body.threshold,
@@ -334,6 +499,12 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
         requireOllamaValidation: body.requireOllamaValidation,
         useOllamaValidator: body.useOllamaValidator,
       });
+      result.executionPolicy = executionPolicy;
+      result.llmUsage = {
+        rawRowsSentToLLM: false,
+        modelUsedForNarrative: result.llm?.model || result.data?.llm?.model || "deterministic-schema-agents",
+        modelUsedForValidation: result.ollamaValidator?.model || "local-governance",
+      };
       sendJson(response, 200, result);
       return true;
     } catch (error) {
@@ -415,7 +586,8 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
       ok(response, result, "Dashboard command processed");
       return true;
     } catch (error) {
-      fail(response, 500, error.message || "Dashboard command failed");
+      const statusCode = error.message && error.message.includes("does not exist in schema") ? 400 : 500;
+      fail(response, statusCode, error.message || "Dashboard command failed");
       return true;
     }
   }
@@ -461,7 +633,102 @@ export async function handleSchemaTrainedAIRoutes(request, response, pathname) {
       ok(response, chatResponse, "AI chat response generated");
       return true;
     } catch (error) {
-      fail(response, 500, error.message || "AI chat failed");
+      const statusCode = error.message && error.message.includes("does not exist in schema") ? 400 : 500;
+      fail(response, statusCode, error.message || "AI chat failed");
+      return true;
+    }
+  }
+
+  const seniorDashboardMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/senior-dashboard$/);
+  if (method === "POST" && seniorDashboardMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(seniorDashboardMatch[1], body);
+      if (!dataset) return fail(response, 404, "Dataset not found. Pass {rows, columns} in body or check dataset repository integration.");
+
+      const result = await generateSeniorAnalystDashboard({
+        dataset,
+        currentDashboard: body.currentDashboard || {},
+        options: {
+          sampleSize: body.sampleSize,
+          maxCharts: body.maxCharts ?? 10,
+          maxKpis: body.maxKpis ?? 8,
+          ragThreshold: body.ragThreshold,
+          ragLimit: body.ragLimit,
+          useRagEmbedding: body.useRagEmbedding !== false,
+          domain: body.domain,
+          objective: body.objective,
+        },
+      });
+
+      ok(response, result, "Senior analyst dashboard generated");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Senior analyst dashboard failed");
+      return true;
+    }
+  }
+
+  const excelChatMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/excel-chat$/);
+  if (method === "POST" && excelChatMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(excelChatMatch[1], body);
+
+      if (!dataset) return fail(response, 404, "Dataset not found");
+
+      const query = String(body.query || body.message || "").trim();
+      if (!query) return fail(response, 400, "query is required");
+
+      const result = await runExcelAnalystChat({
+        dataset,
+        query,
+        currentDashboard: body.currentDashboard || {},
+        useLlm: body.useLlm !== false,
+      });
+
+      ok(response, {
+        userMessage: {
+          role: "user",
+          content: query,
+          timestamp: new Date().toISOString(),
+        },
+        assistantMessage: {
+          role: "assistant",
+          content: result.answer,
+          model: result.model,
+          provider: result.provider,
+          schemaOnly: true,
+          timestamp: new Date().toISOString(),
+        },
+        analysis: result,
+      }, "Excel analyst response generated");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Excel analyst chat failed");
+      return true;
+    }
+  }
+
+  const excelAnalyzeMatch = pathname.match(/^\/api\/datasets\/([^/]+)\/excel-analyze$/);
+  if (method === "POST" && excelAnalyzeMatch) {
+    try {
+      const body = await readJsonBody(request);
+      const dataset = await loadDatasetById(excelAnalyzeMatch[1], body);
+
+      if (!dataset) return fail(response, 404, "Dataset not found");
+
+      const result = await runExcelAnalystChat({
+        dataset,
+        query: body.query || "Analyze this dataset like an Excel expert",
+        currentDashboard: body.currentDashboard || {},
+        useLlm: body.useLlm !== false,
+      });
+
+      ok(response, result, "Excel analysis generated");
+      return true;
+    } catch (error) {
+      fail(response, 500, error.message || "Excel analysis failed");
       return true;
     }
   }

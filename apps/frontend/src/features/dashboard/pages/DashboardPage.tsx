@@ -152,6 +152,20 @@ const DashboardPage = () => {
     return analyzeDataQuality(dataset);
   }, [dataset]);
 
+<<<<<<< HEAD
+  const executionMeta = useMemo(() => {
+    const dashboard = analysis?.dashboard as Record<string, unknown> | undefined;
+    const policy = (dataset as { executionPolicy?: Record<string, unknown> } | null)?.executionPolicy;
+    return {
+      engine: dashboard?.engine || policy?.engine,
+      cacheHit: dashboard?.cacheHit,
+      durationMs: dashboard?.durationMs,
+      rowCount: dashboard?.rowCount || dataset?.rowCount,
+    };
+  }, [analysis, dataset]);
+
+=======
+>>>>>>> origin/main
   if (isHydrating) {
     return (
       <StatusPanel
@@ -213,6 +227,17 @@ const DashboardPage = () => {
                 `Analyzing ${dataset.name} • ${filteredDataset.rowCount.toLocaleString()} records`
               )}
             </p>
+<<<<<<< HEAD
+            {(executionMeta.engine || executionMeta.durationMs !== undefined || executionMeta.cacheHit !== undefined) && (
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {executionMeta.engine && <span className="rounded-md border border-border px-2 py-1">Engine: {String(executionMeta.engine).toUpperCase()}</span>}
+                {executionMeta.rowCount !== undefined && <span className="rounded-md border border-border px-2 py-1">Rows: {Number(executionMeta.rowCount).toLocaleString()}</span>}
+                {executionMeta.cacheHit !== undefined && <span className="rounded-md border border-border px-2 py-1">Cache: {executionMeta.cacheHit ? "Hit" : "Miss"}</span>}
+                {executionMeta.durationMs !== undefined && <span className="rounded-md border border-border px-2 py-1">Duration: {Number(executionMeta.durationMs).toLocaleString()}ms</span>}
+              </div>
+            )}
+=======
+>>>>>>> origin/main
           </div>
         </div>
         <div className="flex items-center gap-3">
