@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 import { pathToFileURL } from "node:url";
 import { trainSchemaRagMemoryFromDataset } from "../src/services/ai-analyst/schema-rag-retriever.js";
 

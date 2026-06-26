@@ -11,10 +11,10 @@ export function detectChartType(query = "") {
   if (/\bhorizontal\s+bar\b/.test(lower)) return "horizontal_bar";
   if (/\b(line|trend|over time|time series)\b/.test(lower)) return "line";
   if (/\b(pie|donut|breakdown|share)\b/.test(lower)) return lower.includes("donut") ? "donut" : "pie";
-  if (/\b(scatter|relationship|correlation)\b/.test(lower)) return "scatter";
+  if (/\b(scatter|correlation)\b/.test(lower)) return "scatter";
   if (/\b(histogram|distribution)\b/.test(lower)) return "histogram";
   if (/\b(area)\b/.test(lower)) return "area";
-  if (/\b(bar|compare|by|vs|vary)\b/.test(lower)) return "bar";
+  if (/\b(bar|compare|by|vary)\b/.test(lower)) return "bar";
   return null;
 }
 
@@ -149,8 +149,9 @@ export function parseCustomChartQuery(query = "", schemaProfile = {}) {
   const kpi = explicitChartType ? null : parseKpi(query, schemaProfile);
   if (kpi) return kpi;
 
-  const chart_type = explicitChartType || "bar";
-  const aggregation = detectAggregation(query) || (/vary|relationship|compare|by/i.test(query) ? "avg" : "sum");
+  let chart_type = explicitChartType || "bar";
+  const inferredAggregation = /\b(vary|relationship|compare)\b/i.test(query) ? "avg" : "sum";
+  const aggregation = detectAggregation(query) || inferredAggregation;
   const parts = queryParts(query);
   const metric =
     findMentionedColumn(query, columns, (column) => roleOf(column) === "metric") ||
@@ -159,6 +160,14 @@ export function parseCustomChartQuery(query = "", schemaProfile = {}) {
   const dimension =
     findMentionedColumn(query, columns, (column) => ["dimension", "location"].includes(roleOf(column))) ||
     firstByRole(columns, ["location", "dimension"]);
+
+  const explicitDimensionRequest = String(query).match(/\b(?:of|by)\s+([a-z0-9_\s-]+)$/i);
+  if (explicitDimensionRequest && ["pie", "donut"].includes(chart_type)) {
+    const requestedDimension = findMentionedColumn(explicitDimensionRequest[1], columns, (column) =>
+      ["dimension", "location"].includes(roleOf(column)),
+    );
+    if (!requestedDimension) return null;
+  }
 
   let xColumn = dimension;
   let yColumn = metric;
@@ -169,7 +178,11 @@ export function parseCustomChartQuery(query = "", schemaProfile = {}) {
     if (left && right) {
       const leftRole = roleOf(left);
       const rightRole = roleOf(right);
-      if (["dimension", "location", "date"].includes(leftRole) && rightRole === "metric") {
+      if (!explicitChartType && /\bvs\b/i.test(query) && leftRole === "metric" && rightRole === "metric") {
+        chart_type = "scatter";
+        xColumn = left;
+        yColumn = right;
+      } else if (["dimension", "location", "date"].includes(leftRole) && rightRole === "metric") {
         xColumn = left;
         yColumn = right;
       } else if (leftRole === "metric" && ["dimension", "location", "date"].includes(rightRole)) {
@@ -193,11 +206,18 @@ export function parseCustomChartQuery(query = "", schemaProfile = {}) {
 
   if (chart_type === "scatter") {
     const numericColumns = columns.filter((column) => roleOf(column) === "metric");
-    const mentioned = numericColumns.filter((column) => normalize(query).includes(normalize(columnName(column)).split(" ")[0]));
-    xColumn = mentioned[0] || findMentionedColumn(query, numericColumns) || numericColumns[0] || metric;
-    yColumn = mentioned.find((column) => columnName(column) !== columnName(xColumn)) ||
-      numericColumns.find((column) => columnName(column) !== columnName(xColumn)) ||
-      metric;
+    const left = parts[0] ? findMentionedColumn(parts[0], numericColumns) : null;
+    const right = parts[1] ? findMentionedColumn(parts[1], numericColumns) : null;
+    if (left && right) {
+      xColumn = left;
+      yColumn = right;
+    } else {
+      const mentioned = numericColumns.filter((column) => normalize(query).includes(normalize(columnName(column)).split(" ")[0]));
+      xColumn = mentioned[0] || findMentionedColumn(query, numericColumns) || numericColumns[0] || metric;
+      yColumn = mentioned.find((column) => columnName(column) !== columnName(xColumn)) ||
+        numericColumns.find((column) => columnName(column) !== columnName(xColumn)) ||
+        metric;
+    }
   }
 
   if (!explicitChartType && !/\b(show|create|make|chart|plot|graph|distribution|scatter|vary|average|avg|sum|total|compare|by|vs)\b/i.test(query)) {

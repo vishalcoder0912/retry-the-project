@@ -5,17 +5,16 @@ const apiBaseUrl = (() => {
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const method = options.method || "GET";
-  console.debug("[API]", method, path);
+  const isFormData = options.body instanceof FormData;
 
   const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
-    headers:
-      options.body instanceof FormData
-        ? options.headers
-        : {
-            "Content-Type": "application/json",
-            ...(options.headers || {}),
-          },
+    headers: isFormData
+      ? options.headers
+      : {
+          "Content-Type": "application/json",
+          ...(options.headers || {}),
+        },
   });
 
   const contentType = response.headers.get("content-type") || "";
@@ -24,8 +23,12 @@ export async function apiRequest<T>(path: string, options: RequestInit = {}): Pr
     : { success: false, error: await response.text().catch(() => "") };
 
   if (!response.ok) {
-    console.error("[API ERROR]", method, path, data);
-    const message = data?.message || data?.error?.message || data?.error || `API failed: ${response.status}`;
+    const message =
+      data?.message ||
+      data?.error?.message ||
+      data?.error ||
+      `API failed: ${response.status}`;
+
     throw new Error(message);
   }
 

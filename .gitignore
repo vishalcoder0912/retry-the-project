@@ -9,6 +9,8 @@ lerna-debug.log*
 
 node_modules
 .codex-runtime/
+.pytest_cache/
+graphify-out/cache/
 dist
 dist-ssr
 *.local

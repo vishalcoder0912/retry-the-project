@@ -182,52 +182,8 @@ export interface DashboardCommandResponse {
   schema_safe?: boolean;
   chartSpec?: ChartSpec;
   kpiSpec?: KpiSpec;
-<<<<<<< HEAD
   targetId?: string;
   targetTitle?: string;
-=======
->>>>>>> origin/main
-  filters?: Record<string, unknown> | Array<{ key?: string; column?: string; operator?: string; value?: unknown }>;
-  dashboard?: DashboardPlan;
-  dashboardPlan?: DashboardPlan;
-  correctedDashboard?: DashboardPlan;
-  dashboardHealth?: { status: "healthy" | "warning" | "failed"; score: number; issues?: unknown[]; warnings?: unknown[] };
-  schemaOnly?: boolean;
-  provider?: string;
-  model?: string;
-  aiError?: string;
-}
-
-export interface DashboardActionItem {
-  action:
-    | "create_chart"
-    | "modify_chart"
-    | "update_chart_type"
-    | "delete_chart"
-    | "create_kpi"
-    | "filter"
-    | "clear_filters"
-    | string;
-  chart_type?: ChartType;
-  type?: ChartType;
-  title?: string;
-  x?: string;
-  y?: string;
-  xKey?: string;
-  yKey?: string;
-  metric?: string;
-  aggregation?: Aggregation;
-  reason?: string;
-  filters?: Record<string, unknown>;
-  chartSpec?: ChartSpec;
-  kpiSpec?: KpiSpec;
-<<<<<<< HEAD
-  targetId?: string;
-  targetTitle?: string;
-  chart_id?: string;
-  chart?: Partial<ChartSpec>;
-=======
->>>>>>> origin/main
 }
 
 export interface AiDashboardCommand {

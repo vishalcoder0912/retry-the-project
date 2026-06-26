@@ -1,12 +1,6 @@
-<<<<<<< HEAD
 import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-=======
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
->>>>>>> origin/main
 
 const PROJECT_ROOT = process.cwd();
 const OUTPUT_FILE = path.join(PROJECT_ROOT, 'CODEBASE_EXPORT.md');
@@ -193,13 +187,9 @@ function detectPackageInfo(files) {
   const packages = files.filter(f => f.file.endsWith('package.json'));
   const results = [];
   for (const pkg of packages) {
-    try {
-<<<<<<< HEAD
-      const content = JSON.parse(fsSync.readFileSync(pkg.absolutePath, 'utf8'));
-=======
-      const content = JSON.parse(fs.readFileSync(pkg.absolutePath, 'utf8'));
->>>>>>> origin/main
-      results.push({
+      try {
+        const content = JSON.parse(fsSync.readFileSync(pkg.absolutePath, 'utf8'));
+        results.push({
         file: pkg.file,
         name: content.name || '(unnamed)',
         version: content.version || '',
@@ -223,11 +213,7 @@ function detectEnvVars(files) {
   const vars = new Map();
   for (const file of files) {
     try {
-<<<<<<< HEAD
       const content = fsSync.readFileSync(file.absolutePath, 'utf8');
-=======
-      const content = fs.readFileSync(file.absolutePath, 'utf8');
->>>>>>> origin/main
       let match;
       while ((match = pattern.exec(content)) !== null) {
         if (!vars.has(match[1])) vars.set(match[1], []);
@@ -243,11 +229,7 @@ function detectApiEndpoints(files) {
   const endpoints = new Map();
   for (const file of files) {
     try {
-<<<<<<< HEAD
       const content = fsSync.readFileSync(file.absolutePath, 'utf8');
-=======
-      const content = fs.readFileSync(file.absolutePath, 'utf8');
->>>>>>> origin/main
       let match;
       while ((match = pattern.exec(content)) !== null) {
         if (!endpoints.has(match[1])) endpoints.set(match[1], []);
@@ -263,11 +245,7 @@ function detectRoutes(files) {
   const routes = [];
   for (const file of files) {
     try {
-<<<<<<< HEAD
       const content = fsSync.readFileSync(file.absolutePath, 'utf8');
-=======
-      const content = fs.readFileSync(file.absolutePath, 'utf8');
->>>>>>> origin/main
       let match;
       while ((match = pattern.exec(content)) !== null) {
         routes.push({ route: match[1], file: file.file });
@@ -291,7 +269,6 @@ function mdTable(headers, rows) {
   return [h, d, ...b].join('\n');
 }
 
-<<<<<<< HEAD
 async function writeExportFile(content) {
   const tempFile = path.join(
     PROJECT_ROOT,
@@ -323,8 +300,6 @@ async function writeExportFile(content) {
   }
 }
 
-=======
->>>>>>> origin/main
 async function generate() {
   console.log('Scanning project...');
   const gitignorePatterns = await parseGitignore();
@@ -417,13 +392,8 @@ async function generate() {
 
   output += `---\n\n*Export complete. ${files.length} files, ${skipped.length} skipped.*\n`;
 
-<<<<<<< HEAD
   const writtenFile = await writeExportFile(output);
   console.log(`\nDone! Generated ${path.relative(PROJECT_ROOT, writtenFile)}`);
-=======
-  await fs.writeFile(OUTPUT_FILE, output, 'utf8');
-  console.log(`\nDone! Generated ${path.relative(PROJECT_ROOT, OUTPUT_FILE)}`);
->>>>>>> origin/main
   console.log(`  Included: ${files.length} files`);
   console.log(`  Skipped: ${skipped.length} paths`);
 }

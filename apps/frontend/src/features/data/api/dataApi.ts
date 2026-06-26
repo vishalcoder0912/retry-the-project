@@ -1,6 +1,7 @@
 import { ChartConfig, ChatMessage, Dataset, DatasetAnalysis } from "@/features/data/model/dataStore";
 import type { Aggregation, ChartSpec, KpiSpec } from "@/features/dashboard/types/dashboardTypes";
 import logger from "@/shared/lib/logger";
+import { API_ROUTES } from "@/api/routes";
 
 export class ApiError extends Error {
   constructor(
@@ -143,7 +144,6 @@ export interface DashboardCommandResponse {
   aiError?: string | null;
 }
 
-<<<<<<< HEAD
 export interface FastDashboardChatResponse {
   intent:
     | "answer"
@@ -166,8 +166,6 @@ export interface FastDashboardChatResponse {
   cached: boolean;
 }
 
-=======
->>>>>>> origin/main
 export interface DashboardAiPayload {
   rows: any[];
   dataDictionary?: any[];
@@ -263,7 +261,6 @@ export interface PdfImportResult {
     datasetId: string;
     fileName: string;
     jobId: string;
-<<<<<<< HEAD
     pageCount?: number;
     tableCount: number;
     chunkCount: number;
@@ -281,11 +278,6 @@ export interface PdfImportResult {
     quality?: Record<string, any>;
     tables?: Array<Record<string, any>>;
     readiness?: PdfPipelineStatus["readiness"];
-=======
-    tableCount: number;
-    chunkCount: number;
-    textElementCount: number;
->>>>>>> origin/main
   };
   dataset: Dataset;
   analysis: DatasetAnalysis;
@@ -307,7 +299,6 @@ export interface PdfAskResult {
     source: number;
     id: string;
     preview: string;
-<<<<<<< HEAD
     pageNumber?: number | null;
     confidence?: number | null;
     extractionMethod?: string;
@@ -372,9 +363,6 @@ export interface PdfPipelineStatus {
   currentPage?: number | null;
   totalPages?: number | null;
   message?: string;
-=======
-  }>;
->>>>>>> origin/main
 }
 
 export interface AgenticConfigResponse {
@@ -391,7 +379,6 @@ export interface AgenticHealthResponse {
   }>;
 }
 
-<<<<<<< HEAD
 export interface SchemaOnlyAnalysisResponse {
   success: boolean;
   response_type: string;
@@ -415,8 +402,6 @@ export interface SchemaOnlyAnalysisResponse {
   audit: { schemaColumnsReceived: number; rawRowsSent: number; actionsValidated: number; actionsRejected: number };
 }
 
-=======
->>>>>>> origin/main
 
 type ApiEnvelope<T> = {
   success?: boolean;
@@ -433,7 +418,6 @@ const apiBaseUrl = (() => {
   }
   return baseUrl.replace(/\/$/, "");
 })();
-<<<<<<< HEAD
 
 export async function safeApiFetch<T>(
   path: string,
@@ -443,6 +427,8 @@ export async function safeApiFetch<T>(
   const method = options?.method || "GET";
 
   try {
+    console.debug("[API]", method, path);
+
     const response = await fetch(`${apiBaseUrl}${path}`, {
       ...options,
       headers: {
@@ -461,6 +447,7 @@ export async function safeApiFetch<T>(
         fallbackText ||
         `API failed with status ${response.status}`;
 
+      console.error("[API ERROR]", method, path, payload || fallbackText || response.status);
       throw new ApiError(message, response.status, payload?.error?.code || payload?.code);
     }
 
@@ -490,15 +477,12 @@ export async function safeApiFetch<T>(
     );
   }
 }
-=======
->>>>>>> origin/main
 
 const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const startTime = Date.now();
   const method = init?.method || "GET";
 
   try {
-<<<<<<< HEAD
     const payload = await safeApiFetch<T | ApiEnvelope<T>>(path, init);
     const duration = Date.now() - startTime;
 
@@ -507,43 +491,6 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
       duration,
     });
 
-=======
-    const response = await fetch(`${apiBaseUrl}${path}`, {
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers || {}),
-      },
-      ...init,
-    });
-
-    const duration = Date.now() - startTime;
-
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => null);
-      const errorMessage = errorPayload?.error?.message || errorPayload?.error || `Request failed with status ${response.status}`;
-      
-      logger.error(`API Error: ${method} ${path}`, {
-        statusCode: response.status,
-        duration,
-        path,
-        method,
-      });
-
-      throw new ApiError(errorMessage, response.status, errorPayload?.error?.code || errorPayload?.code);
-    }
-
-    logger.info(`API: ${method} ${path}`, {
-      statusCode: response.status,
-      duration,
-    });
-
-    if (response.status === 204) {
-      return {} as T;
-    }
-
-    const payload = await response.json() as T | ApiEnvelope<T>;
-
->>>>>>> origin/main
     if (
       payload
       && typeof payload === "object"
@@ -574,7 +521,7 @@ const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
 };
 
 export const api = {
-  getState: () => request<ApiState>("/api/state"),
+  getState: () => request<ApiState>(API_ROUTES.state),
   resetState: () =>
     request<ApiState>("/api/state/reset", {
       method: "POST",
@@ -590,7 +537,7 @@ export const api = {
       body: JSON.stringify({ datasets }),
     }),
   loadDemo: () =>
-    request<ApiState>("/api/datasets/demo", {
+    request<ApiState>(API_ROUTES.dataset.demo, {
       method: "POST",
     }),
   importPdf: async (file: File): Promise<PdfImportResult> => {
@@ -615,7 +562,6 @@ export const api = {
     const payload = await response.json() as ApiEnvelope<PdfImportResult>;
     return payload.data as PdfImportResult;
   },
-<<<<<<< HEAD
   uploadPdfIntelligence: async (file: File): Promise<PdfUploadPipelineResult> => {
     const formData = new FormData();
     formData.append("file", file);
@@ -637,14 +583,11 @@ export const api = {
     request(`/api/pdf-intelligence/${pdfId}`),
   getPdfPipelineStatus: (pdfId: string): Promise<PdfPipelineStatus> =>
     request<PdfPipelineStatus>(`/api/pdf-intelligence/${pdfId}/status`),
-=======
->>>>>>> origin/main
   askPdf: (pdfId: string, query: string): Promise<PdfAskResult> =>
     request<PdfAskResult>(`/api/pdf/${pdfId}/ask`, {
       method: "POST",
       body: JSON.stringify({ query }),
     }),
-<<<<<<< HEAD
   askPdfIntelligence: (pdfId: string, query: string, intent?: string): Promise<PdfAskResult> =>
     request<PdfAskResult>(`/api/pdf-intelligence/${pdfId}/query`, {
       method: "POST",
@@ -665,8 +608,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({}),
     }),
-=======
->>>>>>> origin/main
   updateRow: (datasetId: string, rowId: number, column: string, value: unknown) =>
     request<{ dataset: Dataset }>(`/api/datasets/${datasetId}/rows/${rowId}`, {
       method: "PATCH",
@@ -681,247 +622,6 @@ export const api = {
     request<ChatResponse>(`/api/datasets/${datasetId}/chat`, {
       method: "POST",
       body: JSON.stringify({ query, ...preferences }),
-<<<<<<< HEAD
-=======
-    }),
-  generateSchemaDashboard: (
-    datasetId: string,
-    useLlm = true,
-    dataset?: { rows?: unknown[]; columns?: unknown[] },
-  ) =>
-    request<SchemaDashboardResponse>(`/api/datasets/${datasetId}/schema-dashboard`, {
-      method: "POST",
-      body: JSON.stringify({ useLlm, ...(dataset || {}) }),
-    }),
-  trainSchemaDashboard: (
-    datasetId: string,
-    dashboardPlan: unknown,
-    rating: "good" | "bad" = "good",
-    notes = "",
-  ) =>
-    request(`/api/datasets/${datasetId}/schema-train`, {
-      method: "POST",
-      body: JSON.stringify({ dashboardPlan, rating, notes }),
-    }),
-  sendDashboardCommand: (
-    datasetId: string,
-    query: string,
-    currentDashboard?: unknown,
-    dataset?: { rows?: unknown[]; columns?: unknown[] },
-  ) =>
-    request<DashboardCommandResponse>(`/api/datasets/${datasetId}/dashboard-command`, {
-      method: "POST",
-      body: JSON.stringify({
-        query,
-        currentDashboard,
-        useLlm: true,
-        columns: dataset?.columns,
-      }),
-    }),
-  sendSchemaChat: (datasetId: string, query: string, dataset?: { rows?: unknown[]; columns?: unknown[] }) =>
-    request<{
-      userMessage: unknown;
-      assistantMessage: {
-        role: "assistant";
-        content: string;
-        model?: string;
-        provider?: string;
-        schemaOnly: true;
-      };
-    }>(`/api/datasets/${datasetId}/schema-chat`, {
-      method: "POST",
-      body: JSON.stringify({
-        query,
-        useLlm: true,
-        columns: dataset?.columns,
-      }),
-    }),
-  getSchemaTrainingMemory: () =>
-    request("/api/ai/schema-training-memory", {
-      method: "GET",
-    }),
-  validateAndFixDashboard: (
-    datasetId: string,
-    currentDashboard: {
-      kpis: unknown[];
-      charts: unknown[];
-      filters?: Record<string, unknown>;
-    }
-  ) =>
-    request<DashboardValidateFixResponse>(
-      `/api/datasets/${datasetId}/dashboard-validate-fix`,
-      {
-        method: "POST",
-        body: JSON.stringify({ currentDashboard }),
-      }
-    ),
-  analyzeWithAnalyticsBrain: (datasetId: string) =>
-    request<DatasetAnalysis>(`/api/datasets/${datasetId}/analytics-brain`, {
-      method: "POST",
-    }),
-  runPlaybookAnalysis: (datasetId: string) =>
-    request<DatasetAnalysis>(`/api/datasets/${datasetId}/playbook-analysis`, {
-      method: "POST",
-    }),
-  sendAnalyticsBrainFeedback: (input: {
-    patternId: string;
-    action: string;
-    rating: "good" | "bad";
-    note?: string;
-  }) =>
-    request<{ success: boolean }>("/api/analytics-brain/feedback", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }),
-  getAICorrelations: (datasetId: string) =>
-    request<CorrelationResponse>(`/api/datasets/${datasetId}/ai-correlations`, {
-      method: "GET",
-    }),
-  getAIProfile: (datasetId: string) =>
-    request<{ profile: unknown }>(`/api/datasets/${datasetId}/ai/profile`, {
-      method: "GET",
-    }),
-  getAIAnomalies: (datasetId: string) =>
-    request<{ anomalies: unknown }>(`/api/datasets/${datasetId}/ai/anomalies`, {
-      method: "GET",
-    }),
-  getAIRelationships: (datasetId: string) =>
-    request<{ relationships: unknown }>(`/api/datasets/${datasetId}/ai/relationships`, {
-      method: "GET",
-    }),
-  getAICleaning: (datasetId: string) =>
-    request<{ suggestions: unknown }>(`/api/datasets/${datasetId}/ai/cleaning`, {
-      method: "GET",
-    }),
-  exportDataset: async (datasetId: string, format: 'json' | 'csv' | 'md') => {
-    const response = await fetch(`${apiBaseUrl}/api/datasets/${datasetId}/export/${format}`);
-    if (!response.ok) {
-      throw new Error(`Export failed with status ${response.status}`);
-    }
-    return response.blob();
-  },
-  getCascadeStatus: () =>
-    request<{ success: boolean; cascade: unknown }>("/api/cascade/status", {
-      method: "GET",
-    }),
-  generateQRSession: async (input?: {
-    portalBaseUrl?: string;
-    workspaceName?: string;
-  }): Promise<QrUploadSession> => {
-    const response = await fetch(`${apiBaseUrl}/api/qr-upload/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        portalBaseUrl:
-          input?.portalBaseUrl ||
-          import.meta.env.VITE_PUBLIC_APP_URL ||
-          window.location.origin,
-        workspaceName: input?.workspaceName || "InsightFlow Workspace",
-      }),
-    });
-
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => null);
-
-      throw new ApiError(
-        errorPayload?.error?.message || "Failed to generate QR session",
-        response.status,
-        errorPayload?.error?.code
-      );
-    }
-
-    const payload = await response.json();
-    return payload.data ?? payload;
-  },
-  getQRSessionStatus: async (
-    sessionId: string,
-    token: string
-  ): Promise<QrUploadStatus> => {
-    const response = await fetch(
-      `${apiBaseUrl}/api/qr-upload/${sessionId}/status?token=${encodeURIComponent(token)}`
-    );
-
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => null);
-
-      throw new ApiError(
-        errorPayload?.error?.message || "Failed to get QR session status",
-        response.status,
-        errorPayload?.error?.code
-      );
-    }
-
-    const payload = await response.json();
-    return payload.data ?? payload;
-  },
-  uploadToQRSession: async (
-    sessionId: string,
-    token: string,
-    files: File[]
-  ): Promise<QrUploadStatus> => {
-    const formData = new FormData();
-
-    files.forEach((file) => {
-      formData.append("files", file);
-    });
-
-    const response = await fetch(
-      `${apiBaseUrl}/api/qr-upload/${sessionId}/upload?token=${encodeURIComponent(token)}`,
-      {
-        method: "POST",
-        body: formData,
-      }
-    );
-
-    if (!response.ok) {
-      const errorPayload = await response.json().catch(() => null);
-
-      throw new ApiError(
-        errorPayload?.error?.message || "Upload failed",
-        response.status,
-        errorPayload?.error?.code
-      );
-    }
-
-    const payload = await response.json();
-    return payload.data ?? payload;
-  },
-  deleteDataset: (datasetId: string) =>
-    request<void>(`/api/datasets/${datasetId}`, {
-      method: "DELETE",
-    }),
-  runAiAnalyst: (datasetId: string) =>
-    request<{ analysis: DatasetAnalysis }>(`/api/datasets/${datasetId}/ai-analyst/analyze`, {
-      method: "POST",
-    }),
-  sendAiAnalystCommand: (input: {
-    datasetId: string;
-    command: string;
-    currentAnalysis?: unknown;
-    filters?: Record<string, string>;
-  }) =>
-    request<{ result: DashboardCommandResponse }>(
-      `/api/datasets/${input.datasetId}/ai-analyst/command`,
-      {
-        method: "POST",
-        body: JSON.stringify({
-          command: input.command,
-          currentAnalysis: input.currentAnalysis,
-          filters: input.filters || {},
-        }),
-      }
-    ),
-  getAgenticConfig: () =>
-    request<AgenticConfigResponse>("/api/agentic-models/config"),
-  getAgenticHealth: () =>
-    request<AgenticHealthResponse>("/api/agentic-models/health"),
-  runAgenticAnalysis: (datasetId: string, goal: string) =>
-    request<any>(`/api/agentic-models/datasets/${datasetId}/analyze`, {
-      method: "POST",
-      body: JSON.stringify({ goal }),
->>>>>>> origin/main
     }),
   generateSchemaDashboard: (
     datasetId: string,
@@ -1297,38 +997,3 @@ export const dashboardAiApi = {
   },
 };
 
-async function postDashboardAi<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const payload = await response.json();
-
-  if (!response.ok || payload.success === false) {
-    throw new ApiError(
-      payload.message || payload.error?.message || "Request failed",
-      response.status,
-      payload.error?.code
-    );
-  }
-
-  return payload as T;
-}
-
-export const dashboardAiApi = {
-  generateDashboard(body: DashboardAiPayload) {
-    return postDashboardAi<DashboardAiResponse>("/api/dashboard-ai/generate", body);
-  },
-
-  sendDashboardCommand(body: DashboardAiCommandPayload) {
-    return postDashboardAi<DashboardAiResponse>("/api/dashboard-ai/command", body);
-  },
-
-  validateAndFixDashboard(body: DashboardAiFixPayload) {
-    return postDashboardAi<DashboardAiResponse>("/api/dashboard-ai/fix", body);
-  },
-};

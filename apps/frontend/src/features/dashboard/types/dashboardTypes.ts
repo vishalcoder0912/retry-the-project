@@ -61,7 +61,6 @@ export interface ChartSpec {
   aggregation: Exclude<Aggregation, "count_unique" | "top_by_avg">;
   intent?: ChartIntent;
   limit?: number;
-<<<<<<< HEAD
   filters?: Array<{
     column: string;
     operator?: string;
@@ -72,34 +71,6 @@ export interface ChartSpec {
     direction: "asc" | "desc";
   };
   calculationSource?: string;
-=======
->>>>>>> origin/main
-  splitValues?: boolean;
-  multiValue?: boolean;
-  splitDelimiter?: string;
-}
-
-export interface ChartConfig extends ChartSpec {
-  id: string;
-  data: Array<Record<string, string | number>>;
-  subtitle?: string;
-}
-
-export interface KpiSpec {
-  title: string;
-  metric?: string;
-  aggregation?: Aggregation;
-  format?: "number" | "currency" | "percent" | "text";
-  businessKpi?: boolean;
-<<<<<<< HEAD
-  filters?: Array<{
-    column: string;
-    operator?: string;
-    value: string | number | boolean;
-  }>;
-  calculationSource?: string;
-=======
->>>>>>> origin/main
 }
 
 export interface KpiConfig extends KpiSpec {

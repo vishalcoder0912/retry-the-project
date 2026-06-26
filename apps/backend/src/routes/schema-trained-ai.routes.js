@@ -8,7 +8,7 @@ import {
   trainSchemaRagDashboard,
 } from "../services/ai-analyst/schema-trained-ai-service.js";
 import { generateUnifiedDashboard } from "../services/agentic-dashboard/unified-dashboard-orchestrator.js";
-import { chooseAnalyticsExecutionPolicy } from "../services/performance/analytics-execution-policy.js";
+import * as analyticsExecutionPolicy from "../services/performance/analytics-execution-policy.js";
 import { requestFastDashboard } from "../services/ml/fast-dashboard-client.js";
 import { getMemoryStats, readSchemaTrainingMemory, trainManySchemaExamples } from "../services/ai-analyst/schema-training-store.js";
 import { validateAndFixDashboard } from "../services/dashboard/dashboard-integrity-engine.js";
@@ -28,6 +28,8 @@ import {
 } from "../services/ai-analyst/smart-rag-training-service.js";
 import { trainExcelAnalystRagSeeds } from "../../scripts/train-excel-analyst-rag.js";
 import { trainSeniorAnalystSeeds } from "../../scripts/train-senior-analyst-rag.js";
+
+const { chooseAnalyticsExecutionPolicy } = analyticsExecutionPolicy;
 
 async function readJsonBody(request) {
   try {

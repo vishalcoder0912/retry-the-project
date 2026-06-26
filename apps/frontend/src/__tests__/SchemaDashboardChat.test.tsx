@@ -53,11 +53,7 @@ describe("SchemaDashboardChat", () => {
     expect(screen.getByText(/Chart generated/)).toBeInTheDocument();
     expect(screen.getByText("Provider: local-rules")).toBeInTheDocument();
 
-<<<<<<< HEAD
     fireEvent.change(screen.getByPlaceholderText(/Ask/), {
-=======
-    fireEvent.change(screen.getByPlaceholderText(/Ask:/), {
->>>>>>> origin/main
       target: { value: "add KPI for highest salary_usd" },
     });
     fireEvent.click(screen.getByRole("button", { name: /send dashboard command/i }));
@@ -76,11 +72,7 @@ describe("SchemaDashboardChat", () => {
     });
     render(<SchemaDashboardChat dataset={dataset} onCommand={vi.fn()} />);
 
-<<<<<<< HEAD
     fireEvent.change(screen.getByPlaceholderText(/Ask/), {
-=======
-    fireEvent.change(screen.getByPlaceholderText(/Ask:/), {
->>>>>>> origin/main
       target: { value: "show chart" },
     });
     fireEvent.click(screen.getByRole("button", { name: /send dashboard command/i }));

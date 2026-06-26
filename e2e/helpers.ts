@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import { expect, Page } from "@playwright/test";
-=======
-import { Page } from "@playwright/test";
->>>>>>> origin/main
 
 export const salaryRows = [
   { country: "India", salary_usd: 50000, experience: 2 },
@@ -186,11 +182,8 @@ export async function mockInsightFlowApi(page: Page) {
     return route.fulfill({ json: { success: true, data: {} } });
   });
 }
-<<<<<<< HEAD
 
 export async function gotoApp(page: Page, path: string) {
   await page.goto(path, { waitUntil: "domcontentloaded" });
   await expect(page.locator("main").first()).toBeVisible();
 }
-=======
->>>>>>> origin/main

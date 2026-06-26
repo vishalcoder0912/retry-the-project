@@ -74,7 +74,6 @@ export function generateDynamicQuestionSuggestions(
 
   pushUnique(suggestions, "Build dashboard automatically");
 
-<<<<<<< HEAD
   const salaryCol = availableColumns.find(col => /salary/i.test(col));
   const countryCol = availableColumns.find(col => /country/i.test(col));
   const expCol = availableColumns.find(col => /experience|exp|years/i.test(col));
@@ -93,8 +92,6 @@ export function generateDynamicQuestionSuggestions(
     pushUnique(suggestions, `Analyze ${salesCol} breakdown across ${catCol}`);
   }
 
-=======
->>>>>>> origin/main
   if (primaryMetric && primaryCategory) {
     pushUnique(
       suggestions,

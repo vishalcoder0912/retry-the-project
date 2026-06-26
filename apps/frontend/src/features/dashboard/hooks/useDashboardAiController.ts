@@ -32,76 +32,12 @@ type DashboardSpecs = {
   domain?: string;
 };
 
-<<<<<<< HEAD
 type ChartTarget = {
   id?: string;
   title?: string;
   chart?: Partial<ChartSpec>;
 };
 
-=======
->>>>>>> origin/main
-type ControllerOptions = {
-  dataset?: DatasetPayload | null;
-  initialDashboard?: Partial<DashboardSpecs> | null;
-  initialFilters?: DashboardFilters;
-  useLlm?: boolean;
-};
-
-function makeId() {
-  return crypto.randomUUID?.() || String(Date.now() + Math.random());
-}
-
-function toDatasetPayload(dataset?: DatasetPayload | null): DatasetPayload {
-  return {
-    id: dataset?.id,
-    name: dataset?.name,
-    rows: Array.isArray(dataset?.rows) ? dataset.rows : [],
-    columns: Array.isArray(dataset?.columns) ? dataset.columns : [],
-  };
-}
-
-function normalizeFilters(filters: DashboardCommandResponse["filters"]): DashboardFilters {
-  if (!filters) return {};
-  if (!Array.isArray(filters)) return filters as DashboardFilters;
-
-  return filters.reduce<DashboardFilters>((next, filter) => {
-    const key = String(filter.key || filter.column || "");
-    if (!key) return next;
-    next[key] = filter.value;
-    return next;
-  }, {});
-}
-
-function localFallbackAnswer(query: string, rows: Row[]) {
-  return `Local fallback handled "${query}". Dataset has ${rows.length.toLocaleString()} clean rows, and dashboard values are calculated locally.`;
-}
-
-<<<<<<< HEAD
-function blockedDashboardPrompt(query: string): string | null {
-  const lower = query.toLowerCase();
-
-  if (/set|change|override|edit|make/.test(lower) && /(average|avg|highest|max|total|sum|kpi|metric)/.test(lower) && /\$?\d/.test(lower)) {
-    return "Request blocked by Schema Guardian: KPI values are calculated from the loaded dataset and cannot be manually overwritten.";
-  }
-
-  if (/assume|invent|guess|hallucinate|estimate/.test(lower) && /missing|unknown|columns?|data|metric|satisfaction|retention/.test(lower)) {
-    return "Request blocked by Schema Guardian: I cannot assume or estimate fields that are not present in the loaded schema.";
-  }
-
-  if (/(show|reveal|export|dump|download|print|list).*(raw|all|every|full).*(rows?|records?|data)/.test(lower) || /show all \d[\d,]* records?/.test(lower)) {
-    return "Request blocked by Schema Guardian: dashboard AI cannot expose raw rows or bulk record dumps. Use aggregated charts, KPIs, or the data table export controls.";
-  }
-
-  if (/(show|reveal|dump|print|export).*(internal schema|schema packet|runtime context|hidden columns?|system prompt|prompt)/.test(lower)) {
-    return "Request blocked by Schema Guardian: internal schema packets, hidden fields, runtime context, and prompts are not exposed through chat.";
-  }
-
-  return null;
-}
-
-=======
->>>>>>> origin/main
 function chartFromAction(action: NonNullable<DashboardCommandResponse["actions"]>[number]): ChartSpec | null {
   const spec = action.chartSpec as ChartSpec | undefined;
   if (spec?.type && spec?.title && spec?.xKey) return spec;
@@ -143,7 +79,6 @@ function sameChart(left: Partial<ChartSpec>, right: Partial<ChartSpec>) {
   return chartKey(left) === chartKey(right) || (!!left.title && !!right.title && left.title.toLowerCase() === right.title.toLowerCase());
 }
 
-<<<<<<< HEAD
 function normalizeTitle(value?: string) {
   return String(value || "").toLowerCase().trim();
 }
@@ -185,43 +120,15 @@ function replaceChartByTarget(charts: ChartSpec[], target: ChartTarget, next: Ch
   return replaced ? updated : upsertChart(charts, next);
 }
 
-=======
->>>>>>> origin/main
-function upsertChart(charts: ChartSpec[], next: ChartSpec) {
-  const index = charts.findIndex((chart) => sameChart(chart, next));
-  if (index < 0) return [...charts, next];
-  return charts.map((chart, itemIndex) => itemIndex === index ? { ...chart, ...next } : chart);
-}
-
-function upsertKpi(kpis: KpiSpec[], next: KpiSpec) {
-  const key = next.title.toLowerCase();
-  const index = kpis.findIndex((kpi) => kpi.title.toLowerCase() === key);
-  if (index < 0) return [...kpis, next];
-  return kpis.map((kpi, itemIndex) => itemIndex === index ? { ...kpi, ...next } : kpi);
-}
-
-export function useDashboardAiController({
-  dataset,
-  initialDashboard,
-  initialFilters = {},
-  useLlm = true,
-}: ControllerOptions) {
-  const payload = useMemo(() => toDatasetPayload(dataset), [dataset]);
-  const rows = useMemo(() => cleanDatasetRows((payload.rows || []) as Row[]), [payload.rows]);
-
-  const [filters, setFilters] = useState<DashboardFilters>(initialFilters);
-  const [dashboardSpecs, setDashboardSpecs] = useState<DashboardSpecs>({
-    kpis: initialDashboard?.kpis || [],
-    charts: initialDashboard?.charts || [],
-    source: initialDashboard?.source,
-    domain: initialDashboard?.domain,
-  });
-  const [manualKpis, setManualKpis] = useState<KpiSpec[]>([]);
-  const [manualCharts, setManualCharts] = useState<ChartSpec[]>([]);
-<<<<<<< HEAD
-  const [chartsCleared, setChartsCleared] = useState(false);
-=======
->>>>>>> origin/main
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useDashboardAiController(
+  payload: DatasetPayload,
+  initialDashboard?: { kpis?: KpiSpec[]; charts?: ChartSpec[]; source?: string; domain?: string },
+  filters: Record<string, string> = {},
+  setFilters?: React.Dispatch<React.SetStateAction<Record<string, string>>>,
+  rows: Array<Record<string, unknown>> = [],
+  useLlm = false,
+) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: makeId(),
@@ -280,7 +187,6 @@ export function useDashboardAiController({
     return {
       rows: filteredRows,
       kpis: kpiSpecs.length ? kpiSpecs.map((spec) => buildKpiFromSpec(filteredRows, spec)) : buildKpis(filteredRows),
-<<<<<<< HEAD
       charts: chartSpecs.length
         ? chartSpecs.map((spec) => buildChartFromSpec(filteredRows, spec)).slice(0, 10)
         : chartsCleared
@@ -288,11 +194,6 @@ export function useDashboardAiController({
           : buildDefaultCharts(filteredRows),
     };
   }, [allSpecs, chartsCleared, filteredRows]);
-=======
-      charts: chartSpecs.length ? chartSpecs.map((spec) => buildChartFromSpec(filteredRows, spec)).slice(0, 10) : buildDefaultCharts(filteredRows),
-    };
-  }, [allSpecs, filteredRows]);
->>>>>>> origin/main
 
   const pushAssistant = useCallback((content: string, options: Partial<Message> = {}) => {
     setMessages((current) => [...current, { id: makeId(), role: "assistant", content, ...options }]);
@@ -300,56 +201,38 @@ export function useDashboardAiController({
 
   const applyCommand = useCallback((command: DashboardCommandResponse) => {
     if (command.dashboardHealth) setDashboardHealth(command.dashboardHealth);
-<<<<<<< HEAD
     if (command.provider) localStorage.setItem("last_selected_provider", command.provider);
     if (command.model) localStorage.setItem("last_selected_model", command.model);
-=======
->>>>>>> origin/main
+    const actions = command.actions || [];
+    let shouldClearFilters = false;
+    const nextFilters: Record<string, string> = {};
+    let createdCharts = 0;
+    let createdKpis = 0;
+    let modifiedCharts = 0;
+    let deletedCharts = 0;
 
-    if (command.response_type === "dashboard_action" && Array.isArray(command.actions) && command.actions.length) {
-      let createdCharts = 0;
-      let modifiedCharts = 0;
-      let createdKpis = 0;
-      let deletedCharts = 0;
-      const nextFilters: DashboardFilters = {};
-      let shouldClearFilters = false;
+    for (const action of actions) {
+      const actionName = (action.action || action.name || "").toLowerCase();
 
-      for (const action of command.actions) {
-        const actionName = String(action.action || "").toLowerCase();
+      if (["create_chart", "add_chart", "generate_chart", "create_chart_from_action"].includes(actionName)) {
+        const chart = chartFromAction(action);
+        if (!chart) continue;
+        setChartsCleared(false);
+        setDashboardSpecs((current) => ({ ...current, charts: [...current.charts, chart] }));
+        setManualCharts((current) => upsertChart(current, chart).slice(-10));
+        createdCharts += 1;
+        continue;
+      }
 
-        if (["create_chart", "generate_chart"].includes(actionName)) {
+      if (["modify_chart", "update_chart", "update_chart_type", "convert_chart_type"].includes(actionName)) {
           const chart = chartFromAction(action);
           if (!chart) continue;
-          const exists = allSpecs.charts.some((current) => sameChart(current, chart));
-          if (!exists) {
-<<<<<<< HEAD
-            setChartsCleared(false);
-=======
->>>>>>> origin/main
-            setManualCharts((current) => upsertChart(current, chart).slice(-10));
-            createdCharts += 1;
-          } else {
-            modifiedCharts += 1;
-          }
-          continue;
-        }
-
-        if (["modify_chart", "update_chart", "update_chart_type", "convert_chart_type"].includes(actionName)) {
-          const chart = chartFromAction(action);
-          if (!chart) continue;
-<<<<<<< HEAD
           const target = getActionTarget(action);
           const existsInDashboard = dashboardSpecs.charts.some((item) => chartMatchesTarget(item, target) || sameChart(item, chart));
           setChartsCleared(false);
           setDashboardSpecs((current) => ({ ...current, charts: replaceChartByTarget(current.charts, target, chart) }));
           setManualCharts((current) => current.some((item) => chartMatchesTarget(item, target) || sameChart(item, chart)) || !existsInDashboard
             ? replaceChartByTarget(current, target, chart).slice(-10)
-=======
-          const existsInDashboard = dashboardSpecs.charts.some((item) => sameChart(item, chart));
-          setDashboardSpecs((current) => ({ ...current, charts: current.charts.map((item) => sameChart(item, chart) ? { ...item, ...chart } : item) }));
-          setManualCharts((current) => current.some((item) => sameChart(item, chart)) || !existsInDashboard
-            ? upsertChart(current, chart).slice(-10)
->>>>>>> origin/main
             : current);
           modifiedCharts += 1;
           continue;
@@ -373,7 +256,6 @@ export function useDashboardAiController({
           continue;
         }
 
-<<<<<<< HEAD
         if (["clear_charts", "remove_all_charts", "delete_all_charts"].includes(actionName)) {
           setChartsCleared(true);
           setManualCharts([]);
@@ -386,31 +268,25 @@ export function useDashboardAiController({
           const target = getActionTarget(action);
           setManualCharts((current) => removeChartByTarget(current, target));
           setDashboardSpecs((current) => ({ ...current, charts: removeChartByTarget(current.charts, target) }));
-=======
-        if (["delete_chart", "remove_chart"].includes(actionName)) {
-          setManualCharts((current) => current.slice(0, -1));
-          setDashboardSpecs((current) => ({ ...current, charts: current.charts.slice(0, -1) }));
->>>>>>> origin/main
           deletedCharts += 1;
         }
       }
 
-      if (shouldClearFilters) setFilters({});
-      if (Object.keys(nextFilters).length) setFilters((current) => ({ ...current, ...nextFilters }));
+    if (shouldClearFilters) setFilters({});
+    if (Object.keys(nextFilters).length) setFilters((current) => ({ ...current, ...nextFilters }));
 
-      pushAssistant(command.natural_response || command.message || "Applied schema-safe dashboard actions.", {
-        type: command.schema_safe === false ? "warning" : "action",
-        model: command.model,
-        provider: command.provider,
-      });
+    pushAssistant(command.natural_response || command.message || "Applied schema-safe dashboard actions.", {
+      type: command.schema_safe === false ? "warning" : "action",
+      model: command.model,
+      provider: command.provider,
+    });
 
-      if (!createdCharts && !modifiedCharts && !createdKpis && !deletedCharts && !Object.keys(nextFilters).length && !shouldClearFilters) {
-        pushAssistant("I prepared the action, but there was no valid schema-safe chart, KPI, or filter to apply.", { type: "warning" });
-      }
-      return;
+    if (!createdCharts && !modifiedCharts && !createdKpis && !deletedCharts && !Object.keys(nextFilters).length && !shouldClearFilters) {
+      pushAssistant("I prepared the action, but there was no valid schema-safe chart, KPI, or filter to apply.", { type: "warning" });
     }
+    return;
 
-    if ((command.action === "GENERATE_DASHBOARD" || command.action === "FIX_DASHBOARD") && (command.dashboard || command.dashboardPlan)) {
+  if ((command.action === "GENERATE_DASHBOARD" || command.action === "FIX_DASHBOARD") && (command.dashboard || command.dashboardPlan)) {
       const dashboard = command.dashboard || command.dashboardPlan;
       setDashboardSpecs({
         kpis: (dashboard?.kpis || []) as KpiSpec[],
@@ -418,33 +294,11 @@ export function useDashboardAiController({
         source: dashboard?.source,
         domain: dashboard?.domain,
       });
-<<<<<<< HEAD
       setChartsCleared(false);
-=======
->>>>>>> origin/main
-      setManualCharts([]);
-      setManualKpis([]);
-      pushAssistant(command.message || "Dashboard regenerated with the quality guardian.", {
-        type: command.dashboardHealth?.status === "failed" ? "warning" : "action",
-        model: command.model,
-        provider: command.provider,
-      });
-      return;
-    }
-
-<<<<<<< HEAD
-    const incomingChartSpec = command.chartSpec || (command as any).chart;
-    if ((command.action === "GENERATE_CHART" || command.action === "MODIFY_CHART") && incomingChartSpec) {
-      const { data: _data, rows: _rows, rawRows: _rawRows, ...chartSpec } = incomingChartSpec as ChartSpec & { data?: unknown; rows?: unknown; rawRows?: unknown };
-      setChartsCleared(false);
-=======
-    if ((command.action === "GENERATE_CHART" || command.action === "MODIFY_CHART") && command.chartSpec) {
-      const { data: _data, rows: _rows, rawRows: _rawRows, ...chartSpec } = command.chartSpec as ChartSpec & { data?: unknown; rows?: unknown; rawRows?: unknown };
->>>>>>> origin/main
       if (command.action === "MODIFY_CHART") {
-        setManualCharts((current) => current.length ? [...current.slice(0, -1), chartSpec] : [chartSpec]);
+        setManualCharts((current) => current.length ? [...current.slice(0, -1), command.chartSpec as ChartSpec] : [command.chartSpec as ChartSpec]);
       } else {
-        setManualCharts((current) => [...current, chartSpec]);
+        setManualCharts((current) => [...current, command.chartSpec as ChartSpec]);
       }
       pushAssistant(command.message || "Chart generated from a safe AI spec and calculated locally.", {
         type: "chart",
@@ -466,7 +320,6 @@ export function useDashboardAiController({
     }
 
     if (command.action === "DELETE_CHART") {
-<<<<<<< HEAD
       const target = {
         id: command.targetId || command.chartSpec?.id,
         title: command.targetTitle || command.chartSpec?.title,
@@ -474,10 +327,6 @@ export function useDashboardAiController({
       };
       setManualCharts((current) => removeChartByTarget(current, target));
       setDashboardSpecs((current) => ({ ...current, charts: removeChartByTarget(current.charts, target) }));
-=======
-      setManualCharts((current) => current.slice(0, -1));
-      setDashboardSpecs((current) => ({ ...current, charts: current.charts.slice(0, -1) }));
->>>>>>> origin/main
       pushAssistant(command.message || "Removed a chart.", { type: "action" });
       return;
     }
@@ -511,118 +360,12 @@ export function useDashboardAiController({
     setMessages((current) => [...current, { id: makeId(), role: "user", content: text }]);
 
     try {
-<<<<<<< HEAD
       const blockedMessage = blockedDashboardPrompt(text);
       if (blockedMessage) {
         pushAssistant(blockedMessage, { type: "warning", provider: "schema-guardian" });
         return;
       }
 
-=======
->>>>>>> origin/main
-      if (/understand|explain schema|schema samjhao|data samjhao/i.test(text)) {
-        const result: Record<string, unknown> = await schemaAiClient.understandDatasetSchema(payload.id || "local-dataset", {
-          ...payloadWithContext,
-        });
-
-        pushAssistant(result?.explanation || "Schema understanding generated.", {
-          type: "text",
-          provider: "smart-schema-understanding",
-        });
-        return;
-      }
-
-      if (/smart dashboard|best dashboard|rag dashboard/i.test(text)) {
-        const result: Record<string, unknown> = await schemaAiClient.generateSmartRagDashboard(payload.id || "local-dataset", {
-          ...payloadWithContext,
-          useOllama: useLlm,
-        });
-
-        const dashboard = result?.dashboard;
-
-        if (dashboard) {
-          setDashboardSpecs({
-            kpis: (dashboard.kpis || []) as KpiSpec[],
-            charts: (dashboard.charts || []) as ChartSpec[],
-            source: dashboard.source,
-            domain: dashboard.domain,
-          });
-          setManualCharts([]);
-          setManualKpis([]);
-        }
-
-        if (result?.quality?.health) setDashboardHealth(result.quality.health);
-
-        pushAssistant(
-          result?.understanding?.userExplanation || "Smart RAG dashboard generated.",
-          {
-            type: "action",
-            provider: "smart-rag-dashboard",
-          },
-        );
-        return;
-      }
-
-      if (/remember|train this|save pattern|learn this dashboard/i.test(text)) {
-        const result: Record<string, unknown> = await schemaAiClient.trainSmartRagDashboard(payload.id || "local-dataset", {
-          ...payloadWithContext,
-          acceptedDashboardPlan: allSpecs,
-          rating: "good",
-          notes: "User approved this dashboard from UI.",
-          useOllama: useLlm,
-        });
-
-        pushAssistant(
-          `I saved this dashboard pattern. RAG memory now has ${result?.stats?.total || "updated"} patterns.`,
-          {
-            type: "action",
-            provider: "smart-rag-training",
-          },
-        );
-        return;
-      }
-
-      const command = await schemaAiClient.sendDashboardCommand(
-        payload.id || "local-dataset",
-        text,
-        allSpecs,
-        payloadWithContext,
-        { useLlm },
-      );
-      applyCommand(command);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Dashboard command failed.";
-      setError(message);
-
-      if (/fix|build|regenerate|dashboard/i.test(text)) {
-        const localCharts = buildDefaultCharts(rows).map(({ data: _data, subtitle: _subtitle, warning: _warning, calculatedLocally: _local, ...spec }) => spec);
-        const localKpis = buildKpis(rows).map(({ value: _value, rawValue: _rawValue, subtitle: _subtitle, status: _status, insight: _insight, calculatedLocally: _local, ...spec }) => spec);
-        setDashboardSpecs({ kpis: localKpis, charts: localCharts, source: "frontend-fallback" });
-        pushAssistant(`Backend command failed, so I rebuilt the dashboard locally. ${message}`, { type: "warning" });
-      } else {
-        pushAssistant(message || localFallbackAnswer(text, rows), { type: "warning" });
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [allSpecs, applyCommand, loading, payload, pushAssistant, rows, useLlm]);
-
-  const askChat = useCallback(async (query: string) => {
-    const text = query.trim();
-    if (!text || loading) return;
-
-    setLoading(true);
-    setError(null);
-    setMessages((current) => [...current, { id: makeId(), role: "user", content: text }]);
-
-    try {
-      const response = await schemaAiClient.sendSchemaChat(payload.id || "local-dataset", text, payloadWithContext, { useLlm });
-<<<<<<< HEAD
-      if (response.assistantMessage?.provider) localStorage.setItem("last_selected_provider", response.assistantMessage.provider);
-      if (response.assistantMessage?.model) localStorage.setItem("last_selected_model", response.assistantMessage.model);
-
-=======
->>>>>>> origin/main
       pushAssistant(response.assistantMessage?.content || localFallbackAnswer(text, rows), {
         type: "text",
         model: response.assistantMessage?.model,
@@ -636,6 +379,10 @@ export function useDashboardAiController({
       setLoading(false);
     }
   }, [loading, payload, pushAssistant, rows, useLlm]);
+
+  const askChat = useCallback(async (_query: string) => {
+    return "";
+  }, []);
 
   const convertChart = useCallback((chartId: string, type: ChartType) => {
     setDashboardSpecs((current) => ({
@@ -662,3 +409,4 @@ export function useDashboardAiController({
     convertChart,
   };
 }
+

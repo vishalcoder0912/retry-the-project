@@ -1,10 +1,16 @@
 import { makeSchemaOnlyPacket } from "./schema-fingerprint.js";
 import { critiqueDashboard, sanitizeChartSpec, sanitizeKpiSpec } from "./dashboard-plan-engine.js";
+import { findAnalystTrainingForDomain } from "./analyst-training-memory.js";
 import { assertNoRawRowsInString } from "../ai/llm-payload-sanitizer.js";
 
 const DEFAULT_OLLAMA_BASE_URL = process.env.OLLAMA_HOST || process.env.OLLAMA_BASE_URL || "http://127.0.0.1:11434";
-const DASHBOARD_MODEL = process.env.DASHBOARD_LLM_MODEL || "qwen3:4b";
-const CHAT_MODEL = process.env.CHAT_LLM_MODEL || "llama3.2";
+function getDashboardModel() {
+  return process.env.DASHBOARD_LLM_MODEL || "qwen3:4b";
+}
+
+function getChatModel() {
+  return process.env.CHAT_LLM_MODEL || "llama3.2";
+}
 
 const INSIGHTFLOW_DASHBOARD_SYSTEM_PROMPT = `You are a schema-only AI analyst. You never receive raw dataset rows. You plan and explain using schema, metadata, and deterministic aggregate results only. Never ask for or rely on raw rows.
 You are Dashboard AI Copilot, a schema-aware analytics assistant.
@@ -566,9 +572,10 @@ Return example:
 }
 
 export async function planDashboardWithOllama(schemaProfile, memoryMatch, options = {}) {
+  const model = getDashboardModel();
   try {
     const text = await callOllama({
-      model: DASHBOARD_MODEL,
+      model,
       prompt: buildDashboardPrompt(schemaProfile, memoryMatch, options),
       temperature: 0.1,
     });
@@ -576,7 +583,7 @@ export async function planDashboardWithOllama(schemaProfile, memoryMatch, option
     if (!json) return null;
 
     return critiqueDashboard({
-      source: `ollama:${DASHBOARD_MODEL}`,
+      source: `ollama:${model}`,
       message: json.message || "Dashboard plan generated.",
       dashboardType: json.dashboardType,
       kpis: (json.kpis || []).map((item) => sanitizeKpiSpec(stripUnsafeSpec(item), schemaProfile)).slice(0, 8),
@@ -588,7 +595,7 @@ export async function planDashboardWithOllama(schemaProfile, memoryMatch, option
       storyMode: json.storyMode,
       confidenceScore: Number.isFinite(Number(json.confidenceScore)) ? Number(json.confidenceScore) : undefined,
       schemaOnly: true,
-      model: DASHBOARD_MODEL,
+      model,
     }, schemaProfile);
   } catch (error) {
     return {
@@ -597,7 +604,7 @@ export async function planDashboardWithOllama(schemaProfile, memoryMatch, option
       kpis: [],
       charts: [],
       schemaOnly: true,
-      model: DASHBOARD_MODEL,
+      model,
     };
   }
 }
@@ -609,8 +616,9 @@ export async function planCommandWithOllama({
   ragMatches = [],
   currentDashboard,
 }) {
+  const model = getDashboardModel();
   try {
-    const text = await callOllama({ model: DASHBOARD_MODEL, prompt: buildCommandPrompt(query, schemaProfile, memoryMatch, currentDashboard, {
+    const text = await callOllama({ model, prompt: buildCommandPrompt(query, schemaProfile, memoryMatch, currentDashboard, {
       ragMatches,
     }) });
     const json = extractJson(text);
@@ -621,7 +629,7 @@ export async function planCommandWithOllama({
       return {
         ...envelope,
         provider: "ollama",
-        model: DASHBOARD_MODEL,
+        model,
       };
     }
 
@@ -636,7 +644,7 @@ export async function planCommandWithOllama({
         : undefined,
       schemaOnly: true,
       provider: "ollama",
-      model: DASHBOARD_MODEL,
+      model,
     };
   } catch (error) {
     return {
@@ -644,13 +652,14 @@ export async function planCommandWithOllama({
       message: "I used the local dashboard engine because the LLM planner was unavailable.",
       schemaOnly: true,
       provider: "local",
-      model: DASHBOARD_MODEL,
+      model,
       aiError: error.message,
     };
   }
 }
 
 export async function formatChatAnswerWithOllama({ query, schemaProfile, localAnswer }) {
+  const model = getChatModel();
   try {
     const prompt = `You are Schema AI Studio Assistant.
 
@@ -695,9 +704,9 @@ User question: ${query}
 Local computed answer: ${localAnswer}
 
 Return only the final answer text. Do not expose the Reasoning Layer.`;
-    const text = await callOllama({ model: CHAT_MODEL, prompt, temperature: 0.2 });
-    return { answer: text.trim() || localAnswer, model: CHAT_MODEL, provider: "ollama" };
+    const text = await callOllama({ model, prompt, temperature: 0.2 });
+    return { answer: text.trim() || localAnswer, model, provider: "ollama" };
   } catch (error) {
-    return { answer: localAnswer, model: CHAT_MODEL, provider: "local", aiError: error.message };
+    return { answer: localAnswer, model, provider: "local", aiError: error.message };
   }
 }

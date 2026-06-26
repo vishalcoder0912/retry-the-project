@@ -10,26 +10,41 @@ export function uploadPdfIntelligence<T>(file: File) {
   });
 }
 
-export function getPdfIntelligenceStatus<T>(documentId: string) {
-  return apiRequest<T>(API_ROUTES.pdfIntelligence.status(documentId));
+export function getPdfIntelligenceStatus<T>(pdfId: string) {
+  return apiRequest<T>(API_ROUTES.pdfIntelligence.status(pdfId));
 }
 
-export function queryPdfIntelligence<T>(documentId: string, query: string, intent?: string) {
-  return apiRequest<T>(API_ROUTES.pdfIntelligence.query(documentId), {
+export function getPdfIntelligenceDetails<T>(pdfId: string) {
+  return apiRequest<T>(API_ROUTES.pdfIntelligence.details(pdfId));
+}
+
+export function queryPdfIntelligence<T>(
+  pdfId: string,
+  query: string,
+  intent?: string,
+) {
+  return apiRequest<T>(API_ROUTES.pdfIntelligence.query(pdfId), {
     method: "POST",
     body: JSON.stringify({ query, intent }),
   });
 }
 
-export function reindexPdfIntelligence<T>(documentId: string) {
-  return apiRequest<T>(API_ROUTES.pdfIntelligence.reindex(documentId), {
+export function explainPdfIntelligence<T>(pdfId: string) {
+  return apiRequest<T>(API_ROUTES.pdfIntelligence.explain(pdfId), {
     method: "POST",
     body: JSON.stringify({}),
   });
 }
 
-export function forceOcrPdfIntelligence<T>(documentId: string) {
-  return apiRequest<T>(API_ROUTES.pdfIntelligence.forceOcr(documentId), {
+export function reindexPdfIntelligence<T>(pdfId: string) {
+  return apiRequest<T>(API_ROUTES.pdfIntelligence.reindex(pdfId), {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function forceOcrPdfIntelligence<T>(pdfId: string) {
+  return apiRequest<T>(API_ROUTES.pdfIntelligence.forceOcr(pdfId), {
     method: "POST",
     body: JSON.stringify({}),
   });

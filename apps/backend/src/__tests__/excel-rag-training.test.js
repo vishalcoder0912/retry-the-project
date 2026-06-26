@@ -1,12 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const memoryPath = path.join(process.cwd(), "data", "schema-rag-memory.excel.test.json");
 process.env.SCHEMA_RAG_MEMORY_PATH = memoryPath;
 process.env.DISABLE_OLLAMA_EMBEDDINGS = "1";
 
-const { excelAnalystSeedDatasets, trainExcelAnalystRagSeeds } = await import("../../scripts/train-excel-analyst-rag.js");
+let excelAnalystSeedDatasets;
+let trainExcelAnalystRagSeeds;
+
+beforeAll(async () => {
+  const excelRagTraining = await import("../../scripts/train-excel-analyst-rag.js");
+  excelAnalystSeedDatasets = excelRagTraining.excelAnalystSeedDatasets;
+  trainExcelAnalystRagSeeds = excelRagTraining.trainExcelAnalystRagSeeds;
+});
 
 function resetMemoryFile() {
   fs.mkdirSync(path.dirname(memoryPath), { recursive: true });
