@@ -17,6 +17,15 @@ import {
   governDashboardCommand,
   governChatAnswer,
 } from "../agentic-dashboard/chat-agent.js";
+import { profileLargeDataset } from "./large-data-profiler.js";
+import { buildSeniorAnalystPlan } from "./senior-analyst-brain.js";
+import {
+  buildSeniorDashboardPlan,
+  calculateSeniorCharts,
+} from "./senior-dashboard-planner.js";
+import { selectSeniorKpis } from "./senior-kpi-selector.js";
+import { buildExcelAnalystPlan } from "./excel-analyst-brain.js";
+import { executeExcelAnalysis } from "./excel-calculation-engine.js";
 
 function validateQueryColumns(profile, query) {
   const lower = String(query || "").toLowerCase().trim();
