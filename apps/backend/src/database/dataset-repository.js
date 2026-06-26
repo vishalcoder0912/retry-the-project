@@ -230,6 +230,7 @@ export const createDataset = ({
   fileName = null,
   columns,
   rows,
+  rowCount = null,
   sourceType = "upload",
   originalFilePath = null,
   optimizedFilePath = null,
@@ -242,6 +243,7 @@ export const createDataset = ({
   );
   const csvCachePath = optimizedFilePath || originalFilePath || writeDatasetCsvCache(datasetId, columns, cleanRows);
   const resolvedOptimizedFormat = optimizedFormat || (csvCachePath ? "csv" : null);
+  const finalRowCount = Number.isFinite(Number(rowCount)) ? Number(rowCount) : cleanRows.length;
 
   return withTransaction(() => {
     insertDataset.run(
