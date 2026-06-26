@@ -9,7 +9,7 @@ export const OLLAMA_AGENT_MODELS = Object.freeze({
   dashboardPlanner: process.env.OLLAMA_DASHBOARD_MODEL || "qwen3:8b",
   dashboardChat: process.env.OLLAMA_DASHBOARD_CHAT_MODEL || "qwen3:4b",
   generalChat: process.env.OLLAMA_GENERAL_CHAT_MODEL || "llama3.2:3b",
-  embedding: process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text:latest",
+  embedding: process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text",
   fallback: process.env.OLLAMA_FALLBACK_MODEL || "qwen3:latest",
 });
 
