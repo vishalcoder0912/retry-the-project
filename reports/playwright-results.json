@@ -1,12 +1,7 @@
 {
   "config": {
-<<<<<<< HEAD
     "configFile": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\Agentic ai Data analytics\\playwright.config.ts",
     "rootDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/e2e",
-=======
-    "configFile": "C:\\Users\\VISHAL\\Desktop\\20-12-2025\\All_full_stack_preparation\\expo\\retry-the-project\\playwright.config.ts",
-    "rootDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/e2e",
->>>>>>> origin/main
     "forbidOnly": false,
     "fullyParallel": false,
     "globalSetup": null,
@@ -21,11 +16,7 @@
     "preserveOutput": "always",
     "projects": [
       {
-<<<<<<< HEAD
         "outputDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/reports/playwright-artifacts",
-=======
-        "outputDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/reports/playwright-artifacts",
->>>>>>> origin/main
         "repeatEach": 1,
         "retries": 0,
         "metadata": {
@@ -33,20 +24,12 @@
         },
         "id": "chromium",
         "name": "chromium",
-<<<<<<< HEAD
         "testDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/Agentic ai Data analytics/e2e",
-=======
-        "testDir": "C:/Users/VISHAL/Desktop/20-12-2025/All_full_stack_preparation/expo/retry-the-project/e2e",
->>>>>>> origin/main
         "testIgnore": [],
         "testMatch": [
           "**/*.@(spec|test).?(c|m)[jt]s?(x)"
         ],
-<<<<<<< HEAD
         "timeout": 30000
-=======
-        "timeout": 60000
->>>>>>> origin/main
       }
     ],
     "quiet": false,
@@ -78,16 +61,11 @@
     "updateSnapshots": "missing",
     "updateSourceMethod": "patch",
     "version": "1.59.1",
-<<<<<<< HEAD
     "workers": 6,
-=======
-    "workers": 1,
->>>>>>> origin/main
     "webServer": null
   },
   "suites": [
     {
-<<<<<<< HEAD
       "title": "agentic-ai-full-flow.spec.ts",
       "file": "agentic-ai-full-flow.spec.ts",
       "column": 0,
@@ -102,20 +80,6 @@
           "specs": [
             {
               "timeout": 30000,
-=======
-      "title": "ai-dashboard-command-flow.spec.ts",
-      "file": "ai-dashboard-command-flow.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [
-        {
-          "title": "AI dashboard command flow supports chart, KPI, and clear filters commands",
-          "ok": true,
-          "tags": [],
-          "tests": [
-            {
-              "timeout": 60000,
->>>>>>> origin/main
               "annotations": [],
               "expectedStatus": "passed",
               "projectId": "chromium",
@@ -125,16 +89,11 @@
                   "workerIndex": 0,
                   "parallelIndex": 0,
                   "status": "passed",
-<<<<<<< HEAD
                   "duration": 3221,
-=======
-                  "duration": 7316,
->>>>>>> origin/main
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-<<<<<<< HEAD
                   "startTime": "2026-06-06T10:12:47.600Z",
                   "annotations": [],
                   "expectedStatus": "passed",
@@ -204,11 +163,6 @@
                     }
                   ],
                   "status": "unexpected"
-=======
-                  "startTime": "2026-05-21T08:58:00.382Z",
-                  "annotations": [],
-                  "attachments": []
->>>>>>> origin/main
                 }
               ],
               "status": "expected"
@@ -222,7 +176,6 @@
       ]
     },
     {
-<<<<<<< HEAD
       "title": "ai-provider-fallback.spec.ts",
       "file": "ai-provider-fallback.spec.ts",
       "column": 0,
@@ -436,46 +389,20 @@
       ]
     },
     {
-=======
->>>>>>> origin/main
-      "title": "dashboard-upload-flow.spec.ts",
-      "file": "dashboard-upload-flow.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [
-        {
-          "title": "dashboard upload flow renders dataset, KPIs, charts, and assistant entry point",
-          "ok": true,
-          "tags": [],
-          "tests": [
-            {
-<<<<<<< HEAD
-              "timeout": 30000,
-=======
-              "timeout": 60000,
->>>>>>> origin/main
               "annotations": [],
               "expectedStatus": "passed",
               "projectId": "chromium",
               "projectName": "chromium",
               "results": [
                 {
-<<<<<<< HEAD
                   "workerIndex": 1,
                   "parallelIndex": 0,
                   "status": "passed",
                   "duration": 3056,
-=======
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 2322,
->>>>>>> origin/main
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-<<<<<<< HEAD
                   "startTime": "2026-06-06T10:13:09.058Z",
                   "annotations": [],
                   "expectedStatus": "passed",
@@ -545,11 +472,6 @@
                     }
                   ],
                   "status": "unexpected"
-=======
-                  "startTime": "2026-05-21T08:58:08.260Z",
-                  "annotations": [],
-                  "attachments": []
->>>>>>> origin/main
                 }
               ],
               "status": "expected"
@@ -563,7 +485,6 @@
       ]
     },
     {
-<<<<<<< HEAD
       "title": "geo-intelligence-flow.spec.ts",
       "file": "geo-intelligence-flow.spec.ts",
       "column": 0,
@@ -693,46 +614,20 @@
       ]
     },
     {
-=======
->>>>>>> origin/main
-      "title": "pdf-intelligence-flow.spec.ts",
-      "file": "pdf-intelligence-flow.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [
-        {
-          "title": "PDF intelligence flow renders upload and mocked Q&A states",
-          "ok": true,
-          "tags": [],
-          "tests": [
-            {
-<<<<<<< HEAD
-              "timeout": 30000,
-=======
-              "timeout": 60000,
->>>>>>> origin/main
               "annotations": [],
               "expectedStatus": "passed",
               "projectId": "chromium",
               "projectName": "chromium",
               "results": [
                 {
-<<<<<<< HEAD
                   "workerIndex": 2,
                   "parallelIndex": 0,
                   "status": "passed",
                   "duration": 1610,
-=======
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 1249,
->>>>>>> origin/main
                   "errors": [],
                   "stdout": [],
                   "stderr": [],
                   "retry": 0,
-<<<<<<< HEAD
                   "startTime": "2026-06-06T10:13:26.730Z",
                   "annotations": [],
                   "expectedStatus": "passed",
@@ -933,9 +828,6 @@
                   "stderr": [],
                   "retry": 0,
                   "startTime": "2026-06-06T10:13:31.596Z",
-=======
-                  "startTime": "2026-05-21T08:58:10.621Z",
->>>>>>> origin/main
                   "annotations": [],
                   "attachments": []
                 }
@@ -943,57 +835,9 @@
               "status": "expected"
             }
           ],
-<<<<<<< HEAD
           "id": "22903ad1444cbbd91e38-4d06e5bc2b996a7589cf",
           "file": "upload-dashboard-flow.spec.ts",
           "line": 5,
-=======
-          "id": "fef9d73900acaaa79c39-a8e4531169cd79495da0",
-          "file": "pdf-intelligence-flow.spec.ts",
-          "line": 4,
-          "column": 1
-        }
-      ]
-    },
-    {
-      "title": "schema-only-safety.spec.ts",
-      "file": "schema-only-safety.spec.ts",
-      "column": 0,
-      "line": 0,
-      "specs": [
-        {
-          "title": "schema-only safety flow never displays sentinel raw row values",
-          "ok": true,
-          "tags": [],
-          "tests": [
-            {
-              "timeout": 60000,
-              "annotations": [],
-              "expectedStatus": "passed",
-              "projectId": "chromium",
-              "projectName": "chromium",
-              "results": [
-                {
-                  "workerIndex": 0,
-                  "parallelIndex": 0,
-                  "status": "passed",
-                  "duration": 3309,
-                  "errors": [],
-                  "stdout": [],
-                  "stderr": [],
-                  "retry": 0,
-                  "startTime": "2026-05-21T08:58:12.026Z",
-                  "annotations": [],
-                  "attachments": []
-                }
-              ],
-              "status": "expected"
-            }
-          ],
-          "id": "3a9d3d86a74952b24d4f-d2693bccf0fc2aa3deb0",
-          "file": "schema-only-safety.spec.ts",
-          "line": 4,
->>>>>>> origin/main
           "column": 1
         }
       ]
@@ -1001,19 +845,11 @@
   ],
   "errors": [],
   "stats": {
-<<<<<<< HEAD
     "startTime": "2026-06-06T10:12:45.987Z",
     "duration": 49218.776000000005,
     "expected": 9,
     "skipped": 0,
     "unexpected": 2,
-=======
-    "startTime": "2026-05-21T08:57:58.490Z",
-    "duration": 17901.532,
-    "expected": 4,
-    "skipped": 0,
-    "unexpected": 0,
->>>>>>> origin/main
     "flaky": 0
   }
 }

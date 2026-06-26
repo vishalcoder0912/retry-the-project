@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
@@ -92,26 +92,28 @@
   }
 
   html {
-    @apply dark;
     min-height: 100%;
-    background: #07111f;
+    background: #f8fafc;
   }
 
   body {
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, sans-serif;
     min-height: 100%;
-    background: #07111f;
   }
 
   #root {
     min-height: 100%;
-    background: #07111f;
   }
 
   .recharts-wrapper,
   .recharts-surface {
     outline: none;
+  }
+
+  .recharts-responsive-container,
+  .recharts-wrapper {
+    min-height: 280px;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -127,6 +129,25 @@
 @layer utilities {
   .glass {
     @apply border border-border/50 bg-card/80 backdrop-blur-sm;
+  }
+
+  .insightflow-page {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+  }
+
+  .insightflow-right-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  @media (max-width: 1280px) {
+    .insightflow-right-grid {
+      grid-template-columns: 1fr;
+    }
   }
 }
 

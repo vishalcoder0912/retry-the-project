@@ -1,144 +1,134 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
+import { Download, RefreshCw, Send, Share2, Sparkles } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import {
-  ChevronDown,
-  Download,
-  Filter,
-  RefreshCw,
-  Send,
-  Share2,
-  Sparkles,
-} from "lucide-react";
 import { useData } from "@/features/data/context/useData";
-import {
-  extractRows,
-  interpretCommand,
-} from "@/features/dashboard/utils/commandCenterAnalytics";
-import {
-  exportRowsToCsv,
-} from "@/features/dashboard/utils/dashboardAnalytics";
-import {
-  loadDashboardState,
-  recordDashboardAction,
-  saveDashboardState,
-} from "@/features/dashboard/utils/dashboardStateStorage";
 
-function downloadFile(fileName: string, content: string, mime: string) {
-  const blob = new Blob([content], { type: mime });
+function getDatasetName(dataset: any) {
+  return dataset?.name || dataset?.fileName || dataset?.title || "No dataset loaded";
+}
+
+function getRowCount(dataset: any) {
+  return dataset?.rowCount || dataset?.rows?.length || 0;
+}
+
+function downloadCsv(dataset: any) {
+  if (!dataset?.rows?.length) return;
+
+  const columns = dataset.columns?.map((column: any) => column.name || column.key || column) || Object.keys(dataset.rows[0] || {});
+  const csv = [
+    columns.join(","),
+    ...dataset.rows.map((row: Record<string, unknown>) =>
+      columns
+        .map((column: string) => {
+          const value = row[column] ?? "";
+          return `"${String(value).replace(/"/g, '""')}"`;
+        })
+        .join(","),
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = fileName;
-  link.click();
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${getDatasetName(dataset).replace(/\s+/g, "_")}.csv`;
+  a.click();
   URL.revokeObjectURL(url);
 }
 
 export default function CommandTopBar() {
   const navigate = useNavigate();
-  const { dataset, retryHydrate, isProcessing } = useData();
+  const { dataset, retryHydrate } = useData();
   const [command, setCommand] = useState("");
-  const rows = useMemo(() => extractRows(dataset), [dataset]);
 
-  function runCommand(event: FormEvent) {
+  const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!dataset?.id || !command.trim()) {
-      if (!dataset) navigate("/upload");
-      return;
-    }
 
-    const result = interpretCommand(command, rows);
-    const stored = loadDashboardState(dataset.id);
-    const nextState = {
-      ...stored,
-      filters: result.filters ? { ...stored.filters, ...result.filters } : stored.filters,
-      manualCharts: result.chart ? [result.chart, ...stored.manualCharts].slice(0, 8) : stored.manualCharts,
-      manualKpis: result.kpi ? [result.kpi, ...stored.manualKpis].slice(0, 8) : stored.manualKpis,
-      geoActive: result.geoRequested || stored.geoActive,
-    };
-    saveDashboardState(dataset.id, nextState);
-    recordDashboardAction(dataset.id, result.auditLabel, "command-bar", nextState);
+    const text = command.trim();
+    if (!text) return;
+
+    window.dispatchEvent(
+      new CustomEvent("insightflow:global-command", {
+        detail: { command: text },
+      }),
+    );
+
+    const lower = text.toLowerCase();
+
+    if (lower.includes("pdf")) navigate("/pdf");
+    else if (lower.includes("upload")) navigate("/upload");
+    else if (lower.includes("chat") || lower.includes("ask")) navigate("/chat");
+    else if (lower.includes("analytics") || lower.includes("anomaly") || lower.includes("correlation")) navigate("/analytics");
+    else if (lower.includes("agent")) navigate("/agentic");
+    else navigate("/dashboard");
+
     setCommand("");
-    navigate("/dashboard");
-  }
-
-  function exportDataset() {
-    if (!dataset) return;
-    downloadFile(`${dataset.name || "dataset"}.csv`, exportRowsToCsv(rows), "text/csv;charset=utf-8");
-  }
-
-  async function shareDataset() {
-    const summary = dataset
-      ? `Dataset: ${dataset.name}\nRows: ${rows.length.toLocaleString()}\nColumns: ${dataset.columns.length.toLocaleString()}`
-      : "InsightFlow";
-    await navigator.clipboard?.writeText(summary);
-  }
+  };
 
   return (
-    <div className="sticky top-0 z-30 border-b border-[#E2E8F0] bg-white/95 backdrop-blur">
-      <div className="flex h-[84px] items-center gap-4 px-5 xl:px-8">
+    <header className="sticky top-0 z-40 border-b border-[#E2E8F0] bg-white/95 px-6 py-4 backdrop-blur-xl">
+      <div className="flex items-center gap-5">
         <button
           type="button"
-          onClick={() => navigate(dataset ? "/data" : "/upload")}
-          className="hidden min-w-[240px] items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-left shadow-sm transition hover:border-violet-200 md:flex"
+          onClick={() => navigate("/data")}
+          className="flex h-12 min-w-[260px] items-center justify-between rounded-2xl border border-[#E2E8F0] bg-white px-4 text-left shadow-sm"
         >
-          <span className="min-w-0">
-            <span className="block truncate text-sm font-semibold text-[#0F172A]">
-              {dataset?.name || "Upload a dataset"}
-            </span>
-            <span className="mt-1 inline-flex items-center gap-2 text-xs text-[#64748B]">
-              <span className={`size-2 rounded-full ${dataset ? "bg-[#22C55E]" : "bg-[#F59E0B]"}`} />
-              {dataset ? `${rows.length.toLocaleString()} rows` : "No active data"}
-            </span>
-          </span>
-          <ChevronDown className="size-4 shrink-0 text-[#64748B]" />
+          <div>
+            <p className="text-sm font-bold text-[#0F172A]">{getDatasetName(dataset)}</p>
+            <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+              <span className="size-2 rounded-full bg-emerald-500" />
+              <span>{getRowCount(dataset).toLocaleString()} rows</span>
+            </div>
+          </div>
+          <span className="text-slate-400">⌄</span>
         </button>
 
-        <form onSubmit={runCommand} className="relative min-w-0 flex-1">
-          <Sparkles className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#7C3AED]" />
-          <input
-            value={command}
-            onChange={(event) => setCommand(event.target.value)}
-            placeholder="Ask InsightFlow AI anything about your data..."
-            className="h-12 w-full rounded-2xl border border-violet-200 bg-white pl-12 pr-24 text-sm text-[#0F172A] shadow-[0_0_0_4px_rgba(124,58,237,0.04)] outline-none transition placeholder:text-[#94A3B8] focus:border-[#7C3AED]"
-          />
-          <button
-            type="submit"
-            className="absolute right-2 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-white shadow-lg shadow-violet-500/20"
-            aria-label="Run AI command"
-          >
-            {command.trim() ? <Send className="size-4" /> : <Filter className="size-4" />}
-          </button>
+        <form onSubmit={handleSubmit} className="min-w-0 flex-1">
+          <div className="flex h-12 items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 shadow-sm shadow-violet-100">
+            <Sparkles className="size-5 text-violet-600" />
+            <input
+              value={command}
+              onChange={(event) => setCommand(event.target.value)}
+              className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
+              placeholder="Ask InsightFlow AI anything about your data..."
+            />
+            <button
+              type="submit"
+              aria-label="Send AI command"
+              className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#2563EB] text-white shadow-md"
+            >
+              <Send className="size-4" />
+            </button>
+          </div>
         </form>
 
-        <div className="hidden items-center gap-3 lg:flex">
-          <button
-            type="button"
-            onClick={() => void retryHydrate()}
-            className="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm font-semibold text-[#0F172A] shadow-sm transition hover:bg-[#F8FAFC]"
-          >
-            <RefreshCw className={`mr-2 inline size-4 ${isProcessing ? "animate-spin" : ""}`} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={exportDataset}
-            disabled={!dataset}
-            className="rounded-2xl border border-[#E2E8F0] bg-white px-4 py-3 text-sm font-semibold text-[#0F172A] shadow-sm transition hover:bg-[#F8FAFC] disabled:opacity-50"
-          >
-            <Download className="mr-2 inline size-4" />
-            Export
-          </button>
-          <button
-            type="button"
-            onClick={shareDataset}
-            className="rounded-2xl bg-gradient-to-br from-[#7C3AED] to-[#2563EB] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-500/20"
-          >
-            <Share2 className="mr-2 inline size-4" />
-            Share
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => void retryHydrate?.()}
+          className="flex h-12 items-center gap-2 rounded-2xl border border-[#E2E8F0] bg-white px-4 text-sm font-bold text-[#0F172A] shadow-sm"
+        >
+          <RefreshCw className="size-4" />
+          Refresh
+        </button>
+
+        <button
+          type="button"
+          onClick={() => downloadCsv(dataset)}
+          className="flex h-12 items-center gap-2 rounded-2xl border border-[#E2E8F0] bg-white px-4 text-sm font-bold text-[#0F172A] shadow-sm"
+        >
+          <Download className="size-4" />
+          Export
+        </button>
+
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard?.writeText(window.location.href)}
+          className="flex h-12 items-center gap-2 rounded-2xl bg-gradient-to-r from-[#7C3AED] to-[#2563EB] px-5 text-sm font-bold text-white shadow-lg shadow-violet-200"
+        >
+          <Share2 className="size-4" />
+          Share
+        </button>
       </div>
-    </div>
+    </header>
   );
 }
-

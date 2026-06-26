@@ -160,12 +160,12 @@ const redactSecrets = (content) =>
       '$1[REDACTED_SECRET]',
     );
 
-const withLineNumbers = (content) => {
+const withFilePrefixedLines = (content, filePath) => {
   const lines = content.split(/\r?\n/);
-  const width = String(lines.length).length;
+  const lineWidth = String(lines.length).length;
 
   return lines
-    .map((line, index) => `${String(index + 1).padStart(width, ' ')} | ${line}`)
+    .map((line, index) => `${filePath}:${String(index + 1).padStart(lineWidth, ' ')} | ${line}`)
     .join('\n');
 };
 
@@ -316,7 +316,7 @@ const exportCodebase = async () => {
 
   for (const { absolutePath, file } of sortedFiles) {
     const rawContent = await fs.readFile(absolutePath, 'utf8');
-    const content = withLineNumbers(redactSecrets(rawContent));
+    const content = withFilePrefixedLines(redactSecrets(rawContent), file);
 
     output += '---\n\n';
     output += `### FILE: ${file}\n\n`;
