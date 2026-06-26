@@ -190,11 +190,7 @@ export default function SchemaDashboardChat({
       id: "welcome",
       role: "assistant",
       content:
-<<<<<<< HEAD
         "Dashboard AI Guardian is ready. I use schema-only AI specs and calculate values locally.",
-=======
-        "Schema-trained assistant ready. I can build, fix, explain, or train dashboard patterns without sending raw rows to the LLM.",
->>>>>>> origin/main
     },
   ]);
   const loading = controller?.loading || localLoading;
@@ -207,13 +203,9 @@ export default function SchemaDashboardChat({
   useEffect(() => {
     if (visibleMessages.length > prevMessageCount.current) {
       const raf = requestAnimationFrame(() => {
-<<<<<<< HEAD
         if (typeof messagesEndRef.current?.scrollIntoView === "function") {
           messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
         }
-=======
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
->>>>>>> origin/main
       });
       prevMessageCount.current = visibleMessages.length;
       return () => cancelAnimationFrame(raf);
@@ -278,7 +270,6 @@ export default function SchemaDashboardChat({
         }
       } else {
         onSend?.(query);
-<<<<<<< HEAD
         const safeDatasetId = dataset?.id || dataset?.name || "local-dataset";
         const safeDatasetPayload = {
           id: safeDatasetId,
@@ -310,13 +301,6 @@ export default function SchemaDashboardChat({
             pageContext: "premium-agentic-dashboard",
             dashboardChartCount,
           },
-=======
-        const command = await api.sendDashboardCommand(
-          dataset?.id || "local-dataset",
-          query,
-          currentDashboard,
-          { rows: dataset?.rows || [], columns: dataset?.columns || [] },
->>>>>>> origin/main
         );
         setProvider(command.provider || "schema-safe");
         onCommand(command);
@@ -363,26 +347,16 @@ export default function SchemaDashboardChat({
   }
 
   return (
-<<<<<<< HEAD
     <aside className="sticky top-5 flex h-[min(760px,calc(100vh-8rem))] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-950/95 shadow-2xl shadow-black/30 backdrop-blur">
       <div className="shrink-0 border-b border-slate-700/80 p-4">
-=======
-    <aside className="sticky top-5 flex h-[calc(100vh-8rem)] flex-col rounded-2xl border border-slate-700/70 bg-slate-950/90 shadow-2xl shadow-black/30 backdrop-blur">
-      <div className="shrink-0 border-b border-slate-800 p-4">
->>>>>>> origin/main
         <div className="flex items-start gap-3">
           <div className="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-violet-600/30 to-violet-600/10 text-violet-200 shadow-[0_0_12px_rgba(124,58,237,0.15)]">
             <Bot className="size-5" />
           </div>
 
           <div className="min-w-0 flex-1">
-<<<<<<< HEAD
             <h3 className="text-base font-semibold text-slate-50">Schema AI Studio</h3>
             <p className="mt-0.5 truncate text-xs font-medium text-slate-300">{dataset?.name || "Current dataset"}</p>
-=======
-            <h3 className="text-base font-semibold text-white">Schema AI Studio</h3>
-            <p className="mt-0.5 text-xs text-slate-400">{dataset?.name || "Current dataset"}</p>
->>>>>>> origin/main
           </div>
 
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-200">
@@ -391,11 +365,7 @@ export default function SchemaDashboardChat({
           </span>
         </div>
 
-<<<<<<< HEAD
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-=======
-        <div className="mt-3 grid grid-cols-4 gap-1.5">
->>>>>>> origin/main
           {modes.map((mode) => {
             const Icon = mode.icon;
             const isActive = activeMode === mode.id;
@@ -408,17 +378,10 @@ export default function SchemaDashboardChat({
                   setActiveMode(mode.id);
                   void submit(mode.prompt);
                 }}
-<<<<<<< HEAD
                 className={`relative flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-semibold transition-all ${
                   isActive
                     ? "border-violet-500/60 bg-violet-500/15 text-violet-100 shadow-[0_0_12px_rgba(124,58,237,0.1)]"
                     : "border-slate-600/70 bg-slate-900/70 text-slate-300 hover:border-violet-500/50 hover:text-violet-200"
-=======
-                className={`relative flex flex-col items-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-medium transition-all ${
-                  isActive
-                    ? "border-violet-500/60 bg-violet-500/15 text-violet-100 shadow-[0_0_12px_rgba(124,58,237,0.1)]"
-                    : "border-slate-700/50 bg-slate-900/50 text-slate-400 hover:border-violet-500/40 hover:text-violet-300"
->>>>>>> origin/main
                 }`}
               >
                 <Icon className={`size-4 ${isActive ? "text-violet-300" : ""}`} />
@@ -429,38 +392,22 @@ export default function SchemaDashboardChat({
         </div>
       </div>
 
-<<<<<<< HEAD
       <div className="shrink-0 border-b border-slate-700/80 p-4">
         <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-200">
-=======
-      <div className="shrink-0 border-b border-slate-800 p-4">
-        <div className="mb-2 flex items-center gap-2 text-xs font-medium text-slate-300">
->>>>>>> origin/main
           <Sparkles className="size-3.5 text-violet-300" />
           Trained prompts
         </div>
 
-<<<<<<< HEAD
         <div className="grid max-h-36 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
           {suggestions.slice(0, 6).map((prompt) => (
-=======
-        <div className="grid gap-1.5">
-          {suggestions.slice(0, 5).map((prompt) => (
->>>>>>> origin/main
             <button
               key={prompt}
               type="button"
               onClick={() => submit(prompt)}
               disabled={loading}
-<<<<<<< HEAD
               className="group min-h-9 rounded-xl border border-slate-600/70 bg-slate-900/70 px-3 py-2 text-left text-xs font-medium leading-snug text-slate-300 transition-all hover:border-violet-500/50 hover:bg-violet-500/10 hover:text-violet-100 disabled:opacity-50"
             >
               <span className="mr-1.5 text-slate-400 transition-colors group-hover:text-violet-300">&rarr;</span>
-=======
-              className="group rounded-xl border border-slate-700/50 bg-slate-900/50 px-3 py-2 text-left text-xs text-slate-400 transition-all hover:border-violet-500/50 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
-            >
-              <span className="mr-1.5 text-slate-600 transition-colors group-hover:text-violet-400">&rarr;</span>
->>>>>>> origin/main
               {prompt}
             </button>
           ))}
@@ -468,11 +415,7 @@ export default function SchemaDashboardChat({
       </div>
 
       {controller?.dashboardHealth && (
-<<<<<<< HEAD
         <div className="shrink-0 border-b border-slate-700/80 px-4 py-3">
-=======
-        <div className="shrink-0 border-b border-slate-800 px-4 py-3">
->>>>>>> origin/main
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400">Guardian health</span>
             <span
@@ -496,11 +439,7 @@ export default function SchemaDashboardChat({
         </div>
       )}
 
-<<<<<<< HEAD
       <div ref={containerRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-950/35 p-4">
-=======
-      <div ref={containerRef} className="flex-1 space-y-3 overflow-y-auto p-4">
->>>>>>> origin/main
         <AnimatePresence mode="popLayout">
           {visibleMessages.map((message) => (
             <motion.div
@@ -527,17 +466,10 @@ export default function SchemaDashboardChat({
               </div>
 
               <div
-<<<<<<< HEAD
                 className={`max-w-[min(85%,42rem)] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                   message.role === "user"
                     ? "bg-violet-600 text-white shadow-[0_2px_8px_rgba(124,58,237,0.2)]"
                     : "border border-slate-700/80 bg-slate-900 text-slate-100"
-=======
-                className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  message.role === "user"
-                    ? "bg-violet-600 text-white shadow-[0_2px_8px_rgba(124,58,237,0.2)]"
-                    : "border border-slate-800 bg-slate-900/80 text-slate-200"
->>>>>>> origin/main
                 }`}
               >
                 {message.role === "user" ? (
@@ -555,46 +487,27 @@ export default function SchemaDashboardChat({
         <div ref={messagesEndRef} />
       </div>
 
-<<<<<<< HEAD
       <div className="shrink-0 border-t border-slate-700/80 bg-slate-950/95 p-4">
-=======
-      <div className="shrink-0 border-t border-slate-800 p-4">
->>>>>>> origin/main
         <form
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
           }}
-<<<<<<< HEAD
           className="flex items-end gap-2"
         >
           <div className="flex-1">
             <textarea
               ref={textareaRef}
               aria-label="Dashboard command"
-=======
-          className="flex gap-2"
-        >
-          <div className="relative flex-1">
-            <textarea
-              ref={textareaRef}
->>>>>>> origin/main
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Ask: build the strict salary dashboard"
               rows={1}
-<<<<<<< HEAD
               className="block min-h-11 w-full resize-none overflow-hidden rounded-xl border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-slate-50 outline-none transition-all placeholder:text-slate-400 focus:border-violet-400 focus:shadow-[0_0_12px_rgba(124,58,237,0.12)]"
               disabled={loading}
             />
             <kbd className="hidden">
-=======
-              className="min-h-[40px] w-full resize-none rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 pr-10 text-sm text-slate-100 outline-none placeholder:text-slate-500 transition-all focus:border-violet-500 focus:shadow-[0_0_12px_rgba(124,58,237,0.08)]"
-              disabled={loading}
-            />
-            <kbd className="absolute bottom-2 right-2 hidden rounded-md border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-500 md:inline">
->>>>>>> origin/main
               ↵
             </kbd>
           </div>
@@ -603,11 +516,7 @@ export default function SchemaDashboardChat({
             type="submit"
             aria-label="Send dashboard command"
             disabled={loading || !input.trim()}
-<<<<<<< HEAD
             className="grid size-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-violet-700 text-white shadow-[0_2px_8px_rgba(124,58,237,0.25)] transition-all hover:from-violet-500 hover:to-violet-600 hover:shadow-[0_4px_12px_rgba(124,58,237,0.35)] active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-=======
-            className="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-violet-700 text-white shadow-[0_2px_8px_rgba(124,58,237,0.25)] transition-all hover:from-violet-500 hover:to-violet-600 hover:shadow-[0_4px_12px_rgba(124,58,237,0.35)] active:scale-95 disabled:opacity-50 disabled:shadow-none"
->>>>>>> origin/main
           >
             {loading ? (
               <Loader2 className="size-4 animate-spin" />
@@ -617,7 +526,6 @@ export default function SchemaDashboardChat({
           </button>
         </form>
 
-<<<<<<< HEAD
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-[11px]">
           <div className="flex min-w-0 items-center gap-2">
             <span className="relative flex size-2">
@@ -629,23 +537,11 @@ export default function SchemaDashboardChat({
             </span>
           </div>
           <span className="rounded-lg border border-violet-500/20 bg-violet-950/60 px-2 py-0.5 font-mono font-medium text-violet-300 shadow-[0_0_8px_rgba(139,92,246,0.05)]">
-=======
-        <div className="mt-3 flex items-center justify-between text-[11px] text-slate-500">
-          <div className="flex items-center gap-1.5">
-            <Circle className="size-2 fill-emerald-400 text-emerald-400" />
-            <span>Provider: {provider}</span>
-          </div>
-          <span className="text-slate-600">
->>>>>>> origin/main
             {dashboardChartCount ? `${dashboardChartCount} charts` : `Mode: ${activeMode}`}
           </span>
         </div>
 
-<<<<<<< HEAD
         <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-emerald-300">
-=======
-        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-300">
->>>>>>> origin/main
           <ShieldCheck className="size-3.5" />
           Schema-only AI enabled &middot; raw rows never sent to LLM
         </div>
