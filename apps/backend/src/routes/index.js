@@ -15,6 +15,10 @@ import { handleAiAnalystRoutes } from './ai-analyst.routes.js';
 import { handleSchemaTrainedAIRoutes } from './schema-trained-ai.routes.js';
 import { handleDashboardQualityRoutes } from './dashboard-quality.js';
 import { handleDashboardAiRoutes } from './dashboardAiRoutes.js';
+import {
+  handleChartQueryRequest,
+  handleRemoveChartRequest,
+} from './dashboard-chart-handler.js';
 import { handleAgenticModelRoutes } from './agentic-models.js';
 import {
   handleE2ECompatRoutes,
@@ -58,6 +62,14 @@ export async function setupRoutes(request, response) {
 
     // Schema-only AI dashboard planner + local analytics engine
     if (await handleDashboardAiRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Dashboard-only chart command routes
+    if (await handleChartQueryRequest(request, response, pathname)) {
+      return;
+    }
+    if (await handleRemoveChartRequest(request, response, pathname)) {
       return;
     }
 
