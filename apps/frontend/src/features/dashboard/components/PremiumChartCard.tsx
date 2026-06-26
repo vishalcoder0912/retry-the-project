@@ -145,7 +145,8 @@ function ChartBody({ chart }: { chart: PremiumChart }) {
 
   if (chart.type === "donut") {
     return (
-      <ResponsiveContainer width="100%" height={250}>
+      <div className="min-h-[300px]">
+        <ResponsiveContainer width="100%" height={300}>
         <PieChart>
           <Pie data={chart.data} dataKey={chart.yKey || "value"} nameKey={chart.xKey || "label"} innerRadius={62} outerRadius={92} paddingAngle={3}>
             {chart.data.map((entry, index) => (
@@ -155,6 +156,7 @@ function ChartBody({ chart }: { chart: PremiumChart }) {
           <Tooltip contentStyle={{ background: "#020617", border: "1px solid rgba(139,92,246,.35)", borderRadius: 12, color: "#fff" }} />
         </PieChart>
       </ResponsiveContainer>
+      </div>
     );
   }
 
@@ -166,7 +168,8 @@ function ChartBody({ chart }: { chart: PremiumChart }) {
     }
 
     return (
-      <ResponsiveContainer width="100%" height={250}>
+      <div className="min-h-[300px]">
+      <ResponsiveContainer width="100%" height={300}>
         <ScatterChart margin={{ top: 12, right: 20, bottom: 20, left: 10 }}>
           <CartesianGrid stroke="rgba(148,163,184,.12)" />
           <XAxis 
@@ -191,6 +194,7 @@ function ChartBody({ chart }: { chart: PremiumChart }) {
           <Scatter data={scatterData} fill="#22d3ee" fillOpacity={0.6} />
         </ScatterChart>
       </ResponsiveContainer>
+      </div>
     );
   }
 
@@ -553,7 +557,8 @@ function ChartBody({ chart }: { chart: PremiumChart }) {
 
   if (chart.type === "line") {
     return (
-      <ResponsiveContainer width="100%" height={250}>
+      <div className="min-h-[300px]">
+      <ResponsiveContainer width="100%" height={300}>
         <LineChart data={chart.data} margin={{ top: 12, right: 20, bottom: 12, left: 0 }}>
           <CartesianGrid stroke="rgba(148,163,184,.12)" />
           <XAxis dataKey={chart.xKey || "label"} stroke="#94a3b8" fontSize={11} tickFormatter={shortTick} interval="preserveStartEnd" />
@@ -562,6 +567,7 @@ function ChartBody({ chart }: { chart: PremiumChart }) {
           <Line type="monotone" dataKey={chart.yKey || "value"} stroke="#a855f7" strokeWidth={3} dot={false} />
         </LineChart>
       </ResponsiveContainer>
+      </div>
     );
   }
 
@@ -592,7 +598,8 @@ function ChartBody({ chart }: { chart: PremiumChart }) {
   }
 
   return (
-    <ResponsiveContainer width="100%" height={250}>
+    <div className="min-h-[300px]">
+    <ResponsiveContainer width="100%" height={300}>
       <BarChart data={chart.data} margin={{ top: 12, right: 20, bottom: 12, left: 0 }}>
         <CartesianGrid stroke="rgba(148,163,184,.12)" vertical={false} />
         <XAxis dataKey={chart.xKey || "label"} stroke="#94a3b8" fontSize={11} interval={chart.data.length > 6 ? "preserveStartEnd" : 0} tickFormatter={shortTick} angle={chart.data.length > 5 ? -30 : 0} textAnchor={chart.data.length > 5 ? "end" : "middle"} height={chart.data.length > 5 ? 68 : 50} />
@@ -605,34 +612,31 @@ function ChartBody({ chart }: { chart: PremiumChart }) {
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+    </div>
   );
 }
 
 export interface PremiumChartCardProps {
   chart: PremiumChart;
   isVisible?: boolean;
-  isSelected?: boolean;
   isLoading?: boolean;
   error?: string | null;
   onEdit?: (chartId: string) => void;
   onRemove?: (chartId: string) => void;
   onDuplicate?: (chartId: string) => void;
   onToggleVisibility?: (chartId: string) => void;
-  onSelect?: (chartId: string) => void;
   onReload?: (chartId: string) => void;
 }
 
 export default function PremiumChartCard({
   chart,
   isVisible = true,
-  isSelected = false,
   isLoading = false,
   error = null,
   onEdit,
   onRemove,
   onDuplicate,
   onToggleVisibility,
-  onSelect,
   onReload,
 }: PremiumChartCardProps) {
   if (isLoading) {
