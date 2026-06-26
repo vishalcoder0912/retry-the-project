@@ -12,7 +12,7 @@ const MODELS = {
   manager: process.env.OLLAMA_MANAGER_MODEL || "qwen3:8b",
   dashboard: process.env.OLLAMA_DASHBOARD_MODEL || "qwen3:4b",
   chat: process.env.OLLAMA_CHAT_MODEL || "llama3.2:3b",
-  embedding: process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text:latest",
+  embedding: process.env.OLLAMA_EMBED_MODEL || "nomic-embed-text",
 };
 
 const TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS || 4000);
