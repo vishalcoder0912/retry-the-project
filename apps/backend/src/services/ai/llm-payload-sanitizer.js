@@ -124,6 +124,7 @@ export function assertNoRawRowsInString(text) {
   const lines = text.split("\n");
   let csvLikeLines = 0;
   for (const line of lines) {
+    if (/[{}[\]:]/.test(line)) continue;
     const commaCount = (line.match(/,/g) || []).length;
     if (commaCount >= 3) {
       csvLikeLines++;
