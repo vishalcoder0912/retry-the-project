@@ -1,5 +1,5 @@
-import React, { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Download, FileJson, Share2, Trash2, Plus, UploadCloud, Sparkles } from "lucide-react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Download, FileJson, Share2, Trash2, Plus, UploadCloud, Sparkles, X, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/features/data/api/dataApi";
 import { useData } from "@/features/data/context/useData";
@@ -16,6 +16,8 @@ import { buildDashboardChartFromCommand } from "@/features/dashboard/utils/dashb
 import { generateDynamicQuestionSuggestions } from "@/features/dashboard/utils/dynamicQuestionSuggestions";
 import type { PremiumChart } from "@/features/dashboard/types/premiumDashboardTypes";
 import GlobalGeoIntelligence from "@/features/dashboard/components/GlobalGeoIntelligence";
+import { titleCase } from "@/features/dashboard/utils/commandCenterAnalytics";
+import { getUniqueValues } from "@/features/dashboard/utils/dashboardAnalytics";
 
 const PremiumChartCard = lazy(() => import("@/features/dashboard/components/PremiumChartCard"));
 const EMPTY_CHARTS: PremiumChart[] = [];
@@ -28,11 +30,15 @@ export default function PremiumAgenticDashboardPage() {
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState("Overview");
   const [dashboardMode, setDashboardMode] = useState<"Executive" | "Analyst" | "Story" | "Agentic Mode">("Agentic Mode");
   const [aiPanelCollapsed, setAiPanelCollapsed] = useState(false);
-  
+
+  // Filter state
+  const [filters, setFilters] = useState<Record<string, string>>({});
+
   // Chart management state
   const dashboardCharts = dashboard?.charts ?? EMPTY_CHARTS;
   const chartManager = useChartManager(dashboardCharts);
   const [modalType, setModalType] = useState<"customize" | "build" | null>(null);
+
   const hasGeoColumn = useMemo(
     () => Boolean(dataset?.columns.some((column) => /country|region|state|city|location|territory|province|geo|lat|lon/i.test(column.name) || ["country", "city", "latitude", "longitude"].includes(column.type))),
     [dataset?.columns],
@@ -58,6 +64,28 @@ export default function PremiumAgenticDashboardPage() {
     () => dataset?.columns.map((column) => column.name).filter(Boolean) || [],
     [dataset?.columns],
   );
+
+  // Find primary category for filter dropdown
+  const primaryCategory = useMemo(() => {
+    if (!dataset?.columns.length) return null;
+    const catCol = dataset.columns.find(
+      (col) => /category|type|segment|department|country|region|state|city/i.test(col.name) && !/salary|amount|score|usd/i.test(col.name),
+    );
+    return catCol?.name || null;
+  }, [dataset]);
+
+  // Filtered rows
+  const filteredRows = useMemo(() => {
+    if (!dataset?.rows) return [];
+    let rows = dataset.rows;
+    for (const [key, value] of Object.entries(filters)) {
+      if (value) {
+        rows = rows.filter((row) => String(row[key] ?? "") === value);
+      }
+    }
+    return rows;
+  }, [dataset?.rows, filters]);
+
   const tabCharts = chartManager.getVisibleCharts().filter((chart) => {
     const title = `${chart.title} ${chart.type} ${chart.subtitle || ""}`.toLowerCase();
 
@@ -98,6 +126,14 @@ export default function PremiumAgenticDashboardPage() {
     URL.revokeObjectURL(href);
   };
 
+  const clearFilters = useCallback(() => {
+    setFilters({});
+  }, []);
+
+  const setFilter = useCallback((key: string, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value || undefined }));
+  }, []);
+
   const handleChartCommand = (command: {
     action: string;
     chartId?: string;
@@ -116,11 +152,7 @@ export default function PremiumAgenticDashboardPage() {
       }
       case "remove":
         if (command.chartId) {
-          const result = chartManager.removeChart(command.chartId);
-          if (result.success) {
-            // Could show toast notification here
-            console.log(result.message);
-          }
+          chartManager.removeChart(command.chartId);
         }
         break;
       case "modify": {
@@ -170,18 +202,19 @@ export default function PremiumAgenticDashboardPage() {
           <div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-cyan-500 shadow-[0_0_32px_rgba(34,211,238,.26)]">
             <Sparkles className="h-7 w-7" />
           </div>
-          <h1 className="text-3xl font-black tracking-tight">InsightFlow Dashboard</h1>
+          <h1 className="text-3xl font-black tracking-tight">No Dataset Loaded</h1>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-            Upload CSV, XLSX, or JSON to auto-generate KPIs, charts, data quality checks, geo analytics, AI Insight Engine status, and local AI insights.
+            Upload a dataset or load demo data to activate the AI dashboard.
           </p>
           <div className="mt-7 flex flex-wrap justify-center gap-3">
             <button
               type="button"
               onClick={() => navigate("/upload")}
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_24px_rgba(124,58,237,.35)]"
+              aria-label="Upload dataset"
             >
               <UploadCloud className="h-4 w-4" />
-              Upload dataset
+              Upload Dataset
             </button>
             <button
               type="button"
@@ -189,7 +222,7 @@ export default function PremiumAgenticDashboardPage() {
               disabled={isHydrating}
               className="rounded-xl border border-slate-700 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-violet-400/50 disabled:opacity-60"
             >
-              Load demo data
+              Load Demo Data
             </button>
           </div>
         </section>
@@ -197,31 +230,62 @@ export default function PremiumAgenticDashboardPage() {
     );
   }
 
+  const activeFilterEntries = Object.entries(filters).filter(([, value]) => value);
+
   return (
     <main className="min-h-screen bg-[#020617] text-slate-100">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,.32),transparent_32%),radial-gradient(circle_at_top_right,rgba(6,182,212,.14),transparent_34%),linear-gradient(180deg,#020617,#020617)]" />
 
       <div className={`relative grid gap-5 p-4 transition-all duration-300 ${aiPanelCollapsed ? "xl:grid-cols-[minmax(0,1fr)_60px]" : "xl:grid-cols-[minmax(0,1fr)_330px]"}`}>
         <section className="min-w-0 space-y-4">
+          {/* Header */}
           <header className="rounded-3xl border border-violet-400/20 bg-slate-950/70 p-5 shadow-[0_0_45px_rgba(124,58,237,0.13)]">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-xs text-slate-400">
-                  Dataset: <span className="font-semibold text-emerald-300">{dataset.name}</span>
-                  <span className="ml-2 rounded-full border border-slate-700 px-2 py-0.5 text-[10px]">{dataset.rows.length.toLocaleString()} rows</span>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h1 className="text-3xl font-black tracking-tight text-white">InsightFlow Agentic Dashboard</h1>
+                  {dataset?.name && (
+                    <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-200">
+                      {dataset.name}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-sm text-slate-400">
+                  <span className="mr-2 inline-block size-2 rounded-full bg-[#22C55E]" />
+                  Last updated: {new Date(dashboard.generatedAt || Date.now()).toLocaleTimeString()}
+                  <span className="ml-3">{dataset.rows.length.toLocaleString()} rows &middot; {dataset.columns.length} columns</span>
                 </p>
-                <h1 className="mt-2 text-3xl font-black tracking-tight text-white">DASHBOARD</h1>
-                <p className="text-sm text-slate-400">AI-powered insights & agentic analytics</p>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <button className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button"><Share2 className="h-4 w-4" aria-hidden="true" />Share</button>
-                <button onClick={() => downloadDataset("csv")} className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button"><Download className="h-4 w-4" aria-hidden="true" />Export</button>
-                <button onClick={() => downloadDataset("json")} className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button"><FileJson className="h-4 w-4" aria-hidden="true" />JSON</button>
-                <button onClick={deleteDataset} className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200" type="button"><Trash2 className="h-4 w-4" aria-hidden="true" />Delete</button>
+                <button
+                  type="button"
+                  onClick={() => runPrompt("Analyze dashboard")}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Run Analysis
+                </button>
+                <button className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button" aria-label="Share" onClick={() => navigator.clipboard?.writeText(`Dataset: ${dataset.name}\nRows: ${dataset.rows.length.toLocaleString()}`)}>
+                  <Share2 className="h-4 w-4" aria-hidden="true" />
+                  Share
+                </button>
+                <button onClick={() => downloadDataset("csv")} className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button" aria-label="Export CSV">
+                  <Download className="h-4 w-4" aria-hidden="true" />
+                  Export
+                </button>
+                <button onClick={() => downloadDataset("json")} className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button" aria-label="Export JSON">
+                  <FileJson className="h-4 w-4" aria-hidden="true" />
+                  JSON
+                </button>
+                <button onClick={deleteDataset} className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200" type="button" aria-label="Delete dataset">
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  Delete
+                </button>
               </div>
             </div>
 
+            {/* Dashboard mode tabs */}
             <div className="mt-5 flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-1 text-xs">
               {["Executive", "Analyst", "Story", "Agentic Mode"].map((tab) => (
                 <button key={tab} onClick={() => setDashboardMode(tab as typeof dashboardMode)} className={`rounded-xl px-5 py-2.5 ${dashboardMode === tab ? "bg-violet-600 text-white shadow-[0_0_18px_rgba(124,58,237,.45)]" : "text-slate-400 hover:text-white"}`} type="button">
@@ -231,6 +295,7 @@ export default function PremiumAgenticDashboardPage() {
               ))}
             </div>
 
+            {/* Prompt chips */}
             <div className="mt-3 flex flex-wrap gap-2">
               {promptChips.map((chip) => (
                 <button key={chip} onClick={() => runPrompt(chip)} className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs text-slate-400 hover:border-violet-400/50 hover:text-white" type="button">{chip}</button>
@@ -238,11 +303,61 @@ export default function PremiumAgenticDashboardPage() {
             </div>
           </header>
 
+          {/* Filter Row */}
+          <section className="flex flex-wrap items-center gap-3 rounded-3xl border border-violet-400/20 bg-slate-950/70 p-4">
+            {primaryCategory && (
+              <select
+                value={filters[primaryCategory] || ""}
+                onChange={(event) => setFilter(primaryCategory, event.target.value)}
+                className="rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-2.5 text-sm font-medium text-slate-200 outline-none shadow-sm"
+                aria-label={`Filter by ${primaryCategory}`}
+              >
+                <option value="">All {titleCase(primaryCategory)}</option>
+                {getUniqueValues(dataset.rows as Record<string, unknown>[], primaryCategory, 50).map((value) => (
+                  <option key={value} value={value}>{value}</option>
+                ))}
+              </select>
+            )}
+            {activeFilterEntries.map(([key, value]) => (
+              <span key={key} className="inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200">
+                <Sparkles className="size-3 text-violet-300" />
+                {titleCase(key)}: {String(value)}
+                <button
+                  type="button"
+                  onClick={() => setFilter(key, "")}
+                  aria-label={`Clear ${key} filter`}
+                  className="hover:text-white"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </span>
+            ))}
+            {activeFilterEntries.length > 0 && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-xs font-semibold text-violet-300 hover:text-white"
+              >
+                Clear all
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-2.5 text-xs font-semibold text-slate-300"
+              aria-label="Reset filters"
+            >
+              <RefreshCw className="mr-1.5 inline size-3.5" />
+              Reset
+            </button>
+          </section>
+
+          {/* KPI Cards */}
           <section className="rounded-3xl border border-violet-400/20 bg-slate-950/70 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-white">{dataset.name}</h2>
-                <p className="text-xs text-slate-500">Ready - {dataset.rows.length.toLocaleString()} rows - {dataset.columns.length} columns - {dataset.sourceType || "CSV"}</p>
+                <p className="text-xs text-slate-500">Ready - {filteredRows.length.toLocaleString()} rows - {dataset.columns.length} columns - {dataset.sourceType || "CSV"}</p>
               </div>
               <div className="grid h-20 w-20 place-items-center rounded-full border-4 border-emerald-400/60 bg-emerald-400/10 text-center">
                 <div>
@@ -270,6 +385,7 @@ export default function PremiumAgenticDashboardPage() {
 
           {error && <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">{error}</div>}
 
+          {/* Charts Section */}
           <section className="rounded-3xl border border-violet-400/20 bg-slate-950/70 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div className="flex flex-wrap gap-2 text-xs">
@@ -301,7 +417,7 @@ export default function PremiumAgenticDashboardPage() {
             {chartsReady ? (
               <Suspense fallback={<div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">{tabCharts.slice(0, 3).map((chart) => <div key={chart.id} className="h-[330px] animate-pulse rounded-2xl border border-indigo-400/10 bg-slate-900/50" />)}</div>}>
                 {activeAnalyticsTab === "Geo Analysis" && dataset?.rows?.length ? (
-                  <GlobalGeoIntelligence rows={dataset.rows} columns={dataset.columns} />
+                  <GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} />
                 ) : (
                   <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
                     {tabCharts.map((chart) => (
@@ -309,7 +425,6 @@ export default function PremiumAgenticDashboardPage() {
                         <PremiumChartCard
                           chart={chart}
                           isVisible={chartManager.visibleCharts.has(chart.id)}
-                          isSelected={chartManager.selectedChartId === chart.id}
                           onEdit={(chartId) => {
                             chartManager.setSelectedChartId(chartId);
                             setModalType("customize");
@@ -322,11 +437,6 @@ export default function PremiumAgenticDashboardPage() {
                           }}
                           onToggleVisibility={(chartId) => {
                             chartManager.toggleChartVisibility(chartId);
-                          }}
-                          onSelect={(chartId) => {
-                            chartManager.setSelectedChartId(
-                              chartManager.selectedChartId === chartId ? null : chartId
-                            );
                           }}
                         />
                       </ChartErrorBoundary>
@@ -347,15 +457,25 @@ export default function PremiumAgenticDashboardPage() {
             )}
           </section>
 
+          {/* Geo Intelligence Section */}
+          {hasGeoColumn && activeAnalyticsTab !== "Geo Analysis" && (
+            <section className="rounded-3xl border border-cyan-400/20 bg-slate-950/70 p-4">
+              <h2 className="mb-3 text-lg font-bold text-white">Geo Intelligence</h2>
+              <GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} />
+            </section>
+          )}
+
+          {/* Data-Driven Insights */}
           <PremiumInsightCards insights={dashboard.insights} />
 
+          {/* RAG Pipeline + Data Preview */}
           <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
             <PremiumRagPipeline steps={dashboard.ragPipeline} />
             <PremiumDataPreview dataset={dataset} onViewFullTable={() => navigate("/data")} onDownload={() => downloadDataset("csv")} />
           </div>
-
         </section>
 
+        {/* Right Panel - AI Agent */}
         <EnhancedAgentPanel
           messages={messages}
           reasoning={dashboard.reasoning}
