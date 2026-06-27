@@ -14,28 +14,24 @@ export function PremiumMetricCard({ kpi, featured = false }: { kpi: PremiumKpi; 
   const Icon = iconMap[kpi.icon || "average"];
 
   return (
-    <article className={`group rounded-2xl border transition ${
-      featured 
-        ? "border-cyan-400/40 bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950/40 p-5 shadow-[0_0_34px_rgba(6,182,212,0.18)]" 
-        : "border-indigo-400/20 bg-slate-950/70 p-4 shadow-[0_0_24px_rgba(124,58,237,0.12)]"
-    } hover:border-cyan-300/40 hover:shadow-[0_0_32px_rgba(34,211,238,0.22)]`}>
+    <article
+      className={`group rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-violet-200 hover:shadow-md ${
+        featured ? "min-h-[136px]" : "min-h-[118px]"
+      }`}
+    >
       <div className="flex items-start justify-between gap-3">
-        <div className={`rounded-xl border p-2 ${
-          featured
-            ? "border-cyan-400/30 bg-cyan-500/20 text-cyan-200"
-            : "border-violet-400/20 bg-violet-500/10 text-violet-100"
-        }`}>
-          <Icon className={featured ? "h-6 w-6" : "h-5 w-5"} aria-hidden="true" />
+        <div className="grid size-10 place-items-center rounded-xl border border-violet-100 bg-violet-50 text-violet-600">
+          <Icon className={featured ? "h-5 w-5" : "h-4 w-4"} aria-hidden="true" />
         </div>
         {kpi.delta && (
-          <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-200">
+          <span className="rounded-full border border-emerald-100 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
             {kpi.delta}
           </span>
         )}
       </div>
-      <p className={`mt-4 text-xs font-semibold uppercase tracking-wider ${featured ? "text-cyan-200" : "text-slate-400"}`}>{kpi.title}</p>
-      <p className={`mt-1 font-black text-white ${featured ? "text-3xl leading-tight" : "text-2xl"}`}>{kpi.value}</p>
-      <p className="mt-1 text-xs text-slate-500">{kpi.subtitle}</p>
+      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{kpi.title}</p>
+      <p className={`mt-1 font-black tracking-tight text-slate-950 ${featured ? "text-3xl" : "text-2xl"}`}>{kpi.value}</p>
+      <p className="mt-1 text-xs font-medium text-slate-500">{kpi.subtitle}</p>
     </article>
   );
 }
