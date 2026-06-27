@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { Download, FileJson, Share2, Trash2, Plus, UploadCloud, Sparkles, X, RefreshCw } from "lucide-react";
+import { Download, FileJson, Share2, Trash2, Plus, Sparkles, X, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/features/data/api/dataApi";
 import { useData } from "@/features/data/context/useData";
@@ -50,7 +50,7 @@ const softButton = "inline-flex items-center gap-2 rounded-xl border border-slat
 
 export default function PremiumAgenticDashboardPage() {
   const navigate = useNavigate();
-  const { dataset, deleteDataset, loadDemo, isHydrating } = useData();
+  const { dataset, deleteDataset } = useData();
   const { dashboard, messages, loading, error, deepResearch, setDeepResearch, runPrompt } = usePremiumAgenticDashboard(dataset);
   const [chartsReady, setChartsReady] = useState(false);
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState("Overview");
@@ -177,21 +177,7 @@ export default function PremiumAgenticDashboardPage() {
 
   const activeFilterEntries = Object.entries(filters).filter(([, value]) => value);
 
-  if (!dataset || !dashboard) {
-    return (
-      <main className="min-h-screen bg-[#f6f7fb] p-6 text-slate-900">
-        <section className="mx-auto mt-24 max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-violet-50 text-violet-700"><Sparkles className="h-6 w-6" /></div>
-          <h1 className="text-xl font-black tracking-tight">No dataset loaded</h1>
-          <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-500">Upload a dataset or load demo data to activate your dashboard.</p>
-          <div className="mt-6 flex justify-center gap-3">
-            <button type="button" onClick={() => navigate("/upload")} className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm"><UploadCloud className="h-4 w-4" />Upload Dataset</button>
-            <button type="button" onClick={loadDemo} disabled={isHydrating} className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Load Demo</button>
-          </div>
-        </section>
-      </main>
-    );
-  }
+  if (!dataset || !dashboard) return null;
 
   return (
     <main className="min-h-screen bg-[#f6f7fb] text-slate-900">

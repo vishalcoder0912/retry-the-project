@@ -68,6 +68,7 @@ export default function CommandTopBar() {
   return (
     <header className="sticky top-0 z-40 border-b border-[#E2E8F0] bg-white/95 px-6 py-4 backdrop-blur-xl">
       <div className="flex items-center gap-5">
+        {dataset ? (
         <button
           type="button"
           onClick={() => navigate("/data")}
@@ -82,6 +83,7 @@ export default function CommandTopBar() {
           </div>
           <span className="text-slate-400">⌄</span>
         </button>
+        ) : null}
 
         <form onSubmit={handleSubmit} className="min-w-0 flex-1">
           <div className="flex h-12 items-center gap-3 rounded-2xl border border-violet-200 bg-white px-4 shadow-sm shadow-violet-100">
@@ -102,6 +104,8 @@ export default function CommandTopBar() {
           </div>
         </form>
 
+        {dataset ? (
+          <>
         <button
           type="button"
           onClick={() => void retryHydrate?.()}
@@ -128,6 +132,8 @@ export default function CommandTopBar() {
           <Share2 className="size-4" />
           Share
         </button>
+          </>
+        ) : null}
       </div>
     </header>
   );

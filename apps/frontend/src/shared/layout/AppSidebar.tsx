@@ -1,19 +1,15 @@
-import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  AlertTriangle,
   BarChart3,
   BrainCircuit,
   FileText,
   Grid2X2,
   MessageSquare,
-  RefreshCw,
   Sparkles,
   Table2,
   Upload,
 } from "lucide-react";
 import { cn } from "@/shared/lib/utils";
-import { API_BASE_URL } from "@/config/apiConfig";
 
 const navItems = [
   { label: "Dashboard", to: "/dashboard", icon: Grid2X2 },
@@ -26,29 +22,6 @@ const navItems = [
   { label: "Data Science", to: "/agentic-data-science", icon: BrainCircuit },
 ];
 
-type ProvidersHealth = {
-  mode?: string;
-  providers?: {
-    gemini?: { available?: boolean; warning?: string | null };
-    ollama?: { available?: boolean };
-  };
-};
-
-function ProviderPill({ online }: { online: boolean }) {
-  return (
-    <span
-      className={cn(
-        "rounded-full px-2 py-0.5 text-[11px] font-bold",
-        online
-          ? "bg-emerald-500/15 text-emerald-300"
-          : "bg-rose-500/15 text-rose-300",
-      )}
-    >
-      {online ? "Online" : "Offline"}
-    </span>
-  );
-}
-
 function isActivePath(currentPath: string, itemPath: string) {
   if (itemPath === "/dashboard") return currentPath === "/" || currentPath === "/dashboard";
   if (itemPath === "/pdf") return currentPath === "/pdf" || currentPath === "/pdf-upload";
@@ -57,32 +30,6 @@ function isActivePath(currentPath: string, itemPath: string) {
 
 export default function AppSidebar() {
   const location = useLocation();
-  const [health, setHealth] = useState<ProvidersHealth | null>(null);
-  const [checking, setChecking] = useState(false);
-
-  async function checkHealth() {
-    setChecking(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/ai/providers/health`);
-      setHealth(await response.json());
-    } catch {
-      setHealth(null);
-    } finally {
-      setChecking(false);
-    }
-  }
-
-  useEffect(() => {
-    void checkHealth();
-    const interval = window.setInterval(() => void checkHealth(), 30000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  const geminiOnline = Boolean(health?.providers?.gemini?.available);
-  const ollamaOnline = Boolean(health?.providers?.ollama?.available);
-  const mode = health?.mode ? health.mode.replace(/_/g, " ") : "Hybrid";
-  const fallback = geminiOnline ? "Gemini Ready" : "Local AI";
-  const warning = health?.providers?.gemini?.warning || "Gemini API key is missing or invalid.";
 
   return (
     <aside className="sticky top-0 flex h-screen flex-col overflow-hidden border-r border-white/10 bg-[#061A33] text-white">
@@ -123,52 +70,6 @@ export default function AppSidebar() {
         })}
       </nav>
 
-      <div className="m-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4 shadow-2xl">
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-300">
-            AI Engine Status
-          </p>
-          <button
-            type="button"
-            onClick={() => void checkHealth()}
-            disabled={checking}
-            className="rounded-lg p-1 text-slate-300 transition hover:bg-white/10 hover:text-white disabled:opacity-70"
-            aria-label="Refresh AI engine status"
-          >
-            <RefreshCw className={cn("size-4", checking && "animate-spin")} />
-          </button>
-        </div>
-
-        <div className="space-y-3 text-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-slate-300">Gemini</span>
-            <ProviderPill online={geminiOnline} />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="text-slate-300">Ollama</span>
-            <ProviderPill online={ollamaOnline} />
-          </div>
-
-          <div className="border-t border-dashed border-white/15 pt-3">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-400">Mode</span>
-              <span className="font-bold text-white">{mode}</span>
-            </div>
-            <div className="mt-2 flex items-center justify-between">
-              <span className="text-slate-400">Fallback</span>
-              <span className="font-bold text-white">{fallback}</span>
-            </div>
-          </div>
-
-          {!geminiOnline ? (
-            <div className="flex items-start gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-xs font-semibold text-amber-300">
-              <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-              <span>{warning}</span>
-            </div>
-          ) : null}
-        </div>
-      </div>
     </aside>
   );
 }

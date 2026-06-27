@@ -24,6 +24,13 @@ export const API_ROUTES = {
     fix: "/api/dashboard-ai/fix",
   },
 
+  agentic: {
+    capabilities: "/api/agentic/capabilities",
+    context: (datasetId: string) => `/api/agentic/datasets/${datasetId}/context`,
+    dashboard: (datasetId: string) => `/api/agentic/datasets/${datasetId}/dashboard`,
+    chat: (datasetId: string) => `/api/agentic/datasets/${datasetId}/chat`,
+  },
+
   pdfIntelligence: {
     upload: "/api/pdf-intelligence/upload",
     health: "/api/pdf-intelligence/health",
