@@ -33,6 +33,9 @@ const isMappableGeoColumn = (column: { name: string; type?: string }) => {
   return false;
 };
 
+const cardClass = "rounded-3xl border border-slate-200 bg-white p-5 shadow-sm";
+const softButton = "inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700";
+
 export default function PremiumAgenticDashboardPage() {
   const navigate = useNavigate();
   const { dataset, deleteDataset, loadDemo, isHydrating } = useData();
@@ -47,40 +50,23 @@ export default function PremiumAgenticDashboardPage() {
   const chartManager = useChartManager(dashboardCharts);
   const [modalType, setModalType] = useState<"customize" | "build" | null>(null);
 
-  const hasMappableGeoColumn = useMemo(
-    () => Boolean(dataset?.columns.some(isMappableGeoColumn)),
-    [dataset?.columns],
-  );
-
+  const hasMappableGeoColumn = useMemo(() => Boolean(dataset?.columns.some(isMappableGeoColumn)), [dataset?.columns]);
   const hasDateColumn = useMemo(
     () => Boolean(dataset?.columns.some((column) => /date|month|year|time|created|updated|timestamp/i.test(column.name) || column.type === "date" || column.type === "datetime")),
     [dataset?.columns],
   );
 
   const analyticsTabs = useMemo(
-    () => [
-      "Overview",
-      "Correlations",
-      "Ranking",
-      "Distribution",
-      ...(hasDateColumn ? ["Trends"] : []),
-      "Outliers",
-      ...(hasMappableGeoColumn ? ["Geo Analysis"] : []),
-    ],
+    () => ["Overview", "Correlations", "Ranking", "Distribution", ...(hasDateColumn ? ["Trends"] : []), "Outliers", ...(hasMappableGeoColumn ? ["Geo Analysis"] : [])],
     [hasDateColumn, hasMappableGeoColumn],
   );
 
   const promptChips = useMemo(() => generateDynamicQuestionSuggestions(dataset || undefined, 4), [dataset]);
-  const columnNames = useMemo(
-    () => dataset?.columns.map((column) => column.name).filter(Boolean) || [],
-    [dataset?.columns],
-  );
+  const columnNames = useMemo(() => dataset?.columns.map((column) => column.name).filter(Boolean) || [], [dataset?.columns]);
 
   const primaryCategory = useMemo(() => {
     if (!dataset?.columns.length) return null;
-    const categoryColumn = dataset.columns.find(
-      (column) => /category|type|segment|department|region|state|city/i.test(column.name) && !/salary|amount|score|usd|revenue|profit/i.test(column.name),
-    );
+    const categoryColumn = dataset.columns.find((column) => /category|type|segment|department|region|state|city/i.test(column.name) && !/salary|amount|score|usd|revenue|profit/i.test(column.name));
     return categoryColumn?.name || null;
   }, [dataset]);
 
@@ -94,7 +80,6 @@ export default function PremiumAgenticDashboardPage() {
 
   const tabCharts = chartManager.getVisibleCharts().filter((chart) => {
     const title = `${chart.title} ${chart.type} ${chart.subtitle || ""}`.toLowerCase();
-
     if (activeAnalyticsTab === "Overview") return true;
     if (activeAnalyticsTab === "Correlations") return title.includes("correlation") || title.includes("vs") || chart.type === "scatter";
     if (activeAnalyticsTab === "Ranking") return !title.includes("outlier") && (title.includes("top") || title.includes("ranking") || chart.type === "table");
@@ -102,24 +87,17 @@ export default function PremiumAgenticDashboardPage() {
     if (activeAnalyticsTab === "Trends") return title.includes("trend") || chart.type === "line" || title.includes("date") || title.includes("month");
     if (activeAnalyticsTab === "Outliers") return title.includes("outlier") || title.includes("anomaly");
     if (activeAnalyticsTab === "Geo Analysis") return hasMappableGeoColumn && (chart.type === "map" || title.includes("geo") || title.includes("country") || title.includes("city") || title.includes("location"));
-
     return true;
   });
 
-  useEffect(() => {
-    setActiveAnalyticsTab((currentTab) => (analyticsTabs.includes(currentTab) ? currentTab : "Overview"));
-  }, [analyticsTabs]);
-
+  useEffect(() => setActiveAnalyticsTab((currentTab) => (analyticsTabs.includes(currentTab) ? currentTab : "Overview")), [analyticsTabs]);
   useEffect(() => {
     setChartsReady(false);
     const timer = window.setTimeout(() => setChartsReady(true), 80);
     return () => window.clearTimeout(timer);
   }, [dataset?.id]);
 
-  const clearFilters = useCallback(() => {
-    setFilters({});
-  }, []);
-
+  const clearFilters = useCallback(() => setFilters({}), []);
   const setFilter = useCallback((key: string, value: string) => {
     setFilters((prev) => {
       if (!value) {
@@ -149,9 +127,7 @@ export default function PremiumAgenticDashboardPage() {
         if (chart) {
           chartManager.addChart(chart);
           setActiveAnalyticsTab("Overview");
-        } else {
-          setModalType("build");
-        }
+        } else setModalType("build");
         break;
       }
       case "remove":
@@ -187,22 +163,14 @@ export default function PremiumAgenticDashboardPage() {
 
   if (!dataset || !dashboard) {
     return (
-      <main className="min-h-screen bg-[#020617] p-4 text-white">
-        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,.32),transparent_32%),radial-gradient(circle_at_top_right,rgba(6,182,212,.14),transparent_34%),linear-gradient(180deg,#020617,#020617)]" />
-        <section className="relative mx-auto mt-16 max-w-4xl rounded-3xl border border-violet-400/20 bg-slate-950/75 p-8 text-center shadow-[0_0_60px_rgba(124,58,237,0.16)] backdrop-blur-xl">
-          <div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-cyan-500 shadow-[0_0_32px_rgba(34,211,238,.26)]">
-            <Sparkles className="h-7 w-7" />
-          </div>
-          <h1 className="text-3xl font-black tracking-tight">No Dataset Loaded</h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-300">Upload a dataset or load demo data to activate the AI dashboard.</p>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
-            <button type="button" onClick={() => navigate("/upload")} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_24px_rgba(124,58,237,.35)]" aria-label="Upload dataset">
-              <UploadCloud className="h-4 w-4" />
-              Upload Dataset
-            </button>
-            <button type="button" onClick={loadDemo} disabled={isHydrating} className="rounded-xl border border-slate-700 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-violet-400/50 disabled:opacity-60">
-              Load Demo Data
-            </button>
+      <main className="min-h-screen bg-[#f6f7fb] p-6 text-slate-900">
+        <section className="mx-auto mt-24 max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-violet-50 text-violet-700"><Sparkles className="h-6 w-6" /></div>
+          <h1 className="text-xl font-black tracking-tight">No dataset loaded</h1>
+          <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-500">Upload a dataset or load demo data to activate your dashboard.</p>
+          <div className="mt-6 flex justify-center gap-3">
+            <button type="button" onClick={() => navigate("/upload")} className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm"><UploadCloud className="h-4 w-4" />Upload Dataset</button>
+            <button type="button" onClick={loadDemo} disabled={isHydrating} className="rounded-2xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">Load Demo</button>
           </div>
         </section>
       </main>
@@ -210,149 +178,89 @@ export default function PremiumAgenticDashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#020617] text-slate-100">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,.32),transparent_32%),radial-gradient(circle_at_top_right,rgba(6,182,212,.14),transparent_34%),linear-gradient(180deg,#020617,#020617)]" />
-
-      <div className={`relative grid gap-5 p-4 transition-all duration-300 ${aiPanelCollapsed ? "xl:grid-cols-[minmax(0,1fr)_60px]" : "xl:grid-cols-[minmax(0,1fr)_330px]"}`}>
-        <section className="min-w-0 space-y-4">
-          <header className="rounded-3xl border border-violet-400/20 bg-slate-950/70 p-5 shadow-[0_0_45px_rgba(124,58,237,0.13)]">
+    <main className="min-h-screen bg-[#f6f7fb] text-slate-900">
+      <div className={`grid gap-5 p-5 transition-all duration-300 ${aiPanelCollapsed ? "xl:grid-cols-[minmax(0,1fr)_60px]" : "xl:grid-cols-[minmax(0,1fr)_340px]"}`}>
+        <section className="min-w-0 space-y-5">
+          <header className={cardClass}>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <h1 className="text-3xl font-black tracking-tight text-white">InsightFlow Agentic Dashboard</h1>
-                  <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-200">{dataset.name}</span>
+                  <span className="rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">Agentic Analytics</span>
+                  <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">Live dataset</span>
                 </div>
-                <p className="mt-1 text-sm text-slate-400">
-                  <span className="mr-2 inline-block size-2 rounded-full bg-[#22C55E]" />
-                  Last updated: {new Date(dashboard.generatedAt || Date.now()).toLocaleTimeString()}
-                  <span className="ml-3">{dataset.rows.length.toLocaleString()} rows &middot; {dataset.columns.length} columns</span>
-                </p>
+                <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">{dataset.name}</h1>
+                <p className="mt-1 text-sm text-slate-500">Last updated {new Date(dashboard.generatedAt || Date.now()).toLocaleTimeString()} · {dataset.rows.length.toLocaleString()} rows · {dataset.columns.length} columns</p>
               </div>
-
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => runPrompt("Analyze dashboard")} className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#7C3AED] to-[#2563EB] px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/20">
-                  <Sparkles className="h-4 w-4" />
-                  Run Analysis
-                </button>
-                <button className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button" aria-label="Share" onClick={() => navigator.clipboard?.writeText(`Dataset: ${dataset.name}\nRows: ${dataset.rows.length.toLocaleString()}`)}>
-                  <Share2 className="h-4 w-4" />
-                  Share
-                </button>
-                <button onClick={() => downloadDataset("csv")} className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button" aria-label="Export CSV">
-                  <Download className="h-4 w-4" />
-                  Export
-                </button>
-                <button onClick={() => downloadDataset("json")} className="inline-flex items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300" type="button" aria-label="Export JSON">
-                  <FileJson className="h-4 w-4" />
-                  JSON
-                </button>
-                <button onClick={deleteDataset} className="inline-flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200" type="button" aria-label="Delete dataset">
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </button>
+                <button type="button" onClick={() => runPrompt("Analyze dashboard")} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm"><Sparkles className="h-4 w-4" />Run Analysis</button>
+                <button className={softButton} type="button" aria-label="Share" onClick={() => navigator.clipboard?.writeText(`Dataset: ${dataset.name}\nRows: ${dataset.rows.length.toLocaleString()}`)}><Share2 className="h-4 w-4" />Share</button>
+                <button onClick={() => downloadDataset("csv")} className={softButton} type="button" aria-label="Export CSV"><Download className="h-4 w-4" />Export</button>
+                <button onClick={() => downloadDataset("json")} className={softButton} type="button" aria-label="Export JSON"><FileJson className="h-4 w-4" />JSON</button>
+                <button onClick={deleteDataset} className="inline-flex items-center gap-2 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700" type="button" aria-label="Delete dataset"><Trash2 className="h-4 w-4" />Delete</button>
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900/60 p-1 text-xs">
+            <div className="mt-5 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1 text-xs font-bold">
               {["Executive", "Analyst", "Story", "Agentic Mode"].map((tab) => (
-                <button key={tab} onClick={() => setDashboardMode(tab as typeof dashboardMode)} className={`rounded-xl px-5 py-2.5 ${dashboardMode === tab ? "bg-violet-600 text-white shadow-[0_0_18px_rgba(124,58,237,.45)]" : "text-slate-400 hover:text-white"}`} type="button">
-                  {tab}
-                  {tab === "Agentic Mode" && <span className="ml-2 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px]">BETA</span>}
+                <button key={tab} onClick={() => setDashboardMode(tab as typeof dashboardMode)} className={`rounded-xl px-4 py-2 ${dashboardMode === tab ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-900"}`} type="button">
+                  {tab}{tab === "Agentic Mode" && <span className="ml-2 rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] text-violet-700">BETA</span>}
                 </button>
               ))}
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              {promptChips.map((chip) => (
-                <button key={chip} onClick={() => runPrompt(chip)} className="rounded-xl border border-slate-800 bg-slate-900/70 px-3 py-2 text-xs text-slate-400 hover:border-violet-400/50 hover:text-white" type="button">{chip}</button>
-              ))}
+              {promptChips.map((chip) => <button key={chip} onClick={() => runPrompt(chip)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700" type="button">{chip}</button>)}
             </div>
           </header>
 
-          <section className="flex flex-wrap items-center gap-3 rounded-3xl border border-violet-400/20 bg-slate-950/70 p-4">
+          <section className="flex flex-wrap items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             {primaryCategory && (
-              <select value={filters[primaryCategory] || ""} onChange={(event) => setFilter(primaryCategory, event.target.value)} className="rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-2.5 text-sm font-medium text-slate-200 outline-none shadow-sm" aria-label={`Filter by ${primaryCategory}`}>
+              <select value={filters[primaryCategory] || ""} onChange={(event) => setFilter(primaryCategory, event.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700 outline-none focus:border-violet-300" aria-label={`Filter by ${primaryCategory}`}>
                 <option value="">All {titleCase(primaryCategory)}</option>
                 {getUniqueValues(dataset.rows as Record<string, unknown>[], primaryCategory, 50).map((value) => <option key={value} value={value}>{value}</option>)}
               </select>
             )}
-            {activeFilterEntries.map(([key, value]) => (
-              <span key={key} className="inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200">
-                <Sparkles className="size-3 text-violet-300" />
-                {titleCase(key)}: {String(value)}
-                <button type="button" onClick={() => setFilter(key, "")} aria-label={`Clear ${key} filter`} className="hover:text-white"><X className="size-3.5" /></button>
-              </span>
-            ))}
-            {activeFilterEntries.length > 0 && <button type="button" onClick={clearFilters} className="text-xs font-semibold text-violet-300 hover:text-white">Clear all</button>}
-            <button type="button" onClick={clearFilters} className="rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-2.5 text-xs font-semibold text-slate-300" aria-label="Reset filters">
-              <RefreshCw className="mr-1.5 inline size-3.5" />
-              Reset
-            </button>
+            {activeFilterEntries.map(([key, value]) => <span key={key} className="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700"><Sparkles className="size-3" />{titleCase(key)}: {String(value)}<button type="button" onClick={() => setFilter(key, "")} aria-label={`Clear ${key} filter`}><X className="size-3.5" /></button></span>)}
+            <button type="button" onClick={clearFilters} className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50" aria-label="Reset filters"><RefreshCw className="mr-1.5 inline size-3.5" />Reset</button>
           </section>
 
-          <section className="rounded-3xl border border-violet-400/20 bg-slate-950/70 p-4">
+          <section className={cardClass}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-white">{dataset.name}</h2>
-                <p className="text-xs text-slate-500">Ready - {filteredRows.length.toLocaleString()} rows - {dataset.columns.length} columns - {dataset.sourceType || "CSV"}</p>
+                <h2 className="text-base font-black text-slate-950">Dashboard overview</h2>
+                <p className="text-xs text-slate-500">Ready · {filteredRows.length.toLocaleString()} rows · {dataset.columns.length} columns · {dataset.sourceType || "CSV"}</p>
               </div>
-              <div className="grid h-20 w-20 place-items-center rounded-full border-4 border-emerald-400/60 bg-emerald-400/10 text-center">
-                <div><p className="text-xl font-black text-emerald-200">{dashboard.qualityScore}</p><p className="text-[10px] text-emerald-300">/100</p></div>
-              </div>
+              <div className="grid size-16 place-items-center rounded-2xl border border-emerald-100 bg-emerald-50 text-center"><div><p className="text-lg font-black text-emerald-700">{dashboard.qualityScore}</p><p className="text-[10px] font-bold text-emerald-600">/100</p></div></div>
             </div>
-            <div className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">{dashboard.kpis.slice(0, 3).map((kpi) => <PremiumMetricCard key={kpi.id} kpi={kpi} featured />)}</div>
-              {dashboard.kpis.length > 3 && <div className="grid gap-3 border-t border-slate-800/40 pt-4 md:grid-cols-2 xl:grid-cols-6">{dashboard.kpis.slice(3).map((kpi) => <PremiumMetricCard key={kpi.id} kpi={kpi} featured={false} />)}</div>}
-            </div>
+            <div className="grid gap-4 md:grid-cols-3">{dashboard.kpis.slice(0, 3).map((kpi) => <PremiumMetricCard key={kpi.id} kpi={kpi} featured />)}</div>
+            {dashboard.kpis.length > 3 && <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">{dashboard.kpis.slice(3).map((kpi) => <PremiumMetricCard key={kpi.id} kpi={kpi} featured={false} />)}</div>}
           </section>
 
-          {error && <div className="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-sm text-amber-100">{error}</div>}
+          {error && <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">{error}</div>}
 
-          <section className="rounded-3xl border border-violet-400/20 bg-slate-950/70 p-4">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
-              <div className="flex flex-wrap gap-2 text-xs">
-                {analyticsTabs.map((tab) => (
-                  <button key={tab} onClick={() => setActiveAnalyticsTab(tab)} className={`rounded-lg px-3 py-2 transition ${activeAnalyticsTab === tab ? "bg-violet-600 text-white" : "text-slate-500 hover:bg-slate-900 hover:text-white"}`} type="button">{tab}</button>
-                ))}
+          <section className={cardClass}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap gap-2 text-xs font-bold">
+                {analyticsTabs.map((tab) => <button key={tab} onClick={() => setActiveAnalyticsTab(tab)} className={`rounded-xl px-3 py-2 transition ${activeAnalyticsTab === tab ? "bg-violet-600 text-white" : "text-slate-500 hover:bg-violet-50 hover:text-violet-700"}`} type="button">{tab}</button>)}
               </div>
-              <button onClick={() => setModalType("build")} className="inline-flex items-center gap-2 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2 text-xs text-violet-300 transition hover:bg-violet-500/20" type="button" title="Create custom chart">
-                <Plus className="h-4 w-4" />
-                Add Chart
-              </button>
+              <button onClick={() => setModalType("build")} className="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700" type="button"><Plus className="h-4 w-4" />Add Chart</button>
             </div>
             {chartsReady ? (
-              <Suspense fallback={<div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">{tabCharts.slice(0, 3).map((chart) => <div key={chart.id} className="h-[330px] animate-pulse rounded-2xl border border-indigo-400/10 bg-slate-900/50" />)}</div>}>
-                {activeAnalyticsTab === "Geo Analysis" && hasMappableGeoColumn && dataset?.rows?.length ? (
-                  <GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} />
-                ) : (
+              <Suspense fallback={<div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">{tabCharts.slice(0, 3).map((chart) => <div key={chart.id} className="h-[330px] animate-pulse rounded-3xl border border-slate-200 bg-slate-50" />)}</div>}>
+                {activeAnalyticsTab === "Geo Analysis" && hasMappableGeoColumn && dataset?.rows?.length ? <GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} /> : (
                   <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-                    {tabCharts.map((chart) => (
-                      <ChartErrorBoundary key={chart.id} fallbackTitle={chart.title}>
-                        <PremiumChartCard chart={chart} isVisible={chartManager.visibleCharts.has(chart.id)} onEdit={(chartId) => { chartManager.setSelectedChartId(chartId); setModalType("customize"); }} onRemove={chartManager.removeChart} onDuplicate={chartManager.duplicateChart} onToggleVisibility={chartManager.toggleChartVisibility} />
-                      </ChartErrorBoundary>
-                    ))}
-                    {tabCharts.length === 0 && <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-sm text-slate-400">No {activeAnalyticsTab} chart found for this dataset yet. Click <span className="text-violet-300">Add Chart</span> to create one.</div>}
+                    {tabCharts.map((chart) => <ChartErrorBoundary key={chart.id} fallbackTitle={chart.title}><PremiumChartCard chart={chart} isVisible={chartManager.visibleCharts.has(chart.id)} onEdit={(chartId) => { chartManager.setSelectedChartId(chartId); setModalType("customize"); }} onRemove={chartManager.removeChart} onDuplicate={chartManager.duplicateChart} onToggleVisibility={chartManager.toggleChartVisibility} /></ChartErrorBoundary>)}
+                    {tabCharts.length === 0 && <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">No {activeAnalyticsTab} chart found yet. Click <span className="font-bold text-violet-700">Add Chart</span> to create one.</div>}
                   </div>
                 )}
               </Suspense>
-            ) : (
-              <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">{tabCharts.slice(0, 3).map((chart) => <div key={chart.id} className="h-[330px] animate-pulse rounded-2xl border border-indigo-400/10 bg-slate-900/50" />)}</div>
-            )}
+            ) : <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">{tabCharts.slice(0, 3).map((chart) => <div key={chart.id} className="h-[330px] animate-pulse rounded-3xl border border-slate-200 bg-slate-50" />)}</div>}
           </section>
 
-          {hasMappableGeoColumn && activeAnalyticsTab !== "Geo Analysis" && (
-            <section className="rounded-3xl border border-cyan-400/20 bg-slate-950/70 p-4">
-              <h2 className="mb-3 text-lg font-bold text-white">Geo Intelligence</h2>
-              <GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} />
-            </section>
-          )}
+          {hasMappableGeoColumn && activeAnalyticsTab !== "Geo Analysis" && <section className={cardClass}><h2 className="mb-3 text-base font-black text-slate-950">Geo Intelligence</h2><GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} /></section>}
 
           <PremiumInsightCards insights={dashboard.insights} />
-
-          <div className="grid gap-4 xl:grid-cols-[1.1fr_.9fr]">
-            <PremiumRagPipeline steps={dashboard.ragPipeline} />
-            <PremiumDataPreview dataset={dataset} onViewFullTable={() => navigate("/data")} onDownload={() => downloadDataset("csv")} />
-          </div>
+          <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]"><PremiumRagPipeline steps={dashboard.ragPipeline} /><PremiumDataPreview dataset={dataset} onViewFullTable={() => navigate("/data")} onDownload={() => downloadDataset("csv")} /></div>
         </section>
 
         <EnhancedAgentPanel messages={messages} reasoning={dashboard.reasoning} loading={loading} onAsk={runPrompt} charts={chartManager.getVisibleCharts()} availableColumns={columnNames} onChartCommand={handleChartCommand} onCreateChart={() => setModalType("build")} deepResearch={deepResearch} onDeepResearchChange={setDeepResearch} isCollapsed={aiPanelCollapsed} onToggleCollapse={() => setAiPanelCollapsed(!aiPanelCollapsed)} />
