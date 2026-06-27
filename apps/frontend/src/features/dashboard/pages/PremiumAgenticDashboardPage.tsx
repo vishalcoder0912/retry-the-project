@@ -14,6 +14,7 @@ import { usePremiumAgenticDashboard } from "@/features/dashboard/hooks/usePremiu
 import { useChartManager } from "@/features/dashboard/hooks/useChartManager";
 import { buildDashboardChartFromCommand } from "@/features/dashboard/utils/dashboardCustomChart";
 import { generateDynamicQuestionSuggestions } from "@/features/dashboard/utils/dynamicQuestionSuggestions";
+import { hasResolvableGeoValue } from "@/features/dashboard/utils/geoResolver";
 import type { PremiumChart } from "@/features/dashboard/types/premiumDashboardTypes";
 import GlobalGeoIntelligence from "@/features/dashboard/components/GlobalGeoIntelligence";
 import { titleCase } from "@/features/dashboard/utils/commandCenterAnalytics";
@@ -33,6 +34,17 @@ const isMappableGeoColumn = (column: { name: string; type?: string }) => {
   return false;
 };
 
+const hasMappableDatasetValues = (dataset: NonNullable<ReturnType<typeof useData>["dataset"]>) => {
+  const candidateColumns = dataset.columns.filter((column) => !/id|phone|zip|postal|code|pin|date|time|month|year|url|link/i.test(column.name));
+  return candidateColumns.some((column) => {
+    const values = Array.from(new Set(dataset.rows.slice(0, 300).map((row) => String(row[column.name] ?? "").trim()).filter(Boolean))).slice(0, 80);
+    if (!values.length) return false;
+    const hits = values.filter(hasResolvableGeoValue).length;
+    const ratio = hits / values.length;
+    return (hits >= 2 && ratio >= 0.35) || ratio >= 0.75;
+  });
+};
+
 const cardClass = "rounded-3xl border border-slate-200 bg-white p-5 shadow-sm";
 const softButton = "inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700";
 
@@ -50,7 +62,11 @@ export default function PremiumAgenticDashboardPage() {
   const chartManager = useChartManager(dashboardCharts);
   const [modalType, setModalType] = useState<"customize" | "build" | null>(null);
 
-  const hasMappableGeoColumn = useMemo(() => Boolean(dataset?.columns.some(isMappableGeoColumn)), [dataset?.columns]);
+  const hasMappableGeoColumn = useMemo(() => {
+    if (!dataset) return false;
+    return Boolean(dataset.columns.some(isMappableGeoColumn)) || hasMappableDatasetValues(dataset);
+  }, [dataset]);
+
   const hasDateColumn = useMemo(
     () => Boolean(dataset?.columns.some((column) => /date|month|year|time|created|updated|timestamp/i.test(column.name) || column.type === "date" || column.type === "datetime")),
     [dataset?.columns],
