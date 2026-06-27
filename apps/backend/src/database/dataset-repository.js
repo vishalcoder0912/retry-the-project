@@ -1,4 +1,4 @@
-import { mkdirSync, existsSync, writeFileSync } from "node:fs";
+import { mkdirSync, existsSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -19,10 +19,11 @@ if (!existsSync(databasePath)) {
   console.log(`[DB] Creating database at: ${databasePath}`);
 }
 const db = new DatabaseSync(databasePath);
+db.exec("PRAGMA busy_timeout = 5000");
 
 db.exec(`
-  PRAGMA journal_mode = WAL;
   PRAGMA foreign_keys = ON;
+  PRAGMA journal_mode = WAL;
 
   CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
@@ -68,9 +69,125 @@ db.exec(`
     FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS dataset_files (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL,
+    file_path TEXT,
+    optimized_path TEXT,
+    size_bytes INTEGER DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS dataset_schemas (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL,
+    schema_json TEXT NOT NULL,
+    profile_json TEXT NOT NULL,
+    row_count INTEGER NOT NULL,
+    column_count INTEGER NOT NULL,
+    raw_rows_sent INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS column_profiles (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL,
+    schema_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    role TEXT,
+    type TEXT,
+    profile_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE,
+    FOREIGN KEY(schema_id) REFERENCES dataset_schemas(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS dataset_pipeline_runs (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL,
+    selected_pipeline TEXT NOT NULL,
+    status TEXT NOT NULL,
+    policy_json TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS dashboard_artifacts (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL,
+    pipeline_run_id TEXT,
+    dashboard_json TEXT NOT NULL,
+    raw_rows_sent INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE,
+    FOREIGN KEY(pipeline_run_id) REFERENCES dataset_pipeline_runs(id) ON DELETE SET NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS dashboard_widgets (
+    id TEXT PRIMARY KEY,
+    artifact_id TEXT NOT NULL,
+    dataset_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    title TEXT,
+    widget_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(artifact_id) REFERENCES dashboard_artifacts(id) ON DELETE CASCADE,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_runs (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL,
+    input_json TEXT NOT NULL,
+    output_json TEXT,
+    raw_rows_sent INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS agent_tool_calls (
+    id TEXT PRIMARY KEY,
+    agent_run_id TEXT NOT NULL,
+    dataset_id TEXT NOT NULL,
+    tool_name TEXT NOT NULL,
+    input_json TEXT NOT NULL,
+    output_json TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(agent_run_id) REFERENCES agent_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS rag_memories (
+    id TEXT PRIMARY KEY,
+    dataset_id TEXT,
+    memory_type TEXT NOT NULL,
+    fingerprint TEXT NOT NULL,
+    content_json TEXT NOT NULL,
+    feedback_json TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(dataset_id) REFERENCES datasets(id) ON DELETE SET NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_dataset_columns_dataset_id ON dataset_columns(dataset_id);
   CREATE INDEX IF NOT EXISTS idx_dataset_rows_dataset_id ON dataset_rows(dataset_id);
   CREATE INDEX IF NOT EXISTS idx_chat_messages_dataset_id ON chat_messages(dataset_id);
+  CREATE INDEX IF NOT EXISTS idx_dataset_files_dataset_id ON dataset_files(dataset_id);
+  CREATE INDEX IF NOT EXISTS idx_dataset_schemas_dataset_id ON dataset_schemas(dataset_id);
+  CREATE INDEX IF NOT EXISTS idx_column_profiles_dataset_id ON column_profiles(dataset_id);
+  CREATE INDEX IF NOT EXISTS idx_pipeline_runs_dataset_id ON dataset_pipeline_runs(dataset_id);
+  CREATE INDEX IF NOT EXISTS idx_dashboard_artifacts_dataset_id ON dashboard_artifacts(dataset_id);
+  CREATE INDEX IF NOT EXISTS idx_dashboard_widgets_artifact_id ON dashboard_widgets(artifact_id);
+  CREATE INDEX IF NOT EXISTS idx_agent_runs_dataset_id ON agent_runs(dataset_id);
+  CREATE INDEX IF NOT EXISTS idx_agent_tool_calls_run_id ON agent_tool_calls(agent_run_id);
+  CREATE INDEX IF NOT EXISTS idx_rag_memories_fingerprint ON rag_memories(fingerprint);
 `);
 
 // Migration: Add new columns for local datasets support
@@ -167,6 +284,57 @@ const getChatMessageRows = db.prepare("SELECT * FROM chat_messages WHERE dataset
 const getDatasetRow = db.prepare("SELECT id, row_json FROM dataset_rows WHERE dataset_id = ? AND id = ?");
 const updateDatasetRow = db.prepare("UPDATE dataset_rows SET row_json = ? WHERE dataset_id = ? AND id = ?");
 const deleteDatasetById = db.prepare("DELETE FROM datasets WHERE id = ?");
+const insertDatasetFile = db.prepare(`
+  INSERT INTO dataset_files (id, dataset_id, file_path, optimized_path, size_bytes, created_at)
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
+const insertDatasetSchema = db.prepare(`
+  INSERT INTO dataset_schemas (id, dataset_id, schema_json, profile_json, row_count, column_count, raw_rows_sent, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const insertColumnProfile = db.prepare(`
+  INSERT INTO column_profiles (id, dataset_id, schema_id, name, role, type, profile_json, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const latestDatasetSchema = db.prepare(`
+  SELECT * FROM dataset_schemas WHERE dataset_id = ? ORDER BY created_at DESC LIMIT 1
+`);
+const insertPipelineRun = db.prepare(`
+  INSERT INTO dataset_pipeline_runs (id, dataset_id, selected_pipeline, status, policy_json, started_at, finished_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+const updatePipelineRun = db.prepare(`
+  UPDATE dataset_pipeline_runs SET status = ?, policy_json = ?, finished_at = ? WHERE id = ?
+`);
+const latestPipelineRun = db.prepare(`
+  SELECT * FROM dataset_pipeline_runs WHERE dataset_id = ? ORDER BY started_at DESC LIMIT 1
+`);
+const insertDashboardArtifact = db.prepare(`
+  INSERT INTO dashboard_artifacts (id, dataset_id, pipeline_run_id, dashboard_json, raw_rows_sent, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+const insertDashboardWidget = db.prepare(`
+  INSERT INTO dashboard_widgets (id, artifact_id, dataset_id, type, title, widget_json, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
+const latestDashboardArtifact = db.prepare(`
+  SELECT * FROM dashboard_artifacts WHERE dataset_id = ? ORDER BY created_at DESC LIMIT 1
+`);
+const insertAgentRun = db.prepare(`
+  INSERT INTO agent_runs (id, dataset_id, kind, status, input_json, output_json, raw_rows_sent, created_at, updated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const updateAgentRun = db.prepare(`
+  UPDATE agent_runs SET status = ?, output_json = ?, raw_rows_sent = ?, updated_at = ? WHERE id = ?
+`);
+const insertAgentToolCall = db.prepare(`
+  INSERT INTO agent_tool_calls (id, agent_run_id, dataset_id, tool_name, input_json, output_json, status, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const insertRagMemory = db.prepare(`
+  INSERT INTO rag_memories (id, dataset_id, memory_type, fingerprint, content_json, feedback_json, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
+`);
 
 const mapDataset = (datasetRecord) => {
   if (!datasetRecord) return null;
@@ -282,6 +450,17 @@ export const createDataset = ({
     });
 
     setMeta.run("current_dataset_id", datasetId);
+
+    if (csvCachePath) {
+      let sizeBytes = 0;
+      try {
+        sizeBytes = existsSync(csvCachePath) ? statSync(csvCachePath).size : 0;
+      } catch {
+        sizeBytes = 0;
+      }
+      insertDatasetFile.run(randomUUID(), datasetId, originalFilePath || csvCachePath, csvCachePath, sizeBytes, uploadedAt);
+    }
+
     return getDatasetById(datasetId);
   });
 };
@@ -424,3 +603,195 @@ export const deleteDataset = (datasetId) => {
 };
 
 export const getDatabasePath = () => databasePath;
+
+export const saveDatasetSchemaProfile = ({
+  datasetId,
+  schema,
+  profile,
+  rawRowsSent = false,
+}) => {
+  const schemaId = randomUUID();
+  const createdAt = new Date().toISOString();
+  const columns = Array.isArray(profile?.columns) ? profile.columns : [];
+
+  withTransaction(() => {
+    insertDatasetSchema.run(
+      schemaId,
+      datasetId,
+      JSON.stringify(schema || profile || {}),
+      JSON.stringify(profile || schema || {}),
+      Number(profile?.rowCount || schema?.rowCount || 0),
+      Number(profile?.columnCount || columns.length || 0),
+      rawRowsSent ? 1 : 0,
+      createdAt,
+    );
+
+    for (const column of columns) {
+      insertColumnProfile.run(
+        randomUUID(),
+        datasetId,
+        schemaId,
+        column.name || "",
+        column.role || null,
+        column.type || null,
+        JSON.stringify(column),
+        createdAt,
+      );
+    }
+  });
+
+  return { id: schemaId, datasetId, schema, profile, rawRowsSent, createdAt };
+};
+
+export const getLatestDatasetSchema = (datasetId) => {
+  const row = latestDatasetSchema.get(datasetId);
+  if (!row) return null;
+  return {
+    id: row.id,
+    datasetId: row.dataset_id,
+    schema: parseJson(row.schema_json, {}),
+    profile: parseJson(row.profile_json, {}),
+    rawRowsSent: Boolean(row.raw_rows_sent),
+    createdAt: row.created_at,
+  };
+};
+
+export const createDatasetPipelineRun = ({ datasetId, selectedPipeline, policy = {}, status = "running" }) => {
+  const id = randomUUID();
+  const startedAt = new Date().toISOString();
+  insertPipelineRun.run(id, datasetId, selectedPipeline, status, JSON.stringify(policy), startedAt, null);
+  return { id, datasetId, selectedPipeline, status, policy, startedAt };
+};
+
+export const finishDatasetPipelineRun = ({ runId, status = "completed", policy = {} }) => {
+  const finishedAt = new Date().toISOString();
+  updatePipelineRun.run(status, JSON.stringify(policy), finishedAt, runId);
+  return { id: runId, status, policy, finishedAt };
+};
+
+export const getLatestDatasetPipelineRun = (datasetId) => {
+  const row = latestPipelineRun.get(datasetId);
+  if (!row) return null;
+  return {
+    id: row.id,
+    datasetId: row.dataset_id,
+    selectedPipeline: row.selected_pipeline,
+    status: row.status,
+    policy: parseJson(row.policy_json, {}),
+    startedAt: row.started_at,
+    finishedAt: row.finished_at,
+  };
+};
+
+export const saveDashboardArtifact = ({
+  datasetId,
+  pipelineRunId = null,
+  dashboard,
+  rawRowsSent = false,
+}) => {
+  const artifactId = randomUUID();
+  const now = new Date().toISOString();
+  const widgets = [
+    ...(Array.isArray(dashboard?.kpis) ? dashboard.kpis.map((widget) => ({ ...widget, type: "kpi" })) : []),
+    ...(Array.isArray(dashboard?.charts) ? dashboard.charts.map((widget) => ({ ...widget, type: widget.type || "chart" })) : []),
+  ];
+
+  withTransaction(() => {
+    insertDashboardArtifact.run(
+      artifactId,
+      datasetId,
+      pipelineRunId,
+      JSON.stringify(dashboard || {}),
+      rawRowsSent ? 1 : 0,
+      now,
+      now,
+    );
+
+    for (const widget of widgets) {
+      insertDashboardWidget.run(
+        randomUUID(),
+        artifactId,
+        datasetId,
+        widget.type || "widget",
+        widget.title || null,
+        JSON.stringify(widget),
+        now,
+      );
+    }
+  });
+
+  return { id: artifactId, datasetId, pipelineRunId, dashboard, rawRowsSent, createdAt: now, updatedAt: now };
+};
+
+export const getLatestDashboardArtifact = (datasetId) => {
+  const row = latestDashboardArtifact.get(datasetId);
+  if (!row) return null;
+  return {
+    id: row.id,
+    datasetId: row.dataset_id,
+    pipelineRunId: row.pipeline_run_id,
+    dashboard: parseJson(row.dashboard_json, {}),
+    rawRowsSent: Boolean(row.raw_rows_sent),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+};
+
+export const createAgentRun = ({
+  datasetId,
+  kind,
+  input = {},
+  status = "running",
+  rawRowsSent = false,
+}) => {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  insertAgentRun.run(id, datasetId, kind, status, JSON.stringify(input), null, rawRowsSent ? 1 : 0, now, now);
+  return { id, datasetId, kind, status, input, rawRowsSent, createdAt: now, updatedAt: now };
+};
+
+export const finishAgentRun = ({
+  runId,
+  status = "completed",
+  output = {},
+  rawRowsSent = false,
+}) => {
+  const updatedAt = new Date().toISOString();
+  updateAgentRun.run(status, JSON.stringify(output), rawRowsSent ? 1 : 0, updatedAt, runId);
+  return { id: runId, status, output, rawRowsSent, updatedAt };
+};
+
+export const saveAgentToolCall = ({
+  agentRunId,
+  datasetId,
+  toolName,
+  input = {},
+  output = {},
+  status = "completed",
+}) => {
+  const id = randomUUID();
+  const createdAt = new Date().toISOString();
+  insertAgentToolCall.run(id, agentRunId, datasetId, toolName, JSON.stringify(input), JSON.stringify(output), status, createdAt);
+  return { id, agentRunId, datasetId, toolName, input, output, status, createdAt };
+};
+
+export const saveRagMemory = ({
+  datasetId = null,
+  memoryType = "dashboard_pattern",
+  fingerprint,
+  content = {},
+  feedback = null,
+}) => {
+  const id = randomUUID();
+  const createdAt = new Date().toISOString();
+  insertRagMemory.run(
+    id,
+    datasetId,
+    memoryType,
+    fingerprint || datasetId || id,
+    JSON.stringify(content),
+    feedback ? JSON.stringify(feedback) : null,
+    createdAt,
+  );
+  return { id, datasetId, memoryType, fingerprint, content, feedback, createdAt };
+};

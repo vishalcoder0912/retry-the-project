@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { Download, FileJson, Share2, Trash2, Plus, UploadCloud, Sparkles, X, RefreshCw } from "lucide-react";
+import { Download, FileJson, Share2, Trash2, Plus, Sparkles, X, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/features/data/api/dataApi";
 import { useData } from "@/features/data/context/useData";
@@ -24,7 +24,7 @@ const EMPTY_CHARTS: PremiumChart[] = [];
 
 export default function PremiumAgenticDashboardPage() {
   const navigate = useNavigate();
-  const { dataset, deleteDataset, loadDemo, isHydrating } = useData();
+  const { dataset, deleteDataset } = useData();
   const { dashboard, messages, loading, error, deepResearch, setDeepResearch, runPrompt } = usePremiumAgenticDashboard(dataset);
   const [chartsReady, setChartsReady] = useState(false);
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState("Overview");
@@ -194,41 +194,7 @@ export default function PremiumAgenticDashboardPage() {
     chartManager.addChart(newChart);
   };
 
-  if (!dataset || !dashboard) {
-    return (
-      <main className="min-h-screen bg-[#020617] p-4 text-white">
-        <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,.32),transparent_32%),radial-gradient(circle_at_top_right,rgba(6,182,212,.14),transparent_34%),linear-gradient(180deg,#020617,#020617)]" />
-        <section className="relative mx-auto mt-16 max-w-4xl rounded-3xl border border-violet-400/20 bg-slate-950/75 p-8 text-center shadow-[0_0_60px_rgba(124,58,237,0.16)] backdrop-blur-xl">
-          <div className="mx-auto mb-5 grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-cyan-500 shadow-[0_0_32px_rgba(34,211,238,.26)]">
-            <Sparkles className="h-7 w-7" />
-          </div>
-          <h1 className="text-3xl font-black tracking-tight">No Dataset Loaded</h1>
-          <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-            Upload a dataset or load demo data to activate the AI dashboard.
-          </p>
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate("/upload")}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-cyan-500 px-5 py-3 text-sm font-semibold text-white shadow-[0_0_24px_rgba(124,58,237,.35)]"
-              aria-label="Upload dataset"
-            >
-              <UploadCloud className="h-4 w-4" />
-              Upload Dataset
-            </button>
-            <button
-              type="button"
-              onClick={loadDemo}
-              disabled={isHydrating}
-              className="rounded-xl border border-slate-700 bg-slate-900/70 px-5 py-3 text-sm font-semibold text-slate-200 hover:border-violet-400/50 disabled:opacity-60"
-            >
-              Load Demo Data
-            </button>
-          </div>
-        </section>
-      </main>
-    );
-  }
+  if (!dataset || !dashboard) return null;
 
   const activeFilterEntries = Object.entries(filters).filter(([, value]) => value);
 

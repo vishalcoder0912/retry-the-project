@@ -12,6 +12,10 @@ describe("API route map", () => {
     expect(API_ROUTES.dashboardAi.command).toBe("/api/dashboard-ai/command");
     expect(API_ROUTES.dashboardAi.generate).toBe("/api/dashboard-ai/generate");
     expect(API_ROUTES.dashboardAi.fix).toBe("/api/dashboard-ai/fix");
+    expect(API_ROUTES.agentic.capabilities).toBe("/api/agentic/capabilities");
+    expect(API_ROUTES.agentic.context("dataset_1")).toBe("/api/agentic/datasets/dataset_1/context");
+    expect(API_ROUTES.agentic.dashboard("dataset_1")).toBe("/api/agentic/datasets/dataset_1/dashboard");
+    expect(API_ROUTES.agentic.chat("dataset_1")).toBe("/api/agentic/datasets/dataset_1/chat");
     expect(API_ROUTES.pdfIntelligence.upload).toBe("/api/pdf-intelligence/upload");
     expect(API_ROUTES.pdfIntelligence.query("pdf_1")).toBe("/api/pdf-intelligence/pdf_1/query");
     expect(API_ROUTES.pdfIntelligence.details("pdf_1")).toBe("/api/pdf-intelligence/pdf_1");

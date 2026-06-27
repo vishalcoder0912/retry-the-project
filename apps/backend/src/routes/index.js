@@ -20,6 +20,7 @@ import {
   handleRemoveChartRequest,
 } from './dashboard-chart-handler.js';
 import { handleAgenticModelRoutes } from './agentic-models.js';
+import { handleAgenticRoutes } from './agentic.js';
 import {
   handleE2ECompatRoutes,
   handleE2ENotFound,
@@ -47,6 +48,11 @@ export async function setupRoutes(request, response) {
 
     // Model-aware agentic routes before older AI/dashboard handlers
     if (await handleAgenticModelRoutes(request, response, pathname)) {
+      return;
+    }
+
+    // Canonical schema-first agentic dataset routes
+    if (await handleAgenticRoutes(request, response, pathname)) {
       return;
     }
 
