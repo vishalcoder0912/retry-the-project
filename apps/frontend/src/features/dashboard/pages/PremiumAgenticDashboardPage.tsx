@@ -23,6 +23,8 @@ import { getUniqueValues } from "@/features/dashboard/utils/dashboardAnalytics";
 const PremiumChartCard = lazy(() => import("@/features/dashboard/components/PremiumChartCard"));
 const EMPTY_CHARTS: PremiumChart[] = [];
 
+type ActiveDataset = NonNullable<ReturnType<typeof useData>["dataset"]>;
+
 const isMappableGeoColumn = (column: { name: string; type?: string }) => {
   const normalized = column.name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
   if (["country", "city", "latitude", "longitude"].includes(column.type || "")) return true;
@@ -34,16 +36,18 @@ const isMappableGeoColumn = (column: { name: string; type?: string }) => {
   return false;
 };
 
-const hasMappableDatasetValues = (dataset: NonNullable<ReturnType<typeof useData>["dataset"]>) => {
-  const candidateColumns = dataset.columns.filter((column) => !/id|phone|zip|postal|code|pin|date|time|month|year|url|link/i.test(column.name));
+const hasMappableDatasetValues = (dataset: ActiveDataset) => {
+  const candidateColumns = dataset.columns.filter((column) => !/id|phone|zip|postal|code|pin|date|time|month|year|url|link|amount|billing|age|room/i.test(column.name));
   return candidateColumns.some((column) => {
-    const values = Array.from(new Set(dataset.rows.slice(0, 300).map((row) => String(row[column.name] ?? "").trim()).filter(Boolean))).slice(0, 80);
+    const values = Array.from(new Set(dataset.rows.slice(0, 300).map((row) => String(row[column.name] ?? "").trim()).filter(Boolean))).slice(0, 90);
     if (!values.length) return false;
     const hits = values.filter(hasResolvableGeoValue).length;
     const ratio = hits / values.length;
     return (hits >= 2 && ratio >= 0.35) || ratio >= 0.75;
   });
 };
+
+const hasHealthcareLocationSchema = (dataset: ActiveDataset) => dataset.columns.some((column) => /hospital|facility|clinic|medical_center|medical_centre|address/i.test(column.name));
 
 const cardClass = "rounded-3xl border border-slate-200 bg-white p-5 shadow-sm";
 const softButton = "inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700";
@@ -64,7 +68,7 @@ export default function PremiumAgenticDashboardPage() {
 
   const hasMappableGeoColumn = useMemo(() => {
     if (!dataset) return false;
-    return Boolean(dataset.columns.some(isMappableGeoColumn)) || hasMappableDatasetValues(dataset);
+    return Boolean(dataset.columns.some(isMappableGeoColumn)) || hasMappableDatasetValues(dataset) || hasHealthcareLocationSchema(dataset);
   }, [dataset]);
 
   const hasDateColumn = useMemo(
@@ -82,7 +86,7 @@ export default function PremiumAgenticDashboardPage() {
 
   const primaryCategory = useMemo(() => {
     if (!dataset?.columns.length) return null;
-    const categoryColumn = dataset.columns.find((column) => /category|type|segment|department|region|state|city/i.test(column.name) && !/salary|amount|score|usd|revenue|profit/i.test(column.name));
+    const categoryColumn = dataset.columns.find((column) => /category|type|segment|department|region|state|city|blood/i.test(column.name) && !/salary|amount|score|usd|revenue|profit/i.test(column.name));
     return categoryColumn?.name || null;
   }, [dataset]);
 
