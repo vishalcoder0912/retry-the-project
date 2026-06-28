@@ -44,6 +44,41 @@ export type RagPipelineStep = {
   status: "completed" | "active" | "pending" | "failed" | "skipped";
 };
 
+export type DashboardSchemaColumnProfile = {
+  name: string;
+  declaredType?: string;
+  role: "metric" | "dimension" | "date" | "entity" | "geo" | "identifier" | "text" | "ignored";
+  semanticType: string;
+  nonNullCount: number;
+  missingCount: number;
+  missingPct: number;
+  uniqueCount: number;
+  uniqueRatio: number;
+  numericCount: number;
+  dateCount: number;
+  geoCount: number;
+  examples: string[];
+  min?: number;
+  max?: number;
+  avg?: number;
+  median?: number;
+};
+
+export type DashboardSchemaProfile = {
+  datasetName: string;
+  rowCount: number;
+  columnCount: number;
+  domain: string;
+  qualityScore: number;
+  primaryMetric: string | null;
+  primaryDimension: string | null;
+  primaryDate: string | null;
+  primaryEntity: string | null;
+  geoColumn: string | null;
+  columns: DashboardSchemaColumnProfile[];
+  warnings: string[];
+};
+
 export type PremiumDashboardModel = {
   generatedAt: string;
   primaryMetric: string | null;
@@ -59,6 +94,7 @@ export type PremiumDashboardModel = {
   provider?: string;
   model?: string;
   warnings?: string[];
+  schemaProfile?: DashboardSchemaProfile;
 };
 
 export type AgentMessage = {
