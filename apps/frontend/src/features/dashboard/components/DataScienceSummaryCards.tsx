@@ -22,6 +22,22 @@ type DataScienceSummaryProps = {
   };
 };
 
+type SummaryCardProps = {
+  label: string;
+  value: string | number;
+  hint?: string;
+};
+
+function Card({ label, value, hint }: SummaryCardProps) {
+  return (
+    <section className="min-h-28 rounded-lg border border-slate-700/70 bg-slate-900/70 p-4">
+      <p className="text-xs font-semibold uppercase text-slate-400">{label}</p>
+      <p className="mt-2 break-words text-2xl font-bold text-slate-50">{value}</p>
+      {hint && <p className="mt-2 break-words text-xs text-slate-400">{hint}</p>}
+    </section>
+  );
+}
+
 export default function DataScienceSummaryCards({
   profile,
   anomalies,

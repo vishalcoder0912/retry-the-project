@@ -1,15 +1,16 @@
-# Graph Report - .  (2026-06-25)
+# Graph Report - Agentic ai Data analytics  (2026-06-27)
 
 ## Corpus Check
-- cluster-only mode — file stats not available
+- 762 files · ~3,069,340 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 10408 nodes · 17146 edges · 615 communities (535 shown, 80 thin omitted)
+- 10460 nodes · 17271 edges · 617 communities (535 shown, 82 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 278 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `d43a6e99`
+- Built from commit: `d0e47088`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -598,9 +599,10 @@
 - [[_COMMUNITY_Community 586|Community 586]]
 - [[_COMMUNITY_Community 610|Community 610]]
 - [[_COMMUNITY_Community 611|Community 611]]
-- [[_COMMUNITY_Community 612|Community 612]]
 - [[_COMMUNITY_Community 613|Community 613]]
 - [[_COMMUNITY_Community 614|Community 614]]
+- [[_COMMUNITY_Community 615|Community 615]]
+- [[_COMMUNITY_Community 616|Community 616]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `Code Files` - 703 edges
@@ -608,11 +610,11 @@
 3. `Codebase Deep Export` - 317 edges
 4. `$` - 180 edges
 5. `mt()` - 92 edges
-6. `cn()` - 81 edges
+6. `cn()` - 80 edges
 7. `rv()` - 73 edges
-8. `sendError()` - 45 edges
-9. `sendSuccess()` - 44 edges
-10. `getDatasetById()` - 41 edges
+8. `sendError()` - 48 edges
+9. `sendSuccess()` - 46 edges
+10. `getDatasetById()` - 43 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `tryCall()` --calls--> `Fn()`  [INFERRED]
@@ -629,7 +631,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (615 total, 80 thin omitted)
+## Communities (617 total, 82 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.00
@@ -641,43 +643,43 @@ Nodes (317): Codebase Deep Export, Export Summary, FILE: API_FIX_COMPLETE.md, FI
 
 ### Community 2 - "Community 2"
 Cohesion: 0.02
-Nodes (111): __(), AA(), Ad(), aT(), av(), b_(), bv, bx() (+103 more)
+Nodes (117): __(), AA(), Ad(), av(), bv, bx(), c2(), cA() (+109 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.06
-Nodes (84): detectGeoField(), detectMetricField(), AnalyticsPage(), CorrelationHeatmap(), detectAnomalies(), DataTablePage(), OPERATORS, PAGE_SIZES (+76 more)
+Nodes (82): detectGeoField(), AnalyticsPage(), CorrelationHeatmap(), detectAnomalies(), DataTablePage(), OPERATORS, PAGE_SIZES, rows (+74 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.03
 Nodes (64): $, bi, _block(), calculate(), constructor(), Cr(), _crypt(), decrypt() (+56 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.04
-Nodes (46): cd(), cx(), d2(), Eh(), _h, h0, hT(), i0 (+38 more)
+Cohesion: 0.05
+Nodes (42): b2(), cx(), d2(), Eh(), _h, h0, hT(), i0 (+34 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.04
-Nodes (59): AgenticConfigResponse, AgenticHealthResponse, apiBaseUrl, ApiEnvelope, ApiError, ApiState, ChartQueryResponse, ChatResponse (+51 more)
+Cohesion: 0.23
+Nodes (23): compactPdfAnalysis(), createPdfDocument(), ensureStore(), getPdfChunks(), getPdfDocument(), getPdfIntelligenceAnalysis(), getPdfIntelligenceSummary(), getPdfJobs() (+15 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.07
-Nodes (62): buildAnalystPrompt(), publicModelConfig(), AI_DEFAULTS, AI_MODELS, AI_PROVIDERS, ANALYSIS_TYPES, API_ENDPOINTS, CACHE_KEYS (+54 more)
+Nodes (58): AI_DEFAULTS, AI_MODELS, AI_PROVIDERS, ANALYSIS_TYPES, API_ENDPOINTS, CACHE_KEYS, CHART_TYPES, CONTENT_TYPES (+50 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.06
-Nodes (8): hh(), jT, On(), or, Ri(), rv(), sb(), zo()
+Nodes (12): Di(), f0, Fa(), il(), kE(), kr(), or, r0 (+4 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.03
 Nodes (77): AGENTIC_AI_ANALYTICS_STATUS.md, AI Providers (optional but recommended), AI status, Analytics services, Backend (apps/backend/.env), Build for production, Chat with dataset, Check for syntax errors in new structure (+69 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.07
-Nodes (60): createDataset(), explainPdfDocument(), buildHierarchicalPdfSummary(), analyzePdfWithMlService(), markdownToPages(), findOutputFile(), parsePdfWithOpenDataLoader(), PDF_OUTPUT_DIR (+52 more)
+Cohesion: 0.15
+Nodes (25): createDataset(), createUploadedPdfDocument(), enqueuePdfJob(), hashPdfFile(), queueForceOcrPipeline(), queueInitialPdfPipelines(), queueReindexPipeline(), runTableExtractionPipeline() (+17 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.07
-Nodes (54): af(), df, ef(), ff(), Ja(), lf(), mt(), nf() (+46 more)
+Cohesion: 0.05
+Nodes (58): af(), df, ef(), ff(), Ja(), lf(), mt(), nf() (+50 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.03
@@ -688,28 +690,28 @@ Cohesion: 0.06
 Nodes (55): DATA_ANALYTICS_PROJECT_PLAYBOOKS, aggregate(), buildChart(), buildDataAnalyticsProjectsDashboard(), buildKpi(), buildLearnedChart(), calculateQualityScore(), formatMetric() (+47 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.08
-Nodes (14): aiProviderRouter, GeminiService, OllamaService, ProviderHealthService, buildEnhancedSchema(), callOllamaAI(), formatDatasetSchema(), OLLAMA_MODEL (+6 more)
+Cohesion: 0.11
+Nodes (7): aiProviderRouter, GeminiService, OllamaService, ProviderHealthService, buildSchemaOnlyPrompt(), extractSchemaForAI(), validateSchemaOnlyContext()
 
 ### Community 15 - "Community 15"
 Cohesion: 0.05
-Nodes (60): REVIEW_ROWS, SALARY_ROWS, ChartIntent, avgColumn(), buildGeoIntelligence(), buildGroupedData(), buildHistogramData(), buildInsightFlowSchema() (+52 more)
+Nodes (58): REVIEW_ROWS, SALARY_ROWS, avgColumn(), buildGeoIntelligence(), buildGroupedData(), buildHistogramData(), buildInsightFlowSchema(), buildScatterData() (+50 more)
 
 ### Community 16 - "Community 16"
 Cohesion: 0.05
-Nodes (37): api, QrUploadSession, FilterState, useData(), TopCommandBar(), CommandTopBar(), downloadCsv(), getDatasetName() (+29 more)
+Nodes (41): AgenticConfigResponse, AgenticHealthResponse, api, QrUploadSession, FilterState, RecommendationsPanel(), useData(), TopCommandBar() (+33 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.05
-Nodes (20): ax(), b2(), e_(), ex(), fc(), fr, lb(), md (+12 more)
+Nodes (22): ax(), bE(), c0(), db(), e_(), e0(), ex(), fc() (+14 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.05
-Nodes (36): aS, br(), bs(), cT(), dc(), fl(), fs(), gA (+28 more)
+Cohesion: 0.14
+Nodes (11): dc(), fl(), hc(), id(), jc, jS(), Kb(), sS (+3 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.07
-Nodes (23): clearChatMessages(), getChatMessages(), saveChatMessage(), getRequestBody(), handleChatRoutes(), getRequestBody(), handleLearningFeedbackRoutes(), postAnalytics() (+15 more)
+Cohesion: 0.09
+Nodes (17): getRequestBody(), handleLearningFeedbackRoutes(), postAnalytics(), postDashboardAction(), trainDataset, invalidPayload, salesPayload, callChatRoute() (+9 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.08
@@ -721,15 +723,15 @@ Nodes (59): dependencies, axios, class-variance-authority, clsx, cmdk, d3-scale,
 
 ### Community 22 - "Community 22"
 Cohesion: 0.10
-Nodes (4): Da(), m0, mt, $t()
+Nodes (6): Da(), lt(), m0, mt, mv(), $t()
 
 ### Community 23 - "Community 23"
 Cohesion: 0.05
-Nodes (34): _0, bt(), dx(), fd, fx(), Go(), gx(), hx() (+26 more)
+Nodes (37): bt(), dx(), fd, fx(), Go(), gx(), hx(), ib() (+29 more)
 
 ### Community 24 - "Community 24"
 Cohesion: 0.09
-Nodes (51): buildAnalysisPlan(), buildGuidedDatasetResponse(), buildHRDatasetSchema(), buildInsightsFromSchema(), buildPlanFromAIResponse(), buildSqlForPlan(), classifyChatQuery(), createChatResponse() (+43 more)
+Nodes (52): buildAnalysisPlan(), buildGuidedDatasetResponse(), buildHRDatasetSchema(), buildInsightsFromSchema(), buildPlanFromAIResponse(), buildSqlForPlan(), classifyChatQuery(), createChatResponse() (+44 more)
 
 ### Community 25 - "Community 25"
 Cohesion: 0.12
@@ -740,24 +742,24 @@ Cohesion: 0.08
 Nodes (43): errorResponse(), handleAnalyticsChat(), normalizeFilters(), generateChatAnswer(), buildChartFromQueryResult(), makeId(), ALLOWED_AGGREGATIONS, ALLOWED_CHART_TYPES (+35 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.08
-Nodes (35): cleanRows(), runAnalystCommand(), runFullAutoAnalysis(), ensureFile(), findMemoryMatch(), MEMORY_FILE, readMemory(), saveAnalystMemory() (+27 more)
+Cohesion: 0.13
+Nodes (20): cleanRows(), runAnalystCommand(), runFullAutoAnalysis(), ANALYST_PLAYBOOKS, detectBestPlaybook(), applyFilters(), buildAutoCharts(), buildChartFromCommand() (+12 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.08
-Nodes (42): useKPIEngine(), aggregateAverageByDimension(), aggregateEducationDistribution(), aggregateMultivalueFrequency(), AnalyticsHealthSummary, average(), buildAnalyticsDashboard(), buildInsights() (+34 more)
+Cohesion: 0.07
+Nodes (46): EliteAnalyticsResult, useKPIEngine(), aggregateAverageByDimension(), aggregateEducationDistribution(), aggregateMultivalueFrequency(), AnalyticsDashboardBundle, AnalyticsHealthSummary, average() (+38 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.06
-Nodes (41): databasePath, db, deleteDataset(), deleteDatasetById, __dirname, __filename, getChatMessageRows, getDatasetColumns (+33 more)
+Cohesion: 0.05
+Nodes (54): createAgentRun(), createDatasetPipelineRun(), databasePath, db, deleteDatasetById, __dirname, __filename, finishAgentRun() (+46 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.06
-Nodes (33): DataProvider(), LocalDataProvider(), Action, ActionType, actionTypes, addToRemoveQueue(), dispatch(), genId() (+25 more)
+Nodes (29): Action, ActionType, actionTypes, addToRemoveQueue(), dispatch(), genId(), listeners, memoryState (+21 more)
 
 ### Community 31 - "Community 31"
 Cohesion: 0.11
-Nodes (13): a_, Ah, gc(), k0(), l_, mc(), r(), s_ (+5 more)
+Nodes (13): a_, Ah, aS, gc(), k0(), l_, mc(), r() (+5 more)
 
 ### Community 32 - "Community 32"
 Cohesion: 0.04
@@ -772,12 +774,12 @@ Cohesion: 0.05
 Nodes (42): 1. **Schema-First AI Analysis**, 2. **Agentic AI System**, 3. **Machine Learning**, 4. **Data Pipeline**, 5. **Persistence Layer**, 6. **Frontend UI**, 🤖 Agentic AI Data Analytics - Complete Status Report, AI Services (+34 more)
 
 ### Community 35 - "Community 35"
-Cohesion: 0.07
-Nodes (31): FastDashboardChatResponse, ChatInterface(), Message, COLORS, downloadSvgOrPng(), downloadTextFile(), hasAnyValue(), hasNumericValue() (+23 more)
+Cohesion: 0.13
+Nodes (18): ChatInterface(), Message, EliteDashboardPage(), formatTime(), KPI_ACCENTS, StoredState, mockFetch, salesDataset (+10 more)
 
 ### Community 36 - "Community 36"
 Cohesion: 0.10
-Nodes (38): average(), buildCacheStats(), buildCompatDashboard(), buildCompatDashboardCommand(), buildFeatureImportance(), buildProfile(), buildSchema(), buildSchemaOnlySql() (+30 more)
+Nodes (40): saveChatMessages(), average(), buildCacheStats(), buildCompatDashboard(), buildCompatDashboardCommand(), buildFeatureImportance(), buildProfile(), buildSchema() (+32 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.09
@@ -785,7 +787,7 @@ Nodes (38): AnalysisContext, asNumber(), buildAnalysisContext(), buildCharts(), 
 
 ### Community 38 - "Community 38"
 Cohesion: 0.07
-Nodes (31): GeoIntelligenceProps, METRIC_OPTIONS_PRIORITY, AVERAGE_METRICS, computeGeoIntelligence(), generateInsight(), GEO_FIELD_KEYWORDS, GeoIntelligenceResult, GeoLocationData (+23 more)
+Nodes (32): GeoIntelligenceProps, METRIC_OPTIONS_PRIORITY, AVERAGE_METRICS, computeGeoIntelligence(), detectMetricField(), generateInsight(), GEO_FIELD_KEYWORDS, GeoIntelligenceResult (+24 more)
 
 ### Community 39 - "Community 39"
 Cohesion: 0.05
@@ -796,12 +798,12 @@ Cohesion: 0.05
 Nodes (41): 1. Backend API Verification ?, 2. Frontend Build Verification ?, 3. Documentation Created ?, 4. Code Fixes ?, AI & Intelligence, Analytics, Architecture, Chat & Conversation (+33 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.10
-Nodes (22): chatWithAgent(), embedWithAgent(), extractJson(), generateWithAgent(), pingOllamaModels(), postOllama(), withTimeout(), BaseAgent (+14 more)
+Cohesion: 0.13
+Nodes (11): BaseAgent, asArray(), columnNames(), DashboardChatAgent, DashboardPlannerAgent, DashboardQualityAgent, GeneralChatAgent, ManagerAgent (+3 more)
 
 ### Community 42 - "Community 42"
-Cohesion: 0.11
-Nodes (30): buildSchemaSummary(), cleanRows(), findColumn(), safeNumber(), aggregate(), buildChartFromSpec(), buildKpis(), buildSmallModelPrompt() (+22 more)
+Cohesion: 0.14
+Nodes (22): buildSchemaSummary(), cleanRows(), findColumn(), safeNumber(), aggregate(), buildChartFromSpec(), buildKpis(), buildSmallModelPrompt() (+14 more)
 
 ### Community 43 - "Community 43"
 Cohesion: 0.05
@@ -809,7 +811,7 @@ Nodes (39): dependencies, react-simple-maps, topojson-client, @types/react-simpl
 
 ### Community 44 - "Community 44"
 Cohesion: 0.10
-Nodes (26): Agent, AgentPanel(), AgentThought, AgenticThinkingPanelProps, AgentPlan, DashboardSpecSummary, Dashboard, RecommendationsPanel() (+18 more)
+Nodes (24): Agent, AgentPanel(), AgentThought, AgenticThinkingPanelProps, AgentPlan, DashboardSpecSummary, Dashboard, Alert (+16 more)
 
 ### Community 45 - "Community 45"
 Cohesion: 0.05
@@ -832,8 +834,8 @@ Cohesion: 0.05
 Nodes (37): 1. Prerequisites, 2. Install Dependencies, 3. Configure Environment, 4. Start Services, 5. Access the App, ⚡ 5-Minute Setup, 🤖 AI Capabilities, Analyze with AI (+29 more)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.11
-Nodes (26): compactSchema(), DASHBOARD_MODEL, dashboardSchema, fallbackDashboardPlan(), getColumns(), planDashboardWithAI(), validatePlan(), aggregate() (+18 more)
+Cohesion: 0.10
+Nodes (27): compactSchema(), DASHBOARD_MODEL, dashboardSchema, fallbackDashboardPlan(), getColumns(), planDashboardWithAI(), validatePlan(), aggregate() (+19 more)
 
 ### Community 52 - "Community 52"
 Cohesion: 0.05
@@ -849,7 +851,7 @@ Nodes (37): 1. Configuration Layer (`src/config/`), 1. Install Dependencies, 2. 
 
 ### Community 55 - "Community 55"
 Cohesion: 0.11
-Nodes (33): aggregationLabel(), aliasesForValue(), availableValuesMessage(), blockedPolicyResponse(), buildBusinessQuestions(), buildDatasetUnderstandingAnswer(), buildExcelAnswerMessage(), buildRecommendedVisuals() (+25 more)
+Nodes (35): aggregationLabel(), aliasesForValue(), availableValuesMessage(), blockedPolicyResponse(), buildBusinessQuestions(), buildDatasetUnderstandingAnswer(), buildExcelAnswerMessage(), buildExcelConfidence() (+27 more)
 
 ### Community 56 - "Community 56"
 Cohesion: 0.09
@@ -859,17 +861,13 @@ Nodes (25): ChartActionsPanelProps, ChartModals(), ChartModalsProps, ModalType, 
 Cohesion: 0.12
 Nodes (33): aggregateByCategory(), buildEnhancedSchema(), calculateCorrelation(), cleanForOutliers(), DataTypePatterns, detectDataType(), detectFinanceSchema(), detectHRSchema() (+25 more)
 
-### Community 58 - "Community 58"
-Cohesion: 0.08
-Nodes (4): dr, ho, lt(), _r
-
 ### Community 59 - "Community 59"
 Cohesion: 0.12
-Nodes (19): DOMAIN_LABELS, DOMAIN_TERMS, runBusinessDomainAgent(), calculateDashboardValues(), collectColumnNames(), runDashboardCriticAgent(), ChartSchema, DashboardPlanSchema (+11 more)
+Nodes (20): DOMAIN_LABELS, DOMAIN_TERMS, runBusinessDomainAgent(), calculateDashboardValues(), collectColumnNames(), runDashboardCriticAgent(), ChartSchema, DashboardPlanSchema (+12 more)
 
 ### Community 60 - "Community 60"
 Cohesion: 0.10
-Nodes (29): CATEGORY_PRIORITY_HINTS, critiqueDashboard(), dedupeCharts(), hasAnyHint(), isDefaultAxisColumn(), isMetricColumn(), isRealDateColumn(), isRejectedDefaultAxisColumn() (+21 more)
+Nodes (28): CATEGORY_PRIORITY_HINTS, critiqueDashboard(), dedupeCharts(), hasAnyHint(), isDefaultAxisColumn(), isMetricColumn(), isRealDateColumn(), isRejectedDefaultAxisColumn() (+20 more)
 
 ### Community 61 - "Community 61"
 Cohesion: 0.06
@@ -880,12 +878,12 @@ Cohesion: 0.11
 Nodes (30): aggregate(), analyzeDatasetWithAnalyticsBrain(), buildChart(), buildExperienceBuckets(), buildHistogram(), buildInsights(), buildKpi(), buildSafeSchemaPacket() (+22 more)
 
 ### Community 63 - "Community 63"
-Cohesion: 0.07
-Nodes (18): b0, bc(), c2(), d_(), eE, Fo(), j_(), o2() (+10 more)
+Cohesion: 0.08
+Nodes (14): _0, aT(), b_(), b0, d_(), eE, j_(), nl() (+6 more)
 
 ### Community 64 - "Community 64"
-Cohesion: 0.09
-Nodes (5): cb, close(), Gy(), Lo, show()
+Cohesion: 0.10
+Nodes (4): cb, close(), Gy(), Lo
 
 ### Community 65 - "Community 65"
 Cohesion: 0.06
@@ -896,20 +894,20 @@ Cohesion: 0.06
 Nodes (33): 1. API Request Flow, 2. Data Pipeline, 3. AI Service Integration, 4. Dashboard Generation, API Endpoint Testing Matrix, Backend Test Files, Backend Tests (Vitest), Backend Warnings (+25 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.13
+Cohesion: 0.14
 Nodes (28): cosineSimilarity(), generalChat(), generateDashboardFromSchema(), generateEmbedding(), getOllamaManagerStatus(), handleDashboardCommand(), MAX_TOKENS, MODELS (+20 more)
 
 ### Community 68 - "Community 68"
 Cohesion: 0.11
-Nodes (24): callOllamaEmbedApi(), callOllamaEmbeddingsApi(), cosineSimilarity(), DEFAULT_VECTOR_SIZE, deterministicTextEmbedding(), embedText(), normalizeVector(), timeoutSignal() (+16 more)
+Nodes (23): callOllamaEmbedApi(), callOllamaEmbeddingsApi(), DEFAULT_VECTOR_SIZE, deterministicTextEmbedding(), embedText(), normalizeVector(), timeoutSignal(), tokenize() (+15 more)
 
 ### Community 69 - "Community 69"
 Cohesion: 0.06
 Nodes (33): 1. API Request Flow, 2. Data Pipeline, 3. AI Service Integration, 4. Dashboard Generation, API Endpoint Testing Matrix, Backend Test Files, Backend Tests (Vitest), Backend Warnings (+25 more)
 
 ### Community 70 - "Community 70"
-Cohesion: 0.12
-Nodes (31): AnalyticsHealthSummary, averageColumn(), calculateAverage(), calculateMedian(), ChartDatum, DataQualityIssue, dedupeCharts(), fixedRiskThresholdForMetric() (+23 more)
+Cohesion: 0.11
+Nodes (36): AnalyticsHealthSummary, averageColumn(), calculateAverage(), calculateMedian(), ChartDatum, DataQualityIssue, dedupeCharts(), fixedRiskThresholdForMetric() (+28 more)
 
 ### Community 71 - "Community 71"
 Cohesion: 0.06
@@ -920,8 +918,8 @@ Cohesion: 0.12
 Nodes (31): buildArchitectureReport(), buildCodeBundle(), buildManifest(), buildTree(), codeFenceLanguage(), collectFiles(), DEFAULT_IGNORE_DIRS, DEFAULT_IGNORE_EXTENSIONS (+23 more)
 
 ### Community 73 - "Community 73"
-Cohesion: 0.15
-Nodes (21): runAdvancedAnalytics(), apiBaseUrl, apiRequest(), sendCopilotAnalyticsChat(), getDashboardState(), runDashboardAnalysis(), sendDashboardAction(), sendDashboardChatCommand() (+13 more)
+Cohesion: 0.11
+Nodes (28): agenticApi, AgenticChatResponse, AgenticContextResponse, AgenticDashboardResponse, AgenticExecutionAudit, ApiEnvelope, runAdvancedAnalytics(), apiBaseUrl (+20 more)
 
 ### Community 74 - "Community 74"
 Cohesion: 0.06
@@ -956,23 +954,23 @@ Cohesion: 0.15
 Nodes (28): AGGREGATIONS, applyFilters(), buildFallbackPlan(), buildInitialDashboardAnalysis(), buildInsightsFromKpis(), buildKpis(), buildPlannerPrompt(), callOllamaPlanner() (+20 more)
 
 ### Community 82 - "Community 82"
-Cohesion: 0.14
-Nodes (25): deterministicDashboard(), profileRows(), runModelAwareAgenticAnalysis(), runModelAwareAgenticChat(), buildGuardianDashboardResponse(), buildExcelAnalystPlan(), detectAggregation(), detectExcelIntent() (+17 more)
+Cohesion: 0.07
+Nodes (17): Bi(), br(), bs(), eS(), gh(), gv(), jr(), md (+9 more)
 
 ### Community 83 - "Community 83"
 Cohesion: 0.11
-Nodes (17): buildSchemaRagMemoryEntry(), hashText(), memoryColumns(), removeEmbeddingsForPublicResponse(), sanitizeDashboardPlanForRag(), schemaProfileToRagText(), toPublicMatch(), salesDashboardPlan (+9 more)
+Nodes (20): buildSchemaRagMemoryEntry(), hashText(), memoryColumns(), sanitizeDashboardPlanForRag(), schemaProfileToRagText(), main(), main(), buildPlan() (+12 more)
 
 ### Community 84 - "Community 84"
-Cohesion: 0.13
-Nodes (25): trainSchemaRagMemoryFromDataset(), buildExcelConfidence(), runExcelAnalystChat(), trainSchemaRagDashboard(), trainSmartRagFromApprovedDashboard(), fail(), handleSchemaTrainedAIRoutes(), loadDatasetById() (+17 more)
+Cohesion: 0.08
+Nodes (39): deterministicDashboard(), profileRows(), runModelAwareAgenticAnalysis(), buildGuardianDashboardResponse(), removeEmbeddingsForPublicResponse(), buildRagDashboardPlan(), retrieveSchemaRagMemories(), toPublicMatch() (+31 more)
 
 ### Community 85 - "Community 85"
 Cohesion: 0.14
 Nodes (23): buildMemoryText(), chartPatterns(), deterministicUuid(), hashId(), kpiPatterns(), payloadForEntry(), pointIdForEntry(), safeArray() (+15 more)
 
 ### Community 86 - "Community 86"
-Cohesion: 0.17
+Cohesion: 0.15
 Nodes (4): Ba, Bh(), isShowing(), za
 
 ### Community 87 - "Community 87"
@@ -996,16 +994,16 @@ Cohesion: 0.22
 Nodes (28): assertCheck(), fail(), getCacheObject(), getNodeVersion(), getNpmVersion(), hasErrorMessage(), hasJson(), main() (+20 more)
 
 ### Community 92 - "Community 92"
-Cohesion: 0.13
-Nodes (23): ao(), at(), B(), be(), ca, co(), fo(), ga() (+15 more)
+Cohesion: 0.12
+Nodes (25): tf(), ao(), at(), B(), be(), ca, co(), fo() (+17 more)
 
 ### Community 93 - "Community 93"
 Cohesion: 0.14
 Nodes (26): AGGREGATIONS, assessDashboardHealth(), CATEGORY_ROLES, CHART_TYPES, enforceDashboardQuality(), ensureRuleFallback(), findColumn(), getColumn() (+18 more)
 
 ### Community 94 - "Community 94"
-Cohesion: 0.08
-Nodes (7): Bo(), ds(), eS(), fv, tS(), Ui, ZT()
+Cohesion: 0.09
+Nodes (6): Bo(), ds(), fv, tS(), Ui, ZT()
 
 ### Community 95 - "Community 95"
 Cohesion: 0.10
@@ -1021,11 +1019,11 @@ Nodes (27): 1. `apps/backend/.env` — Agentic model keys to add/update, 1. Cont
 
 ### Community 98 - "Community 98"
 Cohesion: 0.13
-Nodes (24): analyzeColumn(), analyzeColumnsAsync(), asyncSchemaPacketCache, buildDatasetCacheKey(), buildSchemaPacket(), buildSchemaPacketV2(), chunkColumns(), createSchemaPacketSkeleton() (+16 more)
+Nodes (23): analyzeColumn(), analyzeColumnsAsync(), asyncSchemaPacketCache, buildDatasetCacheKey(), buildSchemaPacket(), buildSchemaPacketV2(), chunkColumns(), createSchemaPacketSkeleton() (+15 more)
 
 ### Community 99 - "Community 99"
-Cohesion: 0.15
-Nodes (24): ACTION_AGGREGATIONS, ACTION_CHART_TYPES, CATEGORY_ROLES, chartKey(), collectDashboardCharts(), columnMap(), getChartSpecFromAction(), getKpiSpecFromAction() (+16 more)
+Cohesion: 0.16
+Nodes (23): ACTION_AGGREGATIONS, ACTION_CHART_TYPES, CATEGORY_ROLES, chartKey(), collectDashboardCharts(), columnMap(), getChartSpecFromAction(), getKpiSpecFromAction() (+15 more)
 
 ### Community 100 - "Community 100"
 Cohesion: 0.07
@@ -1037,15 +1035,15 @@ Nodes (22): aggregate(), buildCorrectDashboard(), buildGenericKpis(), buildGener
 
 ### Community 102 - "Community 102"
 Cohesion: 0.14
-Nodes (21): getCascadeStatus(), hasGeminiApiKey(), performAICascadeAnalysis(), tryGeminiAnalysis(), tryLocalFallback(), tryOllamaAnalysis(), isOllamaConfigured(), cacheQuery() (+13 more)
+Nodes (20): getCascadeStatus(), hasGeminiApiKey(), performAICascadeAnalysis(), tryGeminiAnalysis(), tryLocalFallback(), tryOllamaAnalysis(), cacheQuery(), clearDatasetCache() (+12 more)
 
 ### Community 103 - "Community 103"
 Cohesion: 0.14
 Nodes (13): analyticsCache, analyticsCacheSize(), cached(), clearAnalyticsCache(), DEFAULT_TIMEOUT_MS, fingerprintDataset(), makePayload(), MAX_ROWS_SENT_TO_ML (+5 more)
 
 ### Community 104 - "Community 104"
-Cohesion: 0.09
-Nodes (25): DashboardCommand, DashboardFilters, DashboardSchema, DashboardState, DashboardTheme, InsightFlowFilter, InsightFlowGeo, InsightFlowGeoLocation (+17 more)
+Cohesion: 0.06
+Nodes (39): COLORS, downloadSvgOrPng(), downloadTextFile(), hasAnyValue(), hasNumericValue(), LABEL_KEY_CANDIDATES, pickFirstKey(), Props (+31 more)
 
 ### Community 105 - "Community 105"
 Cohesion: 0.09
@@ -1056,16 +1054,16 @@ Cohesion: 0.12
 Nodes (18): API_BASE, DashboardCommandResponse, endpoint(), generateSchemaDashboard(), generateSmartRagDashboard(), getSchemaRagMemory(), request(), retrieveSchemaRagMemory() (+10 more)
 
 ### Community 107 - "Community 107"
-Cohesion: 0.10
-Nodes (17): Props, DatasetLike, formatMessageContent(), modes, parseSections(), Section, sectionMatchers, StructuredMessage() (+9 more)
+Cohesion: 0.08
+Nodes (21): Props, DatasetLike, formatMessageContent(), modes, parseSections(), Section, sectionMatchers, StructuredMessage() (+13 more)
 
 ### Community 108 - "Community 108"
 Cohesion: 0.11
 Nodes (16): ChartErrorBoundary, Props, State, PremiumDataPreview(), useChartManager(), usePremiumAgenticDashboard(), EMPTY_CHARTS, PremiumAgenticDashboardPage() (+8 more)
 
 ### Community 109 - "Community 109"
-Cohesion: 0.09
-Nodes (5): getDatabasePath(), AppError, NotFoundError, validate(), validateRequired()
+Cohesion: 0.06
+Nodes (10): getDatabasePath(), AIError, AppError, DatabaseError, ForbiddenError, NotFoundError, UnauthorizedError, ValidationError (+2 more)
 
 ### Community 110 - "Community 110"
 Cohesion: 0.08
@@ -1076,8 +1074,8 @@ Cohesion: 0.12
 Nodes (25): ALWAYS_IGNORE_DIRS, ALWAYS_IGNORE_EXTS, ALWAYS_IGNORE_FILES, buildDirectoryTree(), collectFiles(), detectApiEndpoints(), detectEntrypoints(), detectEnvVars() (+17 more)
 
 ### Community 112 - "Community 112"
-Cohesion: 0.13
-Nodes (19): buildSchemaUnderstanding(), buildSmartChartCandidates(), buildSmartKpiCandidates(), columnText(), COMMERCE_HINTS, confidenceFromMatches(), detectSmartDomain(), EDUCATION_HINTS (+11 more)
+Cohesion: 0.14
+Nodes (18): buildSchemaUnderstanding(), buildSmartChartCandidates(), buildSmartKpiCandidates(), columnText(), COMMERCE_HINTS, confidenceFromMatches(), detectSmartDomain(), EDUCATION_HINTS (+10 more)
 
 ### Community 113 - "Community 113"
 Cohesion: 0.09
@@ -1097,7 +1095,7 @@ Nodes (24): For /graphify add and --watch, For /graphify query, For the commit h
 
 ### Community 117 - "Community 117"
 Cohesion: 0.23
-Nodes (23): compactPdfAnalysis(), createPdfDocument(), ensureStore(), getPdfChunks(), getPdfDocument(), getPdfIntelligenceAnalysis(), getPdfIntelligenceSummary(), getPdfJobs() (+15 more)
+Nodes (5): checkReadiness(), getEventLoopLag(), handleHealthRoutes(), salesDataset, sendHealth()
 
 ### Community 118 - "Community 118"
 Cohesion: 0.08
@@ -1109,15 +1107,15 @@ Nodes (25): AI & Cascade, Analytics, API Key Naming (Correct), Axios Version (No
 
 ### Community 120 - "Community 120"
 Cohesion: 0.16
-Nodes (19): inferColumns(), mergeParsedDatasets(), parseCsv(), parseDatasetFile(), parseJson(), parseXlsx(), createQrUploadSession(), getQrUploadSession() (+11 more)
+Nodes (19): inferColumns(), mergeParsedDatasets(), parseCsv(), parseDatasetFile(), parseJson(), parseXlsx(), getQrUploadSession(), sessions (+11 more)
 
 ### Community 121 - "Community 121"
 Cohesion: 0.08
 Nodes (24): AutoGluon Configuration, ✅ Backend Verification (100%), ⚠️ CI/CD Pipeline (Pending), Development, Features, Files Verified, 📊 Final Score, ✅ Frontend Verification (98%) (+16 more)
 
-### Community 122 - "Community 122"
-Cohesion: 0.17
-Nodes (6): AIManager, assertNoRawRowsInLLMPayload(), assertNoRawRowsInString(), sanitizeAnalyticsResultForLLM(), sanitizeDatasetForLLM(), callLLMSafely()
+### Community 124 - "Community 124"
+Cohesion: 0.11
+Nodes (10): AIClient, AIProvider, AnalyticsEngine, getAIClient(), AIInsight, Dashboard, Dataset, KPI (+2 more)
 
 ### Community 125 - "Community 125"
 Cohesion: 0.08
@@ -1128,12 +1126,12 @@ Cohesion: 0.08
 Nodes (24): AutoGluon Configuration, ? Backend Verification (100%), ?? CI/CD Pipeline (Pending), Development, Features, Files Verified, ?? Final Score, ? Frontend Verification (98%) (+16 more)
 
 ### Community 127 - "Community 127"
-Cohesion: 0.09
-Nodes (16): AppLayout(), AppSidebar(), navItems, ProviderPill(), ProvidersHealth, AgenticDataSciencePage, AgenticPage, AnalyticsPage (+8 more)
+Cohesion: 0.10
+Nodes (14): AppLayout(), AppSidebar(), navItems, AgenticDataSciencePage, AgenticPage, AnalyticsPage, ChatPage, DataTablePage (+6 more)
 
 ### Community 128 - "Community 128"
-Cohesion: 0.12
-Nodes (15): analyzeDatasetSchema(), calculateCorrelation(), ColumnInfo, DatasetSchema, detectColumnType(), roundTo(), DataColumn, DatasetRow (+7 more)
+Cohesion: 0.22
+Nodes (9): DataColumn, DatasetRow, extractSchema(), LocalFileChunk, LocalFileProcessResult, processCSVInChunks(), processExcelInChunks(), processJSONInChunks() (+1 more)
 
 ### Community 129 - "Community 129"
 Cohesion: 0.08
@@ -1144,8 +1142,8 @@ Cohesion: 0.08
 Nodes (23): 1. Missing `/api/state` Endpoint, 2. Dataset Import Not Working, 3. Vite Proxy Configuration, Check Backend Health, Check State Endpoint, 🚨 Common Issues, Dataset Operations, 🔍 Debugging (+15 more)
 
 ### Community 131 - "Community 131"
-Cohesion: 0.13
-Nodes (8): bo(), Mt(), $s(), tr, ur, wo(), Xs, yo()
+Cohesion: 0.10
+Nodes (10): bo(), dr, lt(), Mt(), $s(), tr, ur, wo() (+2 more)
 
 ### Community 132 - "Community 132"
 Cohesion: 0.12
@@ -1168,8 +1166,8 @@ Cohesion: 0.09
 Nodes (23): devDependencies, autoprefixer, eslint, @eslint/js, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, jsdom (+15 more)
 
 ### Community 137 - "Community 137"
-Cohesion: 0.13
-Nodes (5): LOG_LEVELS, LogEntry, Logger, LoggerOptions, LogLevel
+Cohesion: 0.16
+Nodes (19): fileExtension(), hasColumn(), hasRole(), selectAgenticPipeline(), deleteDataset(), listDatasets(), patchDatasetRow(), chooseAnalyticsExecutionPolicy() (+11 more)
 
 ### Community 138 - "Community 138"
 Cohesion: 0.09
@@ -1184,12 +1182,12 @@ Cohesion: 0.14
 Nodes (20): rows, aggregate(), applyDashboardFilters(), buildGroupedChart(), buildHistogram(), buildMissingValues(), buildScatter(), calculateChart() (+12 more)
 
 ### Community 141 - "Community 141"
-Cohesion: 0.10
-Nodes (14): bs(), es, fa, Ge(), gs(), ha(), la, Nn() (+6 more)
+Cohesion: 0.06
+Nodes (18): _a, bs(), De(), dt(), es, fa, Ge(), gs() (+10 more)
 
 ### Community 142 - "Community 142"
-Cohesion: 0.20
-Nodes (19): categorizeSchemaColumns(), columnName(), detectAggregation(), detectChartType(), findColumnMatch(), findMentionedColumn(), firstByRole(), normalize() (+11 more)
+Cohesion: 0.19
+Nodes (20): categorizeSchemaColumns(), columnName(), detectAggregation(), detectChartType(), findColumnMatch(), findMentionedColumn(), firstByRole(), normalize() (+12 more)
 
 ### Community 143 - "Community 143"
 Cohesion: 0.13
@@ -1197,11 +1195,11 @@ Nodes (18): dedupeKpis(), isNumeric(), makeKpi(), MONEY_TERMS, ORDER_TERMS, PROF
 
 ### Community 144 - "Community 144"
 Cohesion: 0.17
-Nodes (18): buildJsonFallbackStats(), clearSchemaRagMemoryForTests(), ensureDataFile(), getSchemaRagStats(), getSchemaRagStatsSmart(), jaccardTextSimilarity(), MEMORY_PATH, readSchemaRagMemory() (+10 more)
+Nodes (19): cosineSimilarity(), buildJsonFallbackStats(), clearSchemaRagMemoryForTests(), ensureDataFile(), getSchemaRagStats(), getSchemaRagStatsSmart(), jaccardTextSimilarity(), MEMORY_PATH (+11 more)
 
 ### Community 145 - "Community 145"
-Cohesion: 0.16
-Nodes (3): moveTo(), Ph, Tr()
+Cohesion: 0.23
+Nodes (15): buildHierarchicalPdfSummary(), analyzePdfWithMlService(), markdownToPages(), findOutputFile(), parsePdfWithOpenDataLoader(), PDF_OUTPUT_DIR, pdfProcessingPolicy, buildPdfRagChunks() (+7 more)
 
 ### Community 146 - "Community 146"
 Cohesion: 0.09
@@ -1248,23 +1246,23 @@ Cohesion: 0.12
 Nodes (15): EnhancedAgentPanelProps, examples, PremiumInsightCards(), toneClass, iconMap, PremiumMetricCard(), icons, PremiumRagPipeline() (+7 more)
 
 ### Community 157 - "Community 157"
-Cohesion: 0.16
-Nodes (12): columnExists(), isNumericColumn(), normalizeChartType(), VALID_ACTIONS, VALID_AGGREGATIONS, VALID_CHART_TYPES, validateAction(), validateChartAction() (+4 more)
+Cohesion: 0.15
+Nodes (20): buildAnalystPrompt(), runModelAwareAgenticChat(), publicModelConfig(), assessDashboardHealth(), columnExists(), isNumericColumn(), normalizeChartType(), VALID_ACTIONS (+12 more)
 
 ### Community 158 - "Community 158"
 Cohesion: 0.10
 Nodes (21): 1. Install Dependencies, 2. Start the Service, 3. Test the Service, After, 🚀 AutoGluon ML Service - Quick Start, Before, ✅ Configuration Complete!, 🔧 Configuration Options (+13 more)
 
 ### Community 159 - "Community 159"
-Cohesion: 0.16
-Nodes (20): analyzeCodeQuality(), EXCLUDE_DIRS, EXTENSIONS, generateHtmlReport(), getLineCoverage(), getSourceFiles(), getSourceWithoutTests(), getTestFiles() (+12 more)
+Cohesion: 0.12
+Nodes (23): c_(), jo(), Kv(), analyzeCodeQuality(), EXCLUDE_DIRS, EXTENSIONS, generateHtmlReport(), getLineCoverage() (+15 more)
 
 ### Community 160 - "Community 160"
-Cohesion: 0.13
-Nodes (11): analyzeRelationships(), calculateCorrelations(), calculatePearsonCorrelation(), generateAutoCharts(), generateCleaningSuggestions(), getRouteDataset(), handleAnalyticsRoutes(), appState (+3 more)
+Cohesion: 0.14
+Nodes (10): analyzeRelationships(), calculateCorrelations(), calculatePearsonCorrelation(), generateAutoCharts(), generateCleaningSuggestions(), getRouteDataset(), handleAnalyticsRoutes(), appState (+2 more)
 
 ### Community 161 - "Community 161"
-Cohesion: 0.20
+Cohesion: 0.26
 Nodes (15): analyzeDatasetProfile(), calculateDataQuality(), calculatePearsonCorrelation(), detectAnomalies(), generateAIInsights(), generateNarrative(), generateRecommendations(), generateSuggestedAnalyses() (+7 more)
 
 ### Community 162 - "Community 162"
@@ -1272,8 +1270,12 @@ Cohesion: 0.10
 Nodes (19): 1. State Management (`/api/state`), 2. Dataset Operations (`/api/datasets`), 3. Chat Routes (`/api/datasets/:id/chat`), 4. Analytics Routes (`/api/datasets/:id/ai-*`), 5. Export Routes (`/api/datasets/:id/export/:format`), 6. Cascade & QR Routes, ✅ All Missing Endpoints Implemented, Analytics (+11 more)
 
 ### Community 163 - "Community 163"
-Cohesion: 0.22
+Cohesion: 0.24
 Nodes (3): el(), vA, wr()
+
+### Community 164 - "Community 164"
+Cohesion: 0.14
+Nodes (3): moveTo(), Ph, show()
 
 ### Community 165 - "Community 165"
 Cohesion: 0.13
@@ -1287,10 +1289,6 @@ Nodes (19): 1. CSV File Import, 1. Launch Services, 1. Model Training, 1. Natura
 Cohesion: 0.15
 Nodes (19): buildDirectoryTree(), buildSummary(), collectFiles(), exportCodebase(), EXTENSIONLESS_ALLOWLIST, IGNORED_DIRECTORIES, IGNORED_EXTENSIONS, IGNORED_FILENAMES (+11 more)
 
-### Community 168 - "Community 168"
-Cohesion: 0.18
-Nodes (5): pipelineService, PredictiveAnalytics, getCleanColumnClassification(), classifyColumns(), toNumber()
-
 ### Community 169 - "Community 169"
 Cohesion: 0.16
 Nodes (16): Aggregation, buildDashboardChartFromCommand(), buildHistogram(), buildScatter(), buildTitle(), CHART_TYPES, ChartType, DashboardChartCommandParams (+8 more)
@@ -1300,12 +1298,12 @@ Cohesion: 0.23
 Nodes (16): INTENTS, aggregate(), bottomN(), correlation(), dataQuality(), distribution(), duplicateRows(), executeExcelAnalysis() (+8 more)
 
 ### Community 171 - "Community 171"
-Cohesion: 0.18
-Nodes (16): buildColumnContext(), buildRagDocuments(), buildSchemaContext(), buildTrainingExample(), exportTrainingJsonl(), inferRole(), ROLE_KEYWORDS, getCurrentDataset() (+8 more)
+Cohesion: 0.21
+Nodes (15): buildColumnContext(), buildRagDocuments(), buildSchemaContext(), buildTrainingExample(), exportTrainingJsonl(), inferRole(), ROLE_KEYWORDS, getCurrentDataset() (+7 more)
 
 ### Community 172 - "Community 172"
-Cohesion: 0.19
-Nodes (14): retrieveLearningMemory(), buildDatasetFacts(), assertOllamaModelAvailable(), callDashboardPlanner(), callDatasetChat(), callOllamaChat(), DEFAULT_TIMEOUT_MS, extractJson() (+6 more)
+Cohesion: 0.18
+Nodes (17): assertNoRawRowsInLLMPayload(), assertNoRawRowsInString(), sanitizeAnalyticsResultForLLM(), sanitizeDatasetForLLM(), callLLMSafely(), buildDatasetFacts(), assertOllamaModelAvailable(), callDashboardPlanner() (+9 more)
 
 ### Community 174 - "Community 174"
 Cohesion: 0.11
@@ -1399,6 +1397,10 @@ Nodes (16): Agent Orchestration Test: FAIL, Agentic AI Analytics Salary Stress A
 Cohesion: 0.18
 Nodes (9): buildSchemaProfile(), cleanDatasetRows(), detectDomain(), getSchemaSignature(), inferRole(), isMissing(), normalizeColumnName(), splitMultiValue() (+1 more)
 
+### Community 199 - "Community 199"
+Cohesion: 0.25
+Nodes (6): lc(), ME(), oc, rc(), rl(), vh()
+
 ### Community 200 - "Community 200"
 Cohesion: 0.12
 Nodes (16): Create LoRA Config, Expected Improvements, Expected Output Fields, Fine-Tuning Guide: 1B Parameter Model for Schema Understanding, Generating Training Data from Real Datasets, Integration with RAG Pipeline, Model Selection Guide, Option A: Ollama LoRA (Fast, Local) (+8 more)
@@ -1428,8 +1430,8 @@ Cohesion: 0.30
 Nodes (13): getDatasetRowsById(), createCacheKey(), createDatasetFingerprint(), stableStringify(), handleCompareDatasets(), handleMlAnalyticsRoutes(), handleOperation(), handlePredict() (+5 more)
 
 ### Community 208 - "Community 208"
-Cohesion: 0.22
-Nodes (8): buildColumns(), buildPdfDataset(), chunkPdfMarkdown(), extractPlainTextElements(), extractTablesFromPdfJson(), getNodeText(), mergePdfTables(), walk()
+Cohesion: 0.24
+Nodes (15): buildExcelAnalystPlan(), detectAggregation(), detectExcelIntent(), detectLimit(), EXCEL_INTENTS, isDateColumn(), isDimension(), isMetric() (+7 more)
 
 ### Community 210 - "Community 210"
 Cohesion: 0.18
@@ -1500,8 +1502,8 @@ Cohesion: 0.14
 Nodes (13): API Endpoints, Entrypoints, Environment Variables Referenced, Executive Summary, Export Notes, Frontend Routes, Local Import Map, Module Breakdown (+5 more)
 
 ### Community 227 - "Community 227"
-Cohesion: 0.14
-Nodes (5): AIError, DatabaseError, ForbiddenError, UnauthorizedError, ValidationError
+Cohesion: 0.29
+Nodes (3): AppErrorBoundary, AppErrorBoundaryProps, AppErrorBoundaryState
 
 ### Community 228 - "Community 228"
 Cohesion: 0.14
@@ -1528,8 +1530,8 @@ Cohesion: 0.16
 Nodes (11): args, csvFiles, defaultDir, __dirname, exportJsonl, __filename, inferColumns(), parseCsv() (+3 more)
 
 ### Community 234 - "Community 234"
-Cohesion: 0.15
-Nodes (4): _a, De(), dt(), Ts
+Cohesion: 0.22
+Nodes (8): buildColumns(), buildPdfDataset(), chunkPdfMarkdown(), extractPlainTextElements(), extractTablesFromPdfJson(), getNodeText(), mergePdfTables(), walk()
 
 ### Community 235 - "Community 235"
 Cohesion: 0.14
@@ -1552,8 +1554,8 @@ Cohesion: 0.15
 Nodes (13): Contribution Notes, Final Checklist, InsightFlow Testing Prompts for Open-Source Collaboration, Prompt 1: verify the environment, Prompt 2: configure environment variables, Prompt 38: report an issue cleanly, Prompt 39: pre-PR validation, Prompt 3: start services (+5 more)
 
 ### Community 240 - "Community 240"
-Cohesion: 0.21
-Nodes (10): DashboardFilters(), DashboardFiltersProps, PopoverContent, SelectContent, SelectItem, SelectLabel, SelectScrollDownButton, SelectScrollUpButton (+2 more)
+Cohesion: 0.23
+Nodes (9): DashboardFilters(), PopoverContent, SelectContent, SelectItem, SelectLabel, SelectScrollDownButton, SelectScrollUpButton, SelectSeparator (+1 more)
 
 ### Community 241 - "Community 241"
 Cohesion: 0.15
@@ -1572,40 +1574,36 @@ Cohesion: 0.15
 Nodes (13): API Endpoints, Entrypoints, Environment Variables Referenced, Executive Summary, Export Notes, Frontend Routes, Local Import Map, Module Breakdown (+5 more)
 
 ### Community 245 - "Community 245"
-Cohesion: 0.15
-Nodes (13): Contribution Notes, Final Checklist, InsightFlow Testing Prompts for Open-Source Collaboration, Prompt 1: verify the environment, Prompt 2: configure environment variables, Prompt 38: report an issue cleanly, Prompt 39: pre-PR validation, Prompt 3: start services (+5 more)
+Cohesion: 0.05
+Nodes (44): Contribution Notes, Error Handling Testing, Feature Testing, Final Checklist, Frontend Testing, InsightFlow Testing Prompts for Open-Source Collaboration, Integration Testing, Performance Testing (+36 more)
 
 ### Community 247 - "Community 247"
-Cohesion: 0.23
-Nodes (9): BACKEND_ROOT, __dirname, __filename, MEMORY_PATH, readMemory(), saveLearningCorrection(), writeMemory(), correction (+1 more)
+Cohesion: 0.28
+Nodes (11): applyChunkLimit(), batches(), deletePdfIndex(), detectPdfQueryIntent(), indexPdfAnalysisBestEffort(), indexPdfChunks(), indexPdfSummaries(), indexPdfTables() (+3 more)
 
 ### Community 249 - "Community 249"
 Cohesion: 0.26
 Nodes (11): schemaSimilarity(), DEFAULT_MEMORY_PATH, findSimilarSchemas(), jaccard(), memoryStats(), readSchemaMemory(), rememberSchema(), textHash() (+3 more)
 
 ### Community 250 - "Community 250"
-Cohesion: 0.08
-Nodes (26): cc(), cs(), Di(), dn(), dv(), ei(), Hi(), hs() (+18 more)
+Cohesion: 0.05
+Nodes (30): cd(), cs(), gA, hh(), hs(), Ia(), Jh, jT (+22 more)
 
 ### Community 251 - "Community 251"
 Cohesion: 0.17
 Nodes (12): AI Hallucination Risks, Critical Bugs, Dashboard Risks, Final Production Readiness Report, Major Bugs, Medium Bugs, Minor Bugs, Performance Risks (+4 more)
 
 ### Community 252 - "Community 252"
-Cohesion: 0.21
-Nodes (9): DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut(), DropdownMenuSubContent (+1 more)
+Cohesion: 0.19
+Nodes (10): Button, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuShortcut() (+2 more)
 
 ### Community 253 - "Community 253"
-Cohesion: 0.27
-Nodes (8): GEMINI_CONFIG, OLLAMA_CONFIG, TIMEOUT_CONFIG, test(), callOllamaAI(), extractJSONfromResponse(), formatSchemaForPrompt(), validateColumnsExist()
+Cohesion: 0.21
+Nodes (9): GEMINI_CONFIG, OLLAMA_CONFIG, TIMEOUT_CONFIG, test(), callOllamaAI(), extractJSONfromResponse(), buildSchemaPacketAsync(), formatSchemaForPrompt() (+1 more)
 
 ### Community 256 - "Community 256"
 Cohesion: 0.21
 Nodes (9): countDuplicateRows(), ID_KEYWORDS, inferColumnRole(), isDateLike(), isEmpty(), normalizeName(), NUMBER_KEYWORDS, profileRows() (+1 more)
-
-### Community 257 - "Community 257"
-Cohesion: 0.29
-Nodes (9): main(), buildPlan(), buildRagText(), inferRole(), inferType(), makeProfile(), normalizeName(), trainAgenticMasterPack() (+1 more)
 
 ### Community 258 - "Community 258"
 Cohesion: 0.21
@@ -1655,6 +1653,10 @@ Nodes (10): Coverage Summary, Feature Coverage, Final Software Readiness Score, 
 Cohesion: 0.18
 Nodes (8): files, IGNORE_DIRS, issues, report, REPORT_PATH, ROOT, rules, VALID_EXT
 
+### Community 274 - "Community 274"
+Cohesion: 0.25
+Nodes (3): getCleanColumnClassification(), RecommendationEngine, classifyColumns()
+
 ### Community 275 - "Community 275"
 Cohesion: 0.22
 Nodes (8): as(), Bn, En(), is(), os(), St(), Ve, yn()
@@ -1675,13 +1677,17 @@ Nodes (7): extractStructuredData(), parseAnalysisResponse(), parseChatResponse()
 Cohesion: 0.36
 Nodes (8): chart(), isCategory(), isDate(), isGeo(), isNumber(), roleOf(), runChartAgent(), chartsFor()
 
+### Community 281 - "Community 281"
+Cohesion: 0.19
+Nodes (10): FeedbackLearningAgent, BACKEND_ROOT, __dirname, __filename, MEMORY_PATH, readMemory(), saveLearningCorrection(), writeMemory() (+2 more)
+
 ### Community 282 - "Community 282"
 Cohesion: 0.42
 Nodes (9): aggregate(), findColumn(), firstRanked(), formatValue(), makeKpi(), normalize(), pushCalculated(), selectSeniorKpis() (+1 more)
 
 ### Community 283 - "Community 283"
-Cohesion: 0.20
-Nodes (8): AIProvider, getAIClient(), AIInsight, Dashboard, Dataset, KPI, SemanticSchema, Visualization
+Cohesion: 0.35
+Nodes (10): chatWithAgent(), embedWithAgent(), extractJson(), generateWithAgent(), pingOllamaModels(), postOllama(), withTimeout(), AGENTIC_MODELS (+2 more)
 
 ### Community 284 - "Community 284"
 Cohesion: 0.20
@@ -1704,8 +1710,8 @@ Cohesion: 0.38
 Nodes (8): findDataset(), getDatasetMetadataById(), getE2EDataset(), audit(), createDashboardPlan(), handleAgenticDataScienceRoutes(), readJsonBody(), sendJson()
 
 ### Community 290 - "Community 290"
-Cohesion: 0.40
-Nodes (9): cache, cacheKey(), fastDashboardChat(), findColumn(), formatMoney(), getColumns(), getEducationSalaryRanking(), localAnswer() (+1 more)
+Cohesion: 0.36
+Nodes (10): retrieveLearningMemory(), cache, cacheKey(), fastDashboardChat(), findColumn(), formatMoney(), getColumns(), getEducationSalaryRanking() (+2 more)
 
 ### Community 291 - "Community 291"
 Cohesion: 0.20
@@ -1825,7 +1831,7 @@ Nodes (8): Chart Selection Rules, Column Rules, Confidence Score, Legacy Backend
 
 ### Community 328 - "Community 328"
 Cohesion: 0.25
-Nodes (8): FINAL VERIFICATION CHECKLIST, HOW TO USE THIS DOCUMENT, ?? INSIGHTFLOW - COMPREHENSIVE TESTING DOCUMENTATION, PASS Criteria - Performance, PHASE 11: PERFORMANCE BENCHMARKS, QUICK TEST (5 MINUTES), TABLE OF CONTENTS, Test 11.1: Measure Response Times
+Nodes (8): Expected Results, FINAL VERIFICATION CHECKLIST, HOW TO USE THIS DOCUMENT, ?? INSIGHTFLOW - COMPREHENSIVE TESTING DOCUMENTATION, PHASE 1: PREREQUISITES, Prerequisites Check, QUICK TEST (5 MINUTES), TABLE OF CONTENTS
 
 ### Community 329 - "Community 329"
 Cohesion: 0.50
@@ -1841,7 +1847,7 @@ Nodes (8): 📈 Benefits, Error Handling, Fallback providers, 🚀 Ready to Go!,
 
 ### Community 333 - "Community 333"
 Cohesion: 0.25
-Nodes (8): Expected Results, FINAL VERIFICATION CHECKLIST, HOW TO USE THIS DOCUMENT, 🧪 INSIGHTFLOW - COMPREHENSIVE TESTING DOCUMENTATION, PHASE 1: PREREQUISITES, Prerequisites Check, QUICK TEST (5 MINUTES), TABLE OF CONTENTS
+Nodes (8): FINAL VERIFICATION CHECKLIST, HOW TO USE THIS DOCUMENT, 🧪 INSIGHTFLOW - COMPREHENSIVE TESTING DOCUMENTATION, PASS Criteria - Performance, PHASE 11: PERFORMANCE BENCHMARKS, QUICK TEST (5 MINUTES), TABLE OF CONTENTS, Test 11.1: Measure Response Times
 
 ### Community 334 - "Community 334"
 Cohesion: 0.25
@@ -1872,16 +1878,20 @@ Cohesion: 0.50
 Nodes (7): buildCommandPrompt(), buildDashboardPrompt(), callOllama(), extractJson(), formatChatAnswerWithOllama(), planCommandWithOllama(), planDashboardWithOllama()
 
 ### Community 344 - "Community 344"
-Cohesion: 0.25
-Nodes (7): Breadcrumb, BreadcrumbEllipsis(), BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator()
+Cohesion: 0.35
+Nodes (9): explainPdfDocument(), answerPdfQuestion(), buildPdfContext(), callOllama(), isWholePdfIntent(), summaryText(), getPdfReadiness(), getProcessingAnswer() (+1 more)
 
 ### Community 345 - "Community 345"
 Cohesion: 0.25
 Nodes (6): DrawerContent, DrawerDescription, DrawerFooter(), DrawerHeader(), DrawerOverlay, DrawerTitle
 
 ### Community 346 - "Community 346"
-Cohesion: 0.25
-Nodes (7): NavigationMenu, NavigationMenuContent, NavigationMenuIndicator, NavigationMenuList, NavigationMenuTrigger, navigationMenuTriggerStyle, NavigationMenuViewport
+Cohesion: 0.27
+Nodes (8): createSchemaFirstChatResponse(), buildEnhancedSchema(), callOllamaAI(), formatDatasetSchema(), isOllamaConfigured(), OLLAMA_MODEL, OllamaAIService, validateAndNormalizeResponse()
+
+### Community 347 - "Community 347"
+Cohesion: 0.33
+Nodes (9): aggregate(), BLOCKED_MAIN_KPI_TITLES, buildKpiFromTemplate(), buildSalaryBusinessKpis(), formatMetricValue(), formatValue(), isBlockedMainKpi(), makeKpi() (+1 more)
 
 ### Community 348 - "Community 348"
 Cohesion: 0.29
@@ -1946,10 +1956,6 @@ Nodes (6): Critical, High Priority, InsightFlow Priority Fix Plan, Low Priority,
 ### Community 363 - "Community 363"
 Cohesion: 0.29
 Nodes (7): Core rule, Files to copy, Frontend usage, InsightFlow Schema-only Ollama AI Full Code, Ollama model, Route registration, Test commands
-
-### Community 364 - "Community 364"
-Cohesion: 0.29
-Nodes (7): Error Handling Testing, Prompt 24: empty query, Prompt 25: invalid dataset ID, Prompt 26: malformed JSON, Prompt 27: unsupported export format, Prompt 28: invalid local SQL, Prompt 29: offline frontend behavior
 
 ### Community 365 - "Community 365"
 Cohesion: 0.29
@@ -2020,8 +2026,8 @@ Cohesion: 0.33
 Nodes (6): Prompt 33: backend will not start, Prompt 34: frontend will not load, Prompt 35: no AI responses or only fallback responses, Prompt 36: cache appears inactive, Prompt 37: ML service issues, Troubleshooting
 
 ### Community 384 - "Community 384"
-Cohesion: 0.33
-Nodes (4): iconMap, KPICard(), statusColors, trendColors
+Cohesion: 0.29
+Nodes (5): iconMap, KPICard(), KPICardProps, statusColors, trendColors
 
 ### Community 385 - "Community 385"
 Cohesion: 0.33
@@ -2056,8 +2062,8 @@ Cohesion: 0.33
 Nodes (6): Basic Training (Auto-detect Problem Type), Best Quality for Production, Custom Time Limit, Fast Training for Quick Tests, 🎯 Training Examples, With Custom Evaluation Metric
 
 ### Community 395 - "Community 395"
-Cohesion: 0.40
-Nodes (4): formatBytes(), MobileUploadPortal(), QueueFile, UploadMode
+Cohesion: 0.03
+Nodes (59): apiBaseUrl, ApiEnvelope, ApiError, ApiState, ChartQueryResponse, ChatResponse, CorrelationResponse, CorrelationResult (+51 more)
 
 ### Community 396 - "Community 396"
 Cohesion: 0.33
@@ -2080,16 +2086,16 @@ Cohesion: 0.33
 Nodes (6): Data Analyst Automation Plan, Estimated Effort, Features, Implementation Roadmap, Overview, Priority Levels
 
 ### Community 401 - "Community 401"
-Cohesion: 0.33
-Nodes (6): Frontend Testing, Prompt 13: test primary navigation, Prompt 14: test file upload, Prompt 15: test the data table page, Prompt 16: test the dashboard, Prompt 17: test the chat interface
+Cohesion: 0.24
+Nodes (6): analyzeDatasetSchema(), calculateCorrelation(), ColumnInfo, DatasetSchema, detectColumnType(), roundTo()
 
 ### Community 402 - "Community 402"
 Cohesion: 0.33
 Nodes (6): PASS Criteria - Error Handling, PHASE 9: ERROR HANDLING & EDGE CASES, Test 9.1: Empty Query, Test 9.2: Invalid Data Upload, Test 9.3: Very Large Query, Test 9.4: Network Error Simulation
 
 ### Community 403 - "Community 403"
-Cohesion: 0.33
-Nodes (6): Prompt 33: backend will not start, Prompt 34: frontend will not load, Prompt 35: no AI responses or only fallback responses, Prompt 36: cache appears inactive, Prompt 37: ML service issues, Troubleshooting
+Cohesion: 0.44
+Nodes (8): aggregate(), getCountByCategory(), getDistribution(), getMetricByCategory(), getMinMaxMedian(), getRatioByCategory(), getScatterData(), retrieveStatsContext()
 
 ### Community 404 - "Community 404"
 Cohesion: 0.33
@@ -2323,10 +2329,6 @@ Nodes (5): Best Quality (10 minutes), Fast Training (30 seconds), High Quality (
 Cohesion: 0.40
 Nodes (5): Delete Model, Get Feature Importance, Get Model Details, List All Models, 📈 Model Management
 
-### Community 466 - "Community 466"
-Cohesion: 0.40
-Nodes (5): Feature Testing, Prompt 18: test analysis query types, Prompt 19: test export features, Prompt 20: test sampling endpoints, Prompt 21: test local dataset endpoints if using local mode
-
 ### Community 467 - "Community 467"
 Cohesion: 0.40
 Nodes (5): PASS Criteria - Caching, PHASE 6: QUERY CACHING TEST, Test 6.1: First Query (Cache Miss), Test 6.2: Second Query (Cache Hit), Test 6.3: Cache Statistics
@@ -2348,8 +2350,8 @@ Cohesion: 0.40
 Nodes (4): byId, memoryPath, strictEntries, strictPath
 
 ### Community 473 - "Community 473"
-Cohesion: 0.80
-Nodes (4): analyzeColumn(), extractCategoricalStats(), extractNumericStats(), isMeaningfulValue()
+Cohesion: 0.43
+Nodes (6): ensureFile(), findMemoryMatch(), MEMORY_FILE, readMemory(), saveAnalystMemory(), writeMemory()
 
 ### Community 475 - "Community 475"
 Cohesion: 0.40
@@ -2516,8 +2518,8 @@ Cohesion: 0.50
 Nodes (4): Default (Balanced), Full (Comprehensive), 🔧 Hyperparameter Configurations, Light (Fast)
 
 ### Community 518 - "Community 518"
-Cohesion: 0.50
-Nodes (4): Integration Testing, Prompt 30: end-to-end contributor journey, Prompt 31: ML workflow, if enabled, Prompt 32: cross-browser checks
+Cohesion: 0.25
+Nodes (7): Breadcrumb, BreadcrumbEllipsis(), BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator()
 
 ### Community 519 - "Community 519"
 Cohesion: 0.50
@@ -2580,8 +2582,8 @@ Cohesion: 0.67
 Nodes (3): fillTemplate(), getPrompt(), PROMPT_TEMPLATES
 
 ### Community 538 - "Community 538"
-Cohesion: 0.14
-Nodes (22): ac(), bb(), Bi(), c_(), cl(), Ec(), gh(), Ih() (+14 more)
+Cohesion: 0.38
+Nodes (11): ac(), bb(), cl(), Ec(), Ih(), Sh(), Sr(), Tc() (+3 more)
 
 ### Community 539 - "Community 539"
 Cohesion: 0.67
@@ -2616,12 +2618,8 @@ Cohesion: 0.67
 Nodes (3): PASS Criteria - Dashboard, PHASE 5: DASHBOARD & ANALYTICS, Test 5.1: Dashboard Metrics
 
 ### Community 554 - "Community 554"
-Cohesion: 0.67
-Nodes (3): PASS Criteria - Performance, PHASE 11: PERFORMANCE BENCHMARKS, Test 11.1: Measure Response Times
-
-### Community 555 - "Community 555"
-Cohesion: 0.67
-Nodes (3): Performance Testing, Prompt 22: measure key response times, Prompt 23: sequential load test
+Cohesion: 0.25
+Nodes (7): NavigationMenu, NavigationMenuContent, NavigationMenuIndicator, NavigationMenuList, NavigationMenuTrigger, navigationMenuTriggerStyle, NavigationMenuViewport
 
 ### Community 559 - "Community 559"
 Cohesion: 0.67
@@ -2640,43 +2638,43 @@ Cohesion: 0.67
 Nodes (3): Contribution Notes, Prompt 38: report an issue cleanly, Prompt 39: pre-PR validation
 
 ### Community 563 - "Community 563"
-Cohesion: 0.24
-Nodes (4): o0(), pr(), S2, _x()
+Cohesion: 0.40
+Nodes (4): formatBytes(), MobileUploadPortal(), QueueFile, UploadMode
 
 ### Community 564 - "Community 564"
 Cohesion: 0.67
 Nodes (3): Prompt 1: verify the environment, Prompt 2: configure environment variables, Setup And Prerequisites
 
-### Community 612 - "Community 612"
-Cohesion: 0.25
-Nodes (3): c0(), e0(), Wh
-
 ### Community 613 - "Community 613"
 Cohesion: 0.67
 Nodes (3): ?? Core Data Management Features, Dataset Operations, Export Functionality
 
-### Community 614 - "Community 614"
+### Community 615 - "Community 615"
+Cohesion: 0.67
+Nodes (3): PASS Criteria - Performance, PHASE 11: PERFORMANCE BENCHMARKS, Test 11.1: Measure Response Times
+
+### Community 616 - "Community 616"
 Cohesion: 0.67
 Nodes (3): Expected Results, PHASE 1: PREREQUISITES, Prerequisites Check
 
 ## Knowledge Gaps
-- **4479 isolated node(s):** `__filename`, `__dirname`, `args`, `exportJsonl`, `targets` (+4474 more)
+- **4499 isolated node(s):** `__filename`, `__dirname`, `args`, `exportJsonl`, `targets` (+4494 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **80 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **82 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `Fn()` connect `Community 216` to `Community 131`, `Community 4`, `Community 197`, `Community 202`, `Community 84`, `Community 340`?**
-  _High betweenness centrality (0.126) - this node is a cross-community bridge._
-- **Why does `$` connect `Community 4` to `Community 131`, `Community 260`, `Community 132`, `Community 5`, `Community 11`, `Community 141`, `Community 275`, `Community 23`, `Community 535`, `Community 414`, `Community 568`, `Community 569`, `Community 570`, `Community 58`, `Community 572`, `Community 571`, `Community 573`, `Community 216`, `Community 92`, `Community 234`?**
-  _High betweenness centrality (0.124) - this node is a cross-community bridge._
+  _High betweenness centrality (0.131) - this node is a cross-community bridge._
+- **Why does `$` connect `Community 4` to `Community 131`, `Community 260`, `Community 132`, `Community 5`, `Community 11`, `Community 141`, `Community 275`, `Community 23`, `Community 535`, `Community 414`, `Community 568`, `Community 569`, `Community 58`, `Community 570`, `Community 572`, `Community 571`, `Community 573`, `Community 466`, `Community 216`, `Community 92`?**
+  _High betweenness centrality (0.119) - this node is a cross-community bridge._
 - **Why does `tryCall()` connect `Community 84` to `Community 216`?**
-  _High betweenness centrality (0.098) - this node is a cross-community bridge._
+  _High betweenness centrality (0.101) - this node is a cross-community bridge._
 - **Are the 12 inferred relationships involving `mt()` (e.g. with `N` and `Ai()`) actually correct?**
   _`mt()` has 12 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `__filename`, `__dirname`, `args` to the rest of the system?**
-  _4480 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _4500 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.002844950213371266 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
