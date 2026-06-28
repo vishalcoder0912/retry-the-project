@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Globe2, Maximize2, Minus, Plus } from "lucide-react";
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from "react-simple-maps";
 import { scaleLinear } from "d3-scale";
-import { normalizeGeoValue, resolveGeoLocation } from "@/features/dashboard/utils/geoResolver";
+import { extractGeoLocation, normalizeGeoValue } from "@/features/dashboard/utils/geoResolver";
 
 type Row = Record<string, unknown>;
 type Column = { name: string; type?: string; role?: string };
@@ -19,8 +19,8 @@ type Point = {
 };
 
 const WORLD_GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
-
 const clean = (value: unknown) => String(value ?? "").trim();
+const pretty = (value: string) => value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
 const toNumber = (value: unknown) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -28,10 +28,8 @@ const toNumber = (value: unknown) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-const pretty = (value: string) => value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
-
 const formatValue = (value: number, metric: string) => {
-  if (/revenue|sales|profit|amount|price|cost|salary|income|usd|inr/i.test(metric)) return `$${Math.round(value).toLocaleString()}`;
+  if (/revenue|sales|profit|amount|price|cost|salary|income|billing|usd|inr/i.test(metric)) return `$${Math.round(value).toLocaleString()}`;
   return new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 }).format(value);
 };
 
@@ -42,12 +40,12 @@ const findColumn = (columns: Column[], names: string[], regex: RegExp) =>
 
 const inferLocationColumn = (rows: Row[], columns: Column[]) => {
   let best: { column: string; ratio: number; hits: number } | null = null;
-  const candidates = columns.map((column) => column.name).filter((name) => !/id|phone|zip|postal|code|pin|date|time|month|year|url|link/i.test(name));
+  const candidates = columns.map((column) => column.name).filter((name) => !/id|phone|zip|postal|code|pin|date|time|month|year|url|link|amount|billing|age|room/i.test(name));
 
   for (const column of candidates) {
-    const values = Array.from(new Set(rows.slice(0, 250).map((row) => clean(row[column])).filter(Boolean))).slice(0, 70);
+    const values = Array.from(new Set(rows.slice(0, 300).map((row) => clean(row[column])).filter(Boolean))).slice(0, 90);
     if (!values.length) continue;
-    const hits = values.filter((value) => resolveGeoLocation(value)).length;
+    const hits = values.filter((value) => extractGeoLocation(value)).length;
     const ratio = hits / values.length;
     if ((hits >= 2 && ratio >= 0.35) || ratio >= 0.75) {
       if (!best || ratio > best.ratio || hits > best.hits) best = { column, ratio, hits };
@@ -62,31 +60,35 @@ export default function DatasetGeoMap({ rows, columns = [] }: Props) {
   const [zoom, setZoom] = useState(1);
   const [center, setCenter] = useState<[number, number]>([20, 18]);
 
-  const schemaColumns = useMemo(() => columns.length ? columns : Object.keys(rows[0] || {}).map((name) => ({ name })), [columns, rows]);
+  const schemaColumns = useMemo(() => (columns.length ? columns : Object.keys(rows[0] || {}).map((name) => ({ name }))), [columns, rows]);
 
   const schema = useMemo(() => {
     const lat = findColumn(schemaColumns, ["lat", "latitude"], /^(lat|latitude)$/);
     const lng = findColumn(schemaColumns, ["lng", "lon", "long", "longitude"], /^(lng|lon|long|longitude)$/);
     const country = findColumn(schemaColumns, ["country", "country_name", "nation"], /country|nation/);
     const state = findColumn(schemaColumns, ["state", "province", "territory"], /state|province|territory/);
-    const city = findColumn(schemaColumns, ["city", "town"], /city|town/);
+    const city = findColumn(schemaColumns, ["city", "town", "hospital_city", "patient_city", "facility_city", "location_city"], /city|town/);
+    const facility = findColumn(schemaColumns, ["hospital", "facility", "clinic", "medical_center", "medical_centre"], /hospital|facility|clinic|medical_center|medical_centre/);
     const inferred = inferLocationColumn(rows, schemaColumns);
-    const location = country || state || city || inferred;
-    const mode = lat && lng ? "coordinates" : country ? "country" : state ? "state" : city ? "city" : inferred ? "data values" : "none";
-    return { lat, lng, country, state, city, inferred, location, mode };
+    const location = city || state || country || inferred;
+    const mode = lat && lng ? "coordinates" : city ? "city" : state ? "state" : country ? "country" : inferred ? "data values" : facility ? "facility needs city" : "none";
+    return { lat, lng, country, state, city, facility, inferred, location, mode };
   }, [rows, schemaColumns]);
 
-  const metricColumns = useMemo(() => schemaColumns.map((column) => column.name).filter((name) => {
-    if ([schema.lat, schema.lng].includes(name)) return false;
-    if (/id|phone|zip|postal|code|pin/i.test(name)) return false;
-    const values = rows.slice(0, 100).map((row) => toNumber(row[name])).filter((value) => value !== null);
-    return values.length >= Math.min(3, Math.max(rows.length, 1));
-  }), [rows, schemaColumns, schema.lat, schema.lng]);
+  const metricColumns = useMemo(
+    () => schemaColumns.map((column) => column.name).filter((name) => {
+      if ([schema.lat, schema.lng].includes(name)) return false;
+      if (/id|phone|zip|postal|code|pin/i.test(name)) return false;
+      const values = rows.slice(0, 100).map((row) => toNumber(row[name])).filter((value) => value !== null);
+      return values.length >= Math.min(3, Math.max(rows.length, 1));
+    }),
+    [rows, schemaColumns, schema.lat, schema.lng],
+  );
 
   const metricColumn = metricColumns.includes(metric) ? metric : metricColumns[0] || "count";
 
   const points = useMemo<Point[]>(() => {
-    if (!rows.length || schema.mode === "none") return [];
+    if (!rows.length || schema.mode === "none" || schema.mode === "facility needs city") return [];
 
     if (schema.mode === "coordinates") {
       return rows.map((row, index) => {
@@ -99,12 +101,12 @@ export default function DatasetGeoMap({ rows, columns = [] }: Props) {
       }).filter((item): item is Point => Boolean(item)).slice(0, 500);
     }
 
-    const bucket = new Map<string, { raw: string; records: number; sum: number; location: NonNullable<ReturnType<typeof resolveGeoLocation>> }>();
+    const bucket = new Map<string, { raw: string; records: number; sum: number; location: NonNullable<ReturnType<typeof extractGeoLocation>> }>();
     rows.forEach((row) => {
       const raw = clean(row[schema.location]);
-      const location = resolveGeoLocation(raw);
+      const location = extractGeoLocation(raw);
       if (!raw || !location) return;
-      const key = normalizeGeoValue(raw);
+      const key = normalizeGeoValue(location.name || raw);
       const current = bucket.get(key) || { raw, records: 0, sum: 0, location };
       current.records += 1;
       current.sum += metricColumn === "count" ? 1 : toNumber(row[metricColumn]) ?? 0;
@@ -126,21 +128,25 @@ export default function DatasetGeoMap({ rows, columns = [] }: Props) {
   const minValue = Math.min(...points.map((point) => point.value), 0);
   const colorScale = scaleLinear<string>().domain([minValue, maxValue]).range(["#ddd6fe", "#6d28d9"]);
   const active = points.find((point) => point.key === activeKey) || points[0];
-  const unmapped = schema.location ? rows.filter((row) => clean(row[schema.location]) && !resolveGeoLocation(row[schema.location])).length : 0;
+  const unmapped = schema.location ? rows.filter((row) => clean(row[schema.location]) && !extractGeoLocation(row[schema.location])).length : 0;
+
+  if (schema.mode === "facility needs city") {
+    return <Empty title="City schema required for healthcare map" message={`Detected ${schema.facility}, but hospital names alone are not enough for a real map. Add a City, Hospital City, State, Country, Latitude, or Longitude column and the map will plot real locations.`} />;
+  }
 
   if (schema.mode === "none") {
-    return <Empty title="No mappable data detected" message="The map checks schema names and actual dataset values. Add country, state, city, latitude/longitude, or a column whose values are real locations." />;
+    return <Empty title="No mappable location schema detected" message="Add City, Hospital City, State, Country, Latitude/Longitude, or a column whose values contain real places like Delhi, Mumbai, India, USA, or Germany." />;
   }
 
   if (!points.length) {
-    return <Empty title="Geo column found, but values were not mappable" message={`Detected ${schema.mode}. Use recognizable country, city, state names, or add latitude and longitude columns.`} />;
+    return <Empty title="Geo schema found, but city values were not mappable" message={`Detected ${schema.mode}. Use recognizable city/state/country names or add latitude and longitude columns for exact plotting.`} />;
   }
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <header className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700"><Globe2 className="size-3.5" />Dataset-driven map</div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700"><Globe2 className="size-3.5" />Real city map</div>
           <h2 className="mt-3 text-xl font-black tracking-tight text-slate-950">Interactive Geo Intelligence</h2>
           <p className="mt-1 text-sm text-slate-500">Mapping source: <span className="font-bold text-slate-700">{schema.mode}</span> · field: <span className="font-bold text-slate-700">{schema.location || "coordinates"}</span></p>
         </div>
