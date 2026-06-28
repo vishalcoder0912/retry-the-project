@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/features/data/api/dataApi";
 import type { Dataset } from "@/features/data/model/dataStore";
-import { buildPremiumDashboardModel } from "@/features/dashboard/utils/premiumDashboardAnalyticsFixed";
+import { buildPremiumDashboardModel } from "@/features/dashboard/utils/schemaFirstAnalytics";
 import type { AgentMessage } from "@/features/dashboard/types/premiumDashboardTypes";
 
 const starterMessages: AgentMessage[] = [
@@ -29,8 +29,6 @@ const formatMoney = (value: number, column = "") =>
     maximumFractionDigits: value > 100 ? 0 : 2,
   }).format(value);
 
-const findColumn = (dataset: Dataset, patterns: RegExp[]) => dataset.columns.find((column) => patterns.some((pattern) => pattern.test(column.name)))?.name || null;
-
 const groupAverage = (dataset: Dataset, dimension: string, metric: string) => {
   const buckets = new Map<string, { sum: number; count: number }>();
   for (const row of dataset.rows) {
@@ -50,28 +48,32 @@ const groupAverage = (dataset: Dataset, dimension: string, metric: string) => {
 
 function buildLocalAgentAnswer(dataset: Dataset, query: string) {
   const dashboard = buildPremiumDashboardModel(dataset);
-  const metric = dashboard.primaryMetric || findColumn(dataset, [/billing/i, /amount/i, /revenue/i, /sales/i, /salary/i]);
-  const dimension = dashboard.primaryDimension || findColumn(dataset, [/gender/i, /blood/i, /condition/i, /category/i, /segment/i]);
+  const metric = dashboard.primaryMetric;
+  const dimension = dashboard.primaryDimension;
   const normalized = query.toLowerCase();
 
   if (/how many|row count|total records|count rows|count records/i.test(normalized)) {
-    return `${dataset.name} has ${dataset.rows.length.toLocaleString()} records.`;
+    return `${dataset.name} has ${dataset.rows.length.toLocaleString()} real uploaded records.`;
   }
 
   if (metric && /average|avg|mean/i.test(normalized)) {
     const values = dataset.rows.map((row) => asNumber(row[metric])).filter((value): value is number => value !== null);
     const avg = values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
-    return `Average ${metric} is ${formatMoney(avg, metric)} across ${values.length.toLocaleString()} numeric rows.`;
+    return `Average ${metric} is ${formatMoney(avg, metric)} across ${values.length.toLocaleString()} real numeric rows.`;
   }
 
   if (metric && dimension && /by|group|segment|top|rank|best|highest/i.test(normalized)) {
     const rows = groupAverage(dataset, dimension, metric);
-    return `Top ${dimension} by average ${metric}: ${rows.map((row) => `${row.label}: ${formatMoney(row.value, metric)}`).join(", ")}.`;
+    return `Top ${dimension} by average ${metric}: ${rows.map((row) => `${row.label}: ${formatMoney(row.value, metric)}`).join(", ")}. These values are calculated from real rows.`;
   }
 
   if (/outlier|anomal/i.test(normalized)) {
     const chart = dashboard.charts.find((item) => item.id === "metric-outliers");
-    return chart?.data?.length ? `Top outliers: ${chart.data.slice(0, 5).map((row) => `${row.label}: ${Number(row.value).toLocaleString()}`).join(", ")}.` : "No reliable numeric outliers were detected.";
+    return chart?.data?.length ? `Top real outliers: ${chart.data.slice(0, 5).map((row) => `${row.label}: ${Number(row.value).toLocaleString()}`).join(", ")}.` : "No reliable numeric outliers were detected.";
+  }
+
+  if (/schema|column|profile|role/i.test(normalized)) {
+    return `Schema-first analysis detected primary metric ${dashboard.primaryMetric || "not detected"}, primary dimension ${dashboard.primaryDimension || "not detected"}, ${dashboard.kpis.length} KPIs, and ${dashboard.charts.length} real-data charts.`;
   }
 
   if (/geo|map|city|country|location|hospital/i.test(normalized)) {
@@ -79,7 +81,7 @@ function buildLocalAgentAnswer(dataset: Dataset, query: string) {
     return hasMap ? "Geo analysis is available from real city, state, country, or coordinate data." : "Hospital names were detected, but a real map needs City, Hospital City, State, Country, Latitude, or Longitude columns.";
   }
 
-  return `Dataset summary: ${dataset.name} has ${dataset.rows.length.toLocaleString()} rows and ${dataset.columns.length} columns. Primary metric: ${dashboard.primaryMetric || "not detected"}. Primary dimension: ${dashboard.primaryDimension || "not detected"}. Data quality: ${dashboard.qualityScore}/100.`;
+  return `Dataset summary: ${dataset.name} has ${dataset.rows.length.toLocaleString()} rows and ${dataset.columns.length} columns. Primary metric: ${dashboard.primaryMetric || "not detected"}. Primary dimension: ${dashboard.primaryDimension || "not detected"}. Data quality: ${dashboard.qualityScore}/100. All KPI and chart values are calculated from real rows.`;
 }
 
 function buildDashboardState(dataset: Dataset) {
@@ -92,6 +94,7 @@ function buildDashboardState(dataset: Dataset) {
     primaryDimension: dashboard.primaryDimension,
     kpis: dashboard.kpis,
     charts: dashboard.charts.map((chart) => ({ id: chart.id, title: chart.title, type: chart.type, xKey: chart.xKey, yKey: chart.yKey })),
+    warnings: dashboard.warnings || [],
   };
 }
 
