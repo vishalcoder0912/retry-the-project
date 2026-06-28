@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Globe2, Maximize2, Minus, Plus } from "lucide-react";
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from "react-simple-maps";
 import { scaleLinear } from "d3-scale";
+import worldGeographies from "@/assets/maps/countries-110m.json";
 import { extractGeoLocation, normalizeGeoValue } from "@/features/dashboard/utils/geoResolver";
 
 type Row = Record<string, unknown>;
@@ -18,7 +19,13 @@ type Point = {
   source: string;
 };
 
-const WORLD_GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+type MapGeography = {
+  rsmKey: string;
+  properties?: {
+    name?: string;
+  };
+};
+
 const clean = (value: unknown) => String(value ?? "").trim();
 const pretty = (value: string) => value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
@@ -172,7 +179,7 @@ export default function DatasetGeoMap({ rows, columns = [] }: Props) {
           <ComposableMap projection="geoEqualEarth" projectionConfig={{ scale: 165 }} className="absolute inset-0 h-full w-full">
             <rect width="800" height="600" fill="#f8fafc" />
             <ZoomableGroup zoom={zoom} center={center} onMoveEnd={({ coordinates, zoom }) => { setCenter(coordinates as [number, number]); setZoom(zoom); }}>
-              <Geographies geography={WORLD_GEO_URL}>{({ geographies }: any) => geographies.map((geo: any) => { const name = normalizeGeoValue(geo.properties?.name || ""); const match = points.find((point) => normalizeGeoValue(point.name) === name || normalizeGeoValue(point.raw) === name); return <Geography key={geo.rsmKey} geography={geo} fill={match ? colorScale(match.value) : "#e2e8f0"} stroke="#ffffff" strokeWidth={0.55} style={{ default: { outline: "none" }, hover: { fill: match ? "#6d28d9" : "#cbd5e1", outline: "none" }, pressed: { outline: "none" } }} onMouseEnter={() => match && setActiveKey(match.key)} onMouseLeave={() => setActiveKey(null)} />; })}</Geographies>
+              <Geographies geography={worldGeographies}>{({ geographies }: { geographies: MapGeography[] }) => geographies.map((geo) => { const name = normalizeGeoValue(geo.properties?.name || ""); const match = points.find((point) => normalizeGeoValue(point.name) === name || normalizeGeoValue(point.raw) === name); return <Geography key={geo.rsmKey} geography={geo} fill={match ? colorScale(match.value) : "#e2e8f0"} stroke="#ffffff" strokeWidth={0.55} style={{ default: { outline: "none" }, hover: { fill: match ? "#6d28d9" : "#cbd5e1", outline: "none" }, pressed: { outline: "none" } }} onMouseEnter={() => match && setActiveKey(match.key)} onMouseLeave={() => setActiveKey(null)} />; })}</Geographies>
               {points.map((point) => { const radius = 5 + (point.records / Math.max(...points.map((item) => item.records), 1)) * 14; const isActive = activeKey === point.key; return <Marker key={point.key} coordinates={point.coordinates} onMouseEnter={() => setActiveKey(point.key)} onMouseLeave={() => setActiveKey(null)}><circle r={radius + 8} fill="#7c3aed" opacity={isActive ? 0.18 : 0.08} /><circle r={radius} fill={colorScale(point.value)} stroke="#ffffff" strokeWidth={2} />{isActive && <text y={-radius - 8} textAnchor="middle" fontSize={11} fontWeight={800} fill="#0f172a">{point.name}</text>}</Marker>; })}
             </ZoomableGroup>
           </ComposableMap>

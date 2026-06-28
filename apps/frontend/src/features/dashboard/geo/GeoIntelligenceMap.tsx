@@ -5,9 +5,8 @@ import {
   Geography,
   ZoomableGroup,
 } from "react-simple-maps";
+import worldGeographies from "@/assets/maps/countries-110m.json";
 import type { GeoLocationData } from "./geoIntelligenceEngine";
-
-const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
 interface TooltipData {
   location: GeoLocationData;
@@ -98,7 +97,7 @@ const GeoIntelligenceMap = memo(function GeoIntelligenceMap({
         style={{ width: "100%", height: "auto" }}
       >
         <ZoomableGroup zoom={1} center={[0, 30]} minZoom={1} maxZoom={4}>
-          <Geographies geography={GEO_URL}>
+          <Geographies geography={worldGeographies}>
             {({ geographies }) =>
               geographies.map((geo: GeoFeature) => {
                 const name: string =

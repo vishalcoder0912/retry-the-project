@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { Download, FileJson, Share2, Trash2, Plus, Sparkles, X, RefreshCw } from "lucide-react";
+import { Download, FileJson, Share2, Trash2, Plus, Sparkles, X, RefreshCw, UploadCloud, Table2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/features/data/api/dataApi";
 import { useData } from "@/features/data/context/useData";
@@ -54,7 +54,7 @@ const softButton = "inline-flex items-center gap-2 rounded-xl border border-slat
 
 export default function PremiumAgenticDashboardPage() {
   const navigate = useNavigate();
-  const { dataset, deleteDataset } = useData();
+  const { dataset, deleteDataset, isHydrating, loadDemo } = useData();
   const { dashboard, messages, loading, error, deepResearch, setDeepResearch, runPrompt } = usePremiumAgenticDashboard(dataset);
   const [chartsReady, setChartsReady] = useState(false);
   const [activeAnalyticsTab, setActiveAnalyticsTab] = useState("Overview");
@@ -181,7 +181,49 @@ export default function PremiumAgenticDashboardPage() {
 
   const activeFilterEntries = Object.entries(filters).filter(([, value]) => value);
 
-  if (!dataset || !dashboard) return null;
+  if (isHydrating) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-[#f6f7fb] p-6 text-slate-900">
+        <section className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <div className="mx-auto mb-4 grid size-12 place-items-center rounded-2xl bg-violet-50 text-violet-700"><RefreshCw className="h-6 w-6 animate-spin" /></div>
+          <h1 className="text-xl font-black tracking-tight">Preparing dashboard</h1>
+          <p className="mx-auto mt-2 max-w-xs text-sm leading-6 text-slate-500">Loading the active dataset and analytics workspace.</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (!dataset || !dashboard) {
+    return (
+      <main className="min-h-screen bg-[#f6f7fb] p-6 text-slate-900">
+        <section className="mx-auto mt-16 grid max-w-5xl gap-6 lg:grid-cols-[1.05fr_.95fr]">
+          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+            <div className="inline-flex items-center gap-2 rounded-full border border-violet-100 bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700"><Sparkles className="size-3.5" />Agentic analytics workspace</div>
+            <h1 className="mt-5 text-3xl font-black tracking-tight text-slate-950">No dataset loaded</h1>
+            <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">Upload a CSV, Excel workbook, or JSON file to generate KPIs, charts, geo intelligence, insights, and an AI assistant grounded in your data.</p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button type="button" onClick={() => navigate("/upload")} className="inline-flex items-center gap-2 rounded-2xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-violet-700"><UploadCloud className="h-4 w-4" />Upload Dataset</button>
+              <button type="button" onClick={() => void loadDemo()} className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"><Table2 className="h-4 w-4" />Load Demo</button>
+            </div>
+          </div>
+          <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h2 className="text-sm font-black uppercase tracking-[0.16em] text-slate-400">Supported inputs</h2>
+            <div className="mt-4 grid gap-3 text-sm text-slate-600">
+              {["CSV files with headers", "Excel .xlsx workbooks", "JSON row collections", "Columns for country, city, state, latitude, or longitude"].map((item) => (
+                <div key={item} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-semibold">{item}</div>
+              ))}
+            </div>
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100">
+              <div>market,revenue</div>
+              <div>India,61000</div>
+              <div>USA,52000</div>
+              <div>Germany,47000</div>
+            </div>
+          </aside>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#f6f7fb] text-slate-900">
@@ -263,7 +305,19 @@ export default function PremiumAgenticDashboardPage() {
             ) : <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">{tabCharts.slice(0, 3).map((chart) => <div key={chart.id} className="h-[330px] animate-pulse rounded-3xl border border-slate-200 bg-slate-50" />)}</div>}
           </section>
 
-          {hasMappableGeoColumn && activeAnalyticsTab !== "Geo Analysis" && <section className={cardClass}><h2 className="mb-3 text-base font-black text-slate-950">Geo Intelligence</h2><GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} /></section>}
+          {hasMappableGeoColumn && activeAnalyticsTab !== "Geo Analysis" && (
+            <section className={cardClass}>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-base font-black text-slate-950">Geo Intelligence</h2>
+                  <p className="mt-1 text-sm text-slate-500">Mappable location data is available for this dataset. Open the full map, markers, and ranking view in Geo Analysis.</p>
+                </div>
+                <button type="button" onClick={() => setActiveAnalyticsTab("Geo Analysis")} className="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-4 py-2.5 text-xs font-bold text-violet-700">
+                  Open Geo Analysis
+                </button>
+              </div>
+            </section>
+          )}
 
           <PremiumInsightCards insights={dashboard.insights} />
           <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]"><PremiumRagPipeline steps={dashboard.ragPipeline} /><PremiumDataPreview dataset={dataset} onViewFullTable={() => navigate("/data")} onDownload={() => downloadDataset("csv")} /></div>
