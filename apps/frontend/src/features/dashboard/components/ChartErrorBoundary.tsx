@@ -12,15 +12,10 @@ type State = {
 };
 
 export class ChartErrorBoundary extends React.Component<Props, State> {
-  state: State = {
-    hasError: false,
-  };
+  state: State = { hasError: false };
 
   static getDerivedStateFromError(error: Error): State {
-    return {
-      hasError: true,
-      error,
-    };
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error) {
@@ -28,39 +23,25 @@ export class ChartErrorBoundary extends React.Component<Props, State> {
   }
 
   reset = () => {
-    this.setState({
-      hasError: false,
-      error: undefined,
-    });
+    this.setState({ hasError: false, error: undefined });
   };
 
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-[320px] rounded-2xl border border-red-400/20 bg-red-950/20 p-6 text-red-100 shadow-[0_0_30px_rgba(239,68,68,0.12)]">
+        <div className="min-h-[320px] rounded-3xl border border-rose-100 bg-white p-6 text-rose-700 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
-            <AlertTriangle className="size-5 text-red-300" />
-            <h3 className="font-semibold">
-              {this.props.fallbackTitle || "Chart failed to load"}
-            </h3>
+            <span className="grid size-10 place-items-center rounded-2xl bg-rose-50 text-rose-600"><AlertTriangle className="size-5" /></span>
+            <h3 className="font-bold text-slate-950">{this.props.fallbackTitle || "Chart failed to load"}</h3>
           </div>
-
-          <p className="mb-4 text-sm text-red-200/80">
-            This chart component crashed, but the dashboard is still safe.
-          </p>
-
-          <button
-            onClick={this.reset}
-            className="inline-flex items-center gap-2 rounded-xl border border-red-300/30 bg-red-400/10 px-3 py-2 text-sm hover:bg-red-400/20"
-            type="button"
-          >
+          <p className="mb-4 text-sm text-slate-500">This chart failed to render, but the dashboard is still available.</p>
+          <button onClick={this.reset} className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-3 py-2 text-sm font-bold text-white" type="button">
             <RefreshCw className="size-4" />
             Retry chart
           </button>
         </div>
       );
     }
-
     return this.props.children;
   }
 }

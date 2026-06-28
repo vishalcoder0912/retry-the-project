@@ -9,7 +9,6 @@ import {
   buildKpis,
   cleanDatasetRows,
   type DashboardChart,
-  type DashboardFilters,
   type DashboardKpi,
   type Row,
 } from "@/features/dashboard/utils/dashboardAnalytics";
@@ -120,7 +119,112 @@ function replaceChartByTarget(charts: ChartSpec[], target: ChartTarget, next: Ch
   return replaced ? updated : upsertChart(charts, next);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeId() {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function upsertChart(charts: ChartSpec[], next: ChartSpec) {
+  const normalized = { ...next, id: next.id || makeId() };
+  const index = charts.findIndex((chart) => sameChart(chart, normalized) || (!!normalized.id && chart.id === normalized.id));
+  if (index === -1) return [...charts, normalized];
+  return charts.map((chart, chartIndex) => (chartIndex === index ? { ...chart, ...normalized } : chart));
+}
+
+function upsertKpi(kpis: KpiSpec[], next: KpiSpec) {
+  const normalized = { ...next, id: next.id || makeId() };
+  const title = normalizeTitle(normalized.title);
+  const index = kpis.findIndex((kpi) => (!!normalized.id && kpi.id === normalized.id) || normalizeTitle(kpi.title) === title);
+  if (index === -1) return [...kpis, normalized];
+  return kpis.map((kpi, kpiIndex) => (kpiIndex === index ? { ...kpi, ...normalized } : kpi));
+}
+
+function normalizeFilters(filters: DashboardCommandResponse["filters"] = {}) {
+  if (Array.isArray(filters)) {
+    return filters.reduce<Record<string, string>>((acc, filter) => {
+      const key = filter.key || filter.column;
+      if (key && filter.value !== undefined && filter.value !== null && String(filter.value).trim()) {
+        acc[key] = String(filter.value);
+      }
+      return acc;
+    }, {});
+  }
+
+  return Object.fromEntries(
+    Object.entries(filters || {})
+      .filter(([, value]) => value !== undefined && value !== null && String(value).trim())
+      .map(([key, value]) => [key, String(value)]),
+  );
+}
+
+function blockedDashboardPrompt(query: string) {
+  const text = query.toLowerCase();
+  if (/(change|fake|override|tamper|manipulate).{0,30}(kpi|metric|number|value)/i.test(query)) {
+    return "I cannot tamper with dashboard values. I can create schema-safe specs, but KPI and chart values are calculated from the local rows.";
+  }
+  if (/(show|send|dump|expose).{0,30}(raw rows|raw data|all rows|source rows|internal schema)/i.test(query)) {
+    return "I cannot expose raw rows or internal schema through dashboard chat. I can summarize trends, build charts, or apply filters locally.";
+  }
+  if (text.includes("ignore schema") || text.includes("bypass guardian")) {
+    return "Schema Guardian blocked that request. Dashboard actions must use available columns and local calculations.";
+  }
+  return null;
+}
+
+function localFallbackAnswer(query: string, rows: Array<Record<string, unknown>>) {
+  const rowCount = rows.length.toLocaleString();
+  if (/explain|summary|describe|overview/i.test(query)) {
+    return `This dashboard is based on ${rowCount} local rows. Values are calculated in the browser from the current filtered dataset.`;
+  }
+  return "I could not reach the schema AI service, so no dashboard action was applied. Existing local KPIs and charts remain calculated from the dataset.";
+}
+
+function topLevelActionToActions(command: DashboardCommandResponse): NonNullable<DashboardCommandResponse["actions"]> {
+  if (command.actions?.length) return command.actions;
+
+  if (command.action === "GENERATE_CHART" || command.action === "MODIFY_CHART") {
+    return [{
+      action: command.action === "MODIFY_CHART" ? "modify_chart" : "create_chart",
+      chartSpec: command.chartSpec,
+      title: command.chartSpec?.title,
+      type: command.chartSpec?.type,
+      xKey: command.chartSpec?.xKey,
+      yKey: command.chartSpec?.yKey,
+      aggregation: command.chartSpec?.aggregation,
+    }];
+  }
+
+  if (command.action === "GENERATE_KPI") {
+    return [{
+      action: "create_kpi",
+      kpiSpec: command.kpiSpec,
+      title: command.kpiSpec?.title,
+      metric: command.kpiSpec?.metric,
+      aggregation: command.kpiSpec?.aggregation,
+    }];
+  }
+
+  if (command.action === "DELETE_CHART") {
+    return [{
+      action: "delete_chart",
+      targetId: command.targetId,
+      targetTitle: command.targetTitle,
+      chartSpec: command.chartSpec,
+    }];
+  }
+
+  if (command.action === "FILTER") {
+    return [{ action: "filter", filters: command.filters }];
+  }
+
+  if (command.action === "CLEAR_FILTERS") {
+    return [{ action: "clear_filters" }];
+  }
+
+  return [];
+}
+
 export function useDashboardAiController(
   payload: DatasetPayload,
   initialDashboard?: { kpis?: KpiSpec[]; charts?: ChartSpec[]; source?: string; domain?: string },
@@ -139,6 +243,16 @@ export function useDashboardAiController(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dashboardHealth, setDashboardHealth] = useState<DashboardCommandResponse["dashboardHealth"]>();
+  const [dashboardSpecs, setDashboardSpecs] = useState<DashboardSpecs>({
+    kpis: initialDashboard?.kpis || [],
+    charts: initialDashboard?.charts || [],
+    source: initialDashboard?.source,
+    domain: initialDashboard?.domain,
+  });
+  const [manualCharts, setManualCharts] = useState<ChartSpec[]>([]);
+  const [manualKpis, setManualKpis] = useState<KpiSpec[]>([]);
+  const [chartsCleared, setChartsCleared] = useState(false);
+  const updateFilters = useMemo(() => setFilters || (() => undefined), [setFilters]);
 
   useEffect(() => {
     if (!initialDashboard?.kpis?.length && !initialDashboard?.charts?.length) return;
@@ -272,8 +386,21 @@ export function useDashboardAiController(
         }
       }
 
-    if (shouldClearFilters) setFilters({});
-    if (Object.keys(nextFilters).length) setFilters((current) => ({ ...current, ...nextFilters }));
+    if ((command.action === "GENERATE_DASHBOARD" || command.action === "FIX_DASHBOARD") && (command.dashboard || command.dashboardPlan)) {
+      const dashboard = command.dashboard || command.dashboardPlan;
+      setDashboardSpecs({
+        kpis: (dashboard?.kpis || []) as KpiSpec[],
+        charts: (dashboard?.charts || []) as ChartSpec[],
+        source: dashboard?.source,
+        domain: dashboard?.domain,
+      });
+      setManualCharts([]);
+      setManualKpis([]);
+      setChartsCleared(false);
+    }
+
+    if (shouldClearFilters) updateFilters({});
+    if (Object.keys(nextFilters).length) updateFilters((current) => ({ ...current, ...nextFilters }));
 
     pushAssistant(command.natural_response || command.message || "Applied schema-safe dashboard actions.", {
       type: command.schema_safe === false ? "warning" : "action",
@@ -284,72 +411,7 @@ export function useDashboardAiController(
     if (!createdCharts && !modifiedCharts && !createdKpis && !deletedCharts && !Object.keys(nextFilters).length && !shouldClearFilters) {
       pushAssistant("I prepared the action, but there was no valid schema-safe chart, KPI, or filter to apply.", { type: "warning" });
     }
-    return;
-
-  if ((command.action === "GENERATE_DASHBOARD" || command.action === "FIX_DASHBOARD") && (command.dashboard || command.dashboardPlan)) {
-      const dashboard = command.dashboard || command.dashboardPlan;
-      setDashboardSpecs({
-        kpis: (dashboard?.kpis || []) as KpiSpec[],
-        charts: (dashboard?.charts || []) as ChartSpec[],
-        source: dashboard?.source,
-        domain: dashboard?.domain,
-      });
-      setChartsCleared(false);
-      if (command.action === "MODIFY_CHART") {
-        setManualCharts((current) => current.length ? [...current.slice(0, -1), command.chartSpec as ChartSpec] : [command.chartSpec as ChartSpec]);
-      } else {
-        setManualCharts((current) => [...current, command.chartSpec as ChartSpec]);
-      }
-      pushAssistant(command.message || "Chart generated from a safe AI spec and calculated locally.", {
-        type: "chart",
-        model: command.model,
-        provider: command.provider,
-      });
-      return;
-    }
-
-    if (command.action === "GENERATE_KPI" && command.kpiSpec) {
-      const { value: _value, data: _data, rows: _rows, ...kpiSpec } = command.kpiSpec as KpiSpec & { value?: unknown; data?: unknown; rows?: unknown };
-      setManualKpis((current) => [...current, kpiSpec].slice(-8));
-      pushAssistant(command.message || "KPI generated from a safe AI spec and calculated locally.", {
-        type: "kpi",
-        model: command.model,
-        provider: command.provider,
-      });
-      return;
-    }
-
-    if (command.action === "DELETE_CHART") {
-      const target = {
-        id: command.targetId || command.chartSpec?.id,
-        title: command.targetTitle || command.chartSpec?.title,
-        chart: command.chartSpec,
-      };
-      setManualCharts((current) => removeChartByTarget(current, target));
-      setDashboardSpecs((current) => ({ ...current, charts: removeChartByTarget(current.charts, target) }));
-      pushAssistant(command.message || "Removed a chart.", { type: "action" });
-      return;
-    }
-
-    if (command.action === "FILTER") {
-      const nextFilters = normalizeFilters(command.filters);
-      setFilters((current) => ({ ...current, ...nextFilters }));
-      pushAssistant(command.message || "Filter applied.", { type: "action" });
-      return;
-    }
-
-    if (command.action === "CLEAR_FILTERS") {
-      setFilters({});
-      pushAssistant(command.message || "Filters cleared.", { type: "action" });
-      return;
-    }
-
-    pushAssistant(command.message || "I can help build charts, KPIs, filters, and explain this dashboard.", {
-      type: "text",
-      model: command.model,
-      provider: command.provider,
-    });
-  }, [allSpecs.charts, dashboardSpecs.charts, pushAssistant]);
+  }, [dashboardSpecs.charts, pushAssistant, updateFilters]);
 
   const runCommand = useCallback(async (query: string) => {
     const text = query.trim();
@@ -366,11 +428,19 @@ export function useDashboardAiController(
         return;
       }
 
-      pushAssistant(response.assistantMessage?.content || localFallbackAnswer(text, rows), {
-        type: "text",
-        model: response.assistantMessage?.model,
-        provider: response.assistantMessage?.provider,
-      });
+      const datasetId = payload.id || payload.name || "local-dataset";
+      const response = await schemaAiClient.sendDashboardCommand(
+        datasetId,
+        text,
+        { kpis: allSpecs.kpis, charts: allSpecs.charts, filters },
+        {
+          ...payloadWithContext,
+          id: datasetId,
+          rows: cleanDatasetRows(rows as Row[]),
+        },
+        { useLlm },
+      );
+      applyCommand({ ...response, actions: topLevelActionToActions(response) });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Schema chat failed.";
       setError(message);
@@ -378,11 +448,45 @@ export function useDashboardAiController(
     } finally {
       setLoading(false);
     }
-  }, [loading, payload, pushAssistant, rows, useLlm]);
+  }, [allSpecs, applyCommand, filters, loading, payload, payloadWithContext, pushAssistant, rows, useLlm]);
 
-  const askChat = useCallback(async (_query: string) => {
-    return "";
-  }, []);
+  const askChat = useCallback(async (query: string) => {
+    const text = query.trim();
+    if (!text || loading) return "";
+
+    setLoading(true);
+    setError(null);
+    setMessages((current) => [...current, { id: makeId(), role: "user", content: text }]);
+
+    try {
+      const datasetId = payload.id || payload.name || "local-dataset";
+      const response = await schemaAiClient.sendSchemaChat(
+        datasetId,
+        text,
+        {
+          ...payloadWithContext,
+          id: datasetId,
+          rows: cleanDatasetRows(rows as Row[]),
+        },
+        { useLlm },
+      );
+      const content = response.assistantMessage?.content || localFallbackAnswer(text, rows);
+      pushAssistant(content, {
+        type: "text",
+        model: response.assistantMessage?.model,
+        provider: response.assistantMessage?.provider,
+      });
+      return content;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Schema chat failed.";
+      setError(message);
+      const fallback = `${localFallbackAnswer(text, rows)} Debug: ${message}`;
+      pushAssistant(fallback, { type: "warning" });
+      return fallback;
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, payload, payloadWithContext, pushAssistant, rows, useLlm]);
 
   const convertChart = useCallback((chartId: string, type: ChartType) => {
     setDashboardSpecs((current) => ({
