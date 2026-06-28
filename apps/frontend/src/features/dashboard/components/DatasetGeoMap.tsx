@@ -1,1 +1,1 @@
-export { default } from "./AnimatedDatasetGeoMap";
+export { default } from "./ReferenceDatasetGeoMap";
