@@ -2275,8 +2275,8 @@
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/pages/PremiumAgenticDashboardPage.tsx": {
-    "mtime": 1782617449.971837,
-    "ast_hash": "ab90780c065a67f154b9b6bed25655bc",
+    "mtime": 1782618315.942808,
+    "ast_hash": "2e2f7c0f1549a60f49ae62f87beefecb",
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/types/chartManagementTypes.ts": {
