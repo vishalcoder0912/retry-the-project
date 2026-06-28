@@ -57,7 +57,7 @@ export function PremiumDataPreview({ dataset, onViewFullTable }: { dataset: Data
   };
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="col-span-full min-w-0 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <h3 className="text-sm font-black text-slate-950">Dataset Preview</h3>
