@@ -2145,13 +2145,13 @@
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/components/PremiumDataPreview.tsx": {
-    "mtime": 1782617127.0488758,
-    "ast_hash": "a4cfad99ea6725fdfecc236cf6ad92b2",
+    "mtime": 1782620563.7663293,
+    "ast_hash": "19ab3585a6c1353c0f54cbf1b46110bf",
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/components/PremiumInsightCards.tsx": {
-    "mtime": 1782617127.0508778,
-    "ast_hash": "58c4785cd69b561552d695b9d680973d",
+    "mtime": 1782620563.7733421,
+    "ast_hash": "28900f507449f1b2fee0e623ca21cafa",
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/components/PremiumMetricCard.tsx": {
@@ -2160,8 +2160,8 @@
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/components/PremiumRagPipeline.tsx": {
-    "mtime": 1782617127.0538766,
-    "ast_hash": "7874357a7f17a1ecdb6c4865cd7a1bba",
+    "mtime": 1782620563.7793207,
+    "ast_hash": "1c30be033b767d713690c3a17e5dd649",
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/components/ProviderStatusPanel.tsx": {
@@ -2195,8 +2195,8 @@
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/geo/GeoIntelligenceMap.tsx": {
-    "mtime": 1780754598.0139446,
-    "ast_hash": "b2d5776698ed8a878ddb4ceb1438336c",
+    "mtime": 1782620810.2415001,
+    "ast_hash": "e71689b11b810a53fbea998bdf9914f9",
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/geo/GeoKPICards.tsx": {
@@ -2275,8 +2275,8 @@
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/pages/PremiumAgenticDashboardPage.tsx": {
-    "mtime": 1782618315.942808,
-    "ast_hash": "2e2f7c0f1549a60f49ae62f87beefecb",
+    "mtime": 1782621253.7296343,
+    "ast_hash": "439167b3564aa73095eeea2d35882b3d",
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/types/chartManagementTypes.ts": {
@@ -3035,7 +3035,7 @@
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1782616747.9936326,
+    "mtime": 1782620562.4445536,
     "ast_hash": "fd9fe4a312b1cbc33d5b24358f4953c3",
     "semantic_hash": ""
   },
@@ -4305,18 +4305,38 @@
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/components/DatasetGeoMap.tsx": {
-    "mtime": 1782617127.0428672,
-    "ast_hash": "a35495c250623d35deb8befd63046a64",
+    "mtime": 1782620684.5651708,
+    "ast_hash": "4307454f0d081b0a7e6ad203d320617a",
     "semantic_hash": ""
   },
   "apps/frontend/src/features/dashboard/utils/geoResolver.ts": {
-    "mtime": 1782617127.0588794,
-    "ast_hash": "f777121f05ecacdedbdfda6cb0d32efd",
+    "mtime": 1782620731.3947902,
+    "ast_hash": "10fcc24b88f37c0ed106f983e4907468",
     "semantic_hash": ""
   },
   "docs/AGENTIC_AI_DATA_ANALYSIS_ARCHITECTURE.md": {
     "mtime": 1782617127.0663974,
     "ast_hash": "f350c9b1328c7ef6bc05e1e69c79dce1",
+    "semantic_hash": ""
+  },
+  "apps/frontend/src/__tests__/PremiumAgenticDashboardPage.empty.test.tsx": {
+    "mtime": 1782620192.7270846,
+    "ast_hash": "d69d507799a12ee00ba2241d272161e4",
+    "semantic_hash": ""
+  },
+  "apps/frontend/src/__tests__/geoResolver.test.ts": {
+    "mtime": 1782620192.348822,
+    "ast_hash": "ab104648b4770e4197831a41152d9974",
+    "semantic_hash": ""
+  },
+  "apps/frontend/src/assets/maps/countries-110m.json": {
+    "mtime": 1782620077.2749407,
+    "ast_hash": "f9e7e236acd19d09845463e108f33765",
+    "semantic_hash": ""
+  },
+  "apps/frontend/src/features/dashboard/components/ResponsiveDataPreview.tsx": {
+    "mtime": 1782620563.781317,
+    "ast_hash": "57ee5bb922134d962e159989f02fd68c",
     "semantic_hash": ""
   }
 }
