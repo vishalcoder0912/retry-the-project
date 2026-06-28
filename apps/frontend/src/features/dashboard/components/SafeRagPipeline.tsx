@@ -30,7 +30,7 @@ const cleanSubtitle = (value: string) =>
 
 export function PremiumRagPipeline({ steps }: { steps: RagPipelineStep[] }) {
   return (
-    <section className="min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+    <section className="col-span-full min-w-0 overflow-hidden rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h3 className="text-sm font-black leading-5 text-slate-950">Analysis Pipeline</h3>
