@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "@/features/data/api/dataApi";
 import type { Dataset } from "@/features/data/model/dataStore";
 import { buildPremiumDashboardModel } from "@/features/dashboard/utils/premiumDashboardAnalyticsFixed";
 import type { AgentMessage } from "@/features/dashboard/types/premiumDashboardTypes";
@@ -13,6 +14,8 @@ const starterMessages: AgentMessage[] = [
 ];
 
 const randomId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
+const useBackendAgent = () => import.meta.env.VITE_USE_BACKEND_AGENTIC_AI !== "false";
+const agentSampleSize = () => Number(import.meta.env.VITE_AGENTIC_SCHEMA_SAMPLE_SIZE || 7000);
 
 const asNumber = (value: unknown): number | null => {
   const parsed = Number(String(value ?? "").replace(/[$,%]/g, "").trim());
@@ -79,6 +82,19 @@ function buildLocalAgentAnswer(dataset: Dataset, query: string) {
   return `Dataset summary: ${dataset.name} has ${dataset.rows.length.toLocaleString()} rows and ${dataset.columns.length} columns. Primary metric: ${dashboard.primaryMetric || "not detected"}. Primary dimension: ${dashboard.primaryDimension || "not detected"}. Data quality: ${dashboard.qualityScore}/100.`;
 }
 
+function buildDashboardState(dataset: Dataset) {
+  const dashboard = buildPremiumDashboardModel(dataset);
+  return {
+    datasetName: dataset.name,
+    rowCount: dataset.rows.length,
+    columnCount: dataset.columns.length,
+    primaryMetric: dashboard.primaryMetric,
+    primaryDimension: dashboard.primaryDimension,
+    kpis: dashboard.kpis,
+    charts: dashboard.charts.map((chart) => ({ id: chart.id, title: chart.title, type: chart.type, xKey: chart.xKey, yKey: chart.yKey })),
+  };
+}
+
 export function usePremiumAgenticDashboard(dataset: Dataset | null) {
   const [messages, setMessages] = useState<AgentMessage[]>(starterMessages);
   const [loading, setLoading] = useState(false);
@@ -99,8 +115,20 @@ export function usePremiumAgenticDashboard(dataset: Dataset | null) {
       setMessages((current) => [...current, userMessage]);
       setLoading(true);
       setError(null);
+
       try {
-        const answer = buildLocalAgentAnswer(dataset, prompt);
+        let answer = "";
+        if (useBackendAgent()) {
+          try {
+            const result = await api.runSchemaOnlyAnalysis(dataset.id, prompt, buildDashboardState(dataset), { sampleSize: agentSampleSize() });
+            answer = result.natural_response || result.storyMode?.recommendedAction || "Schema-safe agentic analysis completed.";
+          } catch {
+            answer = buildLocalAgentAnswer(dataset, prompt);
+          }
+        } else {
+          answer = buildLocalAgentAnswer(dataset, prompt);
+        }
+
         const assistantMessage: AgentMessage = { id: randomId(), role: "assistant", content: answer, createdAt: new Date().toISOString() };
         setMessages((current) => [...current, assistantMessage]);
       } catch (caught) {
