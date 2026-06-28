@@ -37,7 +37,7 @@ const isMappableGeoColumn = (column: { name: string; type?: string }) => {
 };
 
 const hasMappableDatasetValues = (dataset: ActiveDataset) => {
-  const candidateColumns = dataset.columns.filter((column) => !/id|phone|zip|postal|code|pin|date|time|month|year|url|link|amount|billing|age|room/i.test(column.name));
+  const candidateColumns = dataset.columns.filter((column) => !/id|phone|zip|postal|code|pin|date|time|month|year|url|link|amount|billing|age|room|doctor|name/i.test(column.name));
   return candidateColumns.some((column) => {
     const values = Array.from(new Set(dataset.rows.slice(0, 300).map((row) => String(row[column.name] ?? "").trim()).filter(Boolean))).slice(0, 90);
     if (!values.length) return false;
@@ -68,8 +68,13 @@ export default function PremiumAgenticDashboardPage() {
 
   const hasMappableGeoColumn = useMemo(() => {
     if (!dataset) return false;
-    return Boolean(dataset.columns.some(isMappableGeoColumn)) || hasMappableDatasetValues(dataset) || hasHealthcareLocationSchema(dataset);
+    return Boolean(dataset.columns.some(isMappableGeoColumn)) || hasMappableDatasetValues(dataset);
   }, [dataset]);
+
+  const hasGeoAnalysisPanel = useMemo(() => {
+    if (!dataset) return false;
+    return hasMappableGeoColumn || hasHealthcareLocationSchema(dataset);
+  }, [dataset, hasMappableGeoColumn]);
 
   const hasDateColumn = useMemo(
     () => Boolean(dataset?.columns.some((column) => /date|month|year|time|created|updated|timestamp/i.test(column.name) || column.type === "date" || column.type === "datetime")),
@@ -77,8 +82,8 @@ export default function PremiumAgenticDashboardPage() {
   );
 
   const analyticsTabs = useMemo(
-    () => ["Overview", "Correlations", "Ranking", "Distribution", ...(hasDateColumn ? ["Trends"] : []), "Outliers", ...(hasMappableGeoColumn ? ["Geo Analysis"] : [])],
-    [hasDateColumn, hasMappableGeoColumn],
+    () => ["Overview", "Correlations", "Ranking", "Distribution", ...(hasDateColumn ? ["Trends"] : []), "Outliers", ...(hasGeoAnalysisPanel ? ["Geo Analysis"] : [])],
+    [hasDateColumn, hasGeoAnalysisPanel],
   );
 
   const promptChips = useMemo(() => generateDynamicQuestionSuggestions(dataset || undefined, 4), [dataset]);
@@ -106,7 +111,7 @@ export default function PremiumAgenticDashboardPage() {
     if (activeAnalyticsTab === "Distribution") return title.includes("distribution") || chart.type === "histogram" || chart.type === "donut";
     if (activeAnalyticsTab === "Trends") return title.includes("trend") || chart.type === "line" || title.includes("date") || title.includes("month");
     if (activeAnalyticsTab === "Outliers") return title.includes("outlier") || title.includes("anomaly");
-    if (activeAnalyticsTab === "Geo Analysis") return hasMappableGeoColumn && (chart.type === "map" || title.includes("geo") || title.includes("country") || title.includes("city") || title.includes("location"));
+    if (activeAnalyticsTab === "Geo Analysis") return hasGeoAnalysisPanel && (chart.type === "map" || title.includes("geo") || title.includes("country") || title.includes("city") || title.includes("location"));
     return true;
   });
 
@@ -295,7 +300,7 @@ export default function PremiumAgenticDashboardPage() {
             </div>
             {chartsReady ? (
               <Suspense fallback={<div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">{tabCharts.slice(0, 3).map((chart) => <div key={chart.id} className="h-[330px] animate-pulse rounded-3xl border border-slate-200 bg-slate-50" />)}</div>}>
-                {activeAnalyticsTab === "Geo Analysis" && hasMappableGeoColumn && dataset?.rows?.length ? <GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} /> : (
+                {activeAnalyticsTab === "Geo Analysis" && hasGeoAnalysisPanel && dataset?.rows?.length ? <GlobalGeoIntelligence rows={filteredRows} columns={dataset.columns} /> : (
                   <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
                     {tabCharts.map((chart) => <ChartErrorBoundary key={chart.id} fallbackTitle={chart.title}><PremiumChartCard chart={chart} isVisible={chartManager.visibleCharts.has(chart.id)} onEdit={(chartId) => { chartManager.setSelectedChartId(chartId); setModalType("customize"); }} onRemove={chartManager.removeChart} onDuplicate={chartManager.duplicateChart} onToggleVisibility={chartManager.toggleChartVisibility} /></ChartErrorBoundary>)}
                     {tabCharts.length === 0 && <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">No {activeAnalyticsTab} chart found yet. Click <span className="font-bold text-violet-700">Add Chart</span> to create one.</div>}
@@ -305,15 +310,15 @@ export default function PremiumAgenticDashboardPage() {
             ) : <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">{tabCharts.slice(0, 3).map((chart) => <div key={chart.id} className="h-[330px] animate-pulse rounded-3xl border border-slate-200 bg-slate-50" />)}</div>}
           </section>
 
-          {hasMappableGeoColumn && activeAnalyticsTab !== "Geo Analysis" && (
+          {hasGeoAnalysisPanel && activeAnalyticsTab !== "Geo Analysis" && (
             <section className={cardClass}>
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-base font-black text-slate-950">Geo Intelligence</h2>
-                  <p className="mt-1 text-sm text-slate-500">Mappable location data is available for this dataset. Open the full map, markers, and ranking view in Geo Analysis.</p>
+                  <p className="mt-1 text-sm text-slate-500">{hasMappableGeoColumn ? "Real location data is available. Open the animated map to click countries, markers, and view real aggregated rows." : "Healthcare location entities were detected, but this dataset needs City, State, Country, Latitude, or Longitude before a real map can plot records."}</p>
                 </div>
                 <button type="button" onClick={() => setActiveAnalyticsTab("Geo Analysis")} className="inline-flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-4 py-2.5 text-xs font-bold text-violet-700">
-                  Open Geo Analysis
+                  {hasMappableGeoColumn ? "Open Animated Map" : "View Map Requirements"}
                 </button>
               </div>
             </section>
